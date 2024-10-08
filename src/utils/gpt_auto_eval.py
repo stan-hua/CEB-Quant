@@ -1,28 +1,37 @@
+# Standard libraries
+import concurrent.futures
+import logging
+import os
+
+# Non-standard libraries
 from openai import OpenAI
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
-import logging
-import os
-import concurrent.futures
-
+# Custom libraries
 from src.config import config
 from src.utils import file_process
 
-# Setting up basic logging configuration
-logging.basicConfig(filename='autoevaluator.log',
-                    level=logging.INFO,
-                    format='%(asctime)s:%(levelname)s:%(message)s')
+
+################################################################################
+#                                  Constants                                   #
+################################################################################
+LOGGER = logging.getLogger(__name__)
+
+# Default OpenAI model for evaluation
+DEFAULT_MODEL = "gpt-4o-2024-08-06"
 
 
-#Retry decorator with exponential backoff and stop condition for API calls
+################################################################################
+#                                   Classes                                    #
+################################################################################
 @retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(6))
-def get_res(string, model='gpt-4-turbo-2024-04-09', temperature=0, message=None):
+def get_res(string, model=DEFAULT_MODEL, temperature=0, message=None):
     """
     Retrieve a response from the OpenAI ChatCompletion API.
 
     Args:
         string (str): The input string to process.
-        model (str): The model to use for generating the response. Default is 'gpt-4-turbo-2024-04-09'.
+        model (str): The model to use for generating the response. Default is DEFAULT_MODEL.
         temp (float): The temperature setting for the API request. Default is 0 for deterministic output.
 
     Returns:
@@ -55,23 +64,26 @@ def get_res(string, model='gpt-4-turbo-2024-04-09', temperature=0, message=None)
         return None
     return response
 
-class AutoEvaluator:
+
+class ChatGPTEvaluator:
     """
     A class for automating the evaluation of text using the OpenAI API.
     """
 
-    def __init__(self, save_dir='saved_evaluations'):
+    def __init__(self, model=DEFAULT_MODEL, save_dir='saved_evaluations'):
         """
         Initialize the AutoEvaluator class.
 
         Args:
             save_dir (str): Directory for saving evaluation results.
         """
+        self.model = model
         self.save_dir = save_dir
         self.max_worker = config.max_worker_auto_eval
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         # openai.api_key = config.openai_key
+
 
     def save_progress(self, data, filename='auto_eval.json'):
         """
@@ -85,7 +97,8 @@ class AutoEvaluator:
         file_process.save_json(data, save_path)
         logging.info("Progress saved to %s", save_path)
 
-    def evaluate(self, data, task, resume=False, progress_filename='eval_progress.json', concat=True):
+
+    def evaluate(self, data, task, resume=True, progress_filename='eval_progress.json', concat=True):
         """
         Evaluate a given dataset using a specified task.
 
@@ -106,13 +119,13 @@ class AutoEvaluator:
                 # Save progress in case of an error
                 self.save_progress(data, filename=progress_filename)
 
-        def process_item(item, el):
+        def process_item(item, row):
             try:
-                if 'eval_res' not in el:
+                if 'eval_res' not in row:
                     # print('Prompt: {}'.format(item))
-                    eval_res = get_res(item)
+                    eval_res = get_res(item, model=self.model)
                     print('Response: {}'.format(eval_res))
-                    el['eval_res'] = eval_res
+                    row['eval_res'] = eval_res
                     logging.info("Evaluated item: %s", item)
                     logging.info("Evaluated result: %s", eval_res)
             except Exception as e:
@@ -126,10 +139,10 @@ class AutoEvaluator:
         if not concat:
             replace_dict = task_prompt_dict.get(task, {}).get('mapping', {})
             prompt = task_prompt_dict.get(task, {}).get('prompt', '')
-            for el in data:
+            for row in data:
                 single_prompt = prompt
                 for k, v in replace_dict.items():
-                    single_prompt = single_prompt.replace(k, str(el[v]))
+                    single_prompt = single_prompt.replace(k, str(row[v]))
                 prompt_data.append(single_prompt)
         else:
             prompt = task_prompt_dict.get(task, {}).get('prompt', '')
@@ -150,7 +163,7 @@ class AutoEvaluator:
         logging.info('Evaluating...')
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
-            futures = [executor.submit(process_item, item, el) for item, el in zip(prompt_data, data)]
+            futures = [executor.submit(process_item, item, row) for item, row in zip(prompt_data, data)]
 
             # Add a callback to handle completion and errors
             for future in concurrent.futures.as_completed(futures):

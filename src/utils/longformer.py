@@ -6,10 +6,8 @@ from tqdm import tqdm
 
 import torch
 import src.config as config
-# Configure basic logging
-logging.basicConfig(filename='huggingface_evaluator.log',
-                    level=logging.INFO,
-                    format='%(asctime)s:%(levelname)s:%(message)s')
+
+
 PROGRESS_FILENAME = 'longformer_eval.json'
 
 # TODO: Refine this class for more general HF model evaluation
@@ -66,7 +64,7 @@ class HuggingFaceEvaluator:
         assert isinstance(data, list), "Data must be a list."
         logging.info('Total data number: {}'.format(len(data)))
         # Filter out invalid data
-        data = [el for el in data if el['res'] is not None and el != ""]
+        data = [row for row in data if row['res'] is not None and row != ""]
         logging.info('Total data number: %d', len(data))
         logging.info('Evaluating...')
 
@@ -74,7 +72,6 @@ class HuggingFaceEvaluator:
 
         file_process.save_json(data, os.path.join(self.save_dir, progress_filename))
         return evaluated_data
-
 
 
     def _evaluate_batch(self,data, batch_size=32, progress_filename=PROGRESS_FILENAME):

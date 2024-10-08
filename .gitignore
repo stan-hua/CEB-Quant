@@ -1,0 +1,7 @@
+slurm/logs/*
+generation_results
+metrics
+saved_evaluations
+
+*.pyc*
+*.pyc

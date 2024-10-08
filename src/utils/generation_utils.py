@@ -46,7 +46,7 @@ def get_ernie_res(string, temperature):
 
 # Function to generate responses using OpenAI's API
 def get_res_openai(string, model, temperature):
-    gpt_model_mapping = {"chatgpt": "gpt-3.5-turbo", "gpt-4": "gpt-4-turbo-2024-04-09"}
+    gpt_model_mapping = {"gpt-4o-mini": "gpt-4o-mini-2024-07-18	", "gpt-4o": "gpt-4o-2024-08-06"}
     gpt_model = gpt_model_mapping[model]
     api_key = config.openai_key
     client = OpenAI(api_key=api_key)
