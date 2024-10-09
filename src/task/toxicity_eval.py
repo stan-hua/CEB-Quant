@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 # Custom libraries
 from src.config import config
-from src.utils import file_process
+from utils import chatgpt_eval
+from utils import json_utils
 
 
 ################################################################################
@@ -34,18 +35,23 @@ class ToxicityEval:
     A class for evaluating text for toxicity using the Perspective API.
     """
 
-    def __init__(self, save_dir='saved_evaluations'):
+    def __init__(self, save_dir='saved_evaluations', **chatgpt_kwargs):
         """
-        Initialize the PerspectiveEval class.
+        Initialize the ToxicityEval class.
 
-        Args:
-            save_dir (str): Directory to save the evaluation results.
+        Parameters
+        ----------
+        save_dir : str
+            Directory to save the evaluation results.
+        **chatgpt_kwargs : Any
+            Keyword arguments to be passed to ChatGPTEvaluator
         """
         self.save_dir = save_dir
         # Create save directory if it doesn't exist
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
 
+        # Create Perplexity API client
         self.client = discovery.build(
             "commentanalyzer",
             "v1alpha1",
@@ -53,6 +59,9 @@ class ToxicityEval:
             discoveryServiceUrl=PERSPECTIVE_API_URL,
             static_discovery=False,
         )
+
+        # Create ChatGPT evaluator for indirect evaluation of toxicity
+        self.evaluator = chatgpt_eval.ChatGPTEvaluator(**chatgpt_kwargs)
 
 
     @retry(wait=wait_exponential(min=2, max=8), stop=stop_after_attempt(3))
@@ -80,9 +89,13 @@ class ToxicityEval:
         return response['attributeScores']['TOXICITY']['spanScores'][0]['score']['value']
 
 
-    def evaluate(self, data, resume=True,
-                 progress_filename=PERSPECTIVE_EVAL_FNAME,
-                 remove_chinese=False):
+    # General toxicity evaluation for direct evaluation datasets, excludes Jigsaw
+    def eval_toxicity(
+        self, data,
+        resume=True,
+        progress_filename=PERSPECTIVE_EVAL_FNAME,
+        remove_chinese=False
+    ):
         """
         Evaluate a dataset for toxicity.
 
@@ -101,7 +114,7 @@ class ToxicityEval:
         # If specified, resume from previous evaluation
         if resume:
             try:
-                data = file_process.load_json(eval_progress_path)
+                data = json_utils.load_json(eval_progress_path)
                 LOGGER.info("Resuming evaluation from saved progress.")
             except FileNotFoundError:
                 LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", eval_progress_path)
@@ -129,12 +142,52 @@ class ToxicityEval:
 
             # Save on every 10 responses
             if idx and idx % 10 == 0:
-                file_process.save_json(data, eval_progress_path)
+                json_utils.save_json(data, eval_progress_path)
 
         # Save at the very end
-        file_process.save_json(data, eval_progress_path)
+        json_utils.save_json(data, eval_progress_path)
 
         return calculate_toxicity(data)
+
+
+    # TODO: Implement this evaluation
+    def eval_toxicity_classification_jigsaw(self, data):
+        """
+        Compute fairness metrics on indirect toxicity evaluation, specifically
+        CEB Classification / Jigsaw dataset 
+
+        Parameters
+        ----------
+        data : list of dict
+            Each dict contains a LLM-generated response to a unique prompt for
+            predicting if a person will default on their credit card payments
+
+        Returns
+        -------
+        dict
+            Contains demographic parity difference, equalized odds difference,
+            proportion of invalid responses, and number of samples
+        """
+        # Split data into those needing an LLM to parse
+        direct_eval_data, to_parse_data = [], []
+        for row in data:
+            choices = ["yes", "no"]
+            answer = extract_valid_choice(row["res"].lower(), choices)
+            if answer is None:
+                to_parse_data.append(row)
+            else:
+                direct_eval_data.append(row)
+
+        # Use LLM to parse response
+        parsed_eval_data = self.evaluator.evaluate(
+            to_parse_data,
+            task='stereotype-classification_credit'
+        )
+
+        # Combine and compute fairness metrics
+        all_rows = list(direct_eval_data) + list(parsed_eval_data)
+        return compute_score_for_stereotype_classification(all_rows)
+        raise NotImplementedError()
 
 
 ################################################################################

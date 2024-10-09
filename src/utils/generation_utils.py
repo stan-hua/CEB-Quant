@@ -12,7 +12,7 @@ import vllm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from src.config import config
-from src.utils import file_process
+from utils import json_utils
 
 # Load model information from configuration
 model_info = config.model_info

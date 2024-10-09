@@ -343,7 +343,7 @@ class LLMGeneration:
                     future.result()
 
             # Save the updated saved data to the output file
-            file_process.save_json(saved_data, output_path, lock=lock)
+            json_utils.save_json(saved_data, output_path, lock=lock)
         print(f"Processed {input_path} and saved results to {output_path}")
 
 

@@ -1,7 +1,7 @@
 from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 import logging
 import os
-from src.utils import file_process
+from utils import json_utils
 from tqdm import tqdm
 
 import torch
@@ -56,7 +56,7 @@ class HuggingFaceEvaluator:
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
             try:
-                data = file_process.load_json(load_path)
+                data = json_utils.load_json(load_path)
                 logging.info("Resuming evaluation from saved progress.")
             except FileNotFoundError:
                 logging.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
@@ -70,7 +70,7 @@ class HuggingFaceEvaluator:
 
         evaluated_data = self._evaluate_batch(data)
 
-        file_process.save_json(data, os.path.join(self.save_dir, progress_filename))
+        json_utils.save_json(data, os.path.join(self.save_dir, progress_filename))
         return evaluated_data
 
 
@@ -92,7 +92,7 @@ class HuggingFaceEvaluator:
                     logging.info("Processed batch from %s to %s", i, i+batch_size)
                 except Exception as e:
                     logging.error("Error processing batch %s to %s: %s", i, i+batch_size, str(e))
-                    file_process.save_json(data, os.path.join(self.save_dir, progress_filename))
+                    json_utils.save_json(data, os.path.join(self.save_dir, progress_filename))
                     raise
             else:
                 results.extend(batch)

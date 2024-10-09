@@ -9,7 +9,7 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
 from src.config import config
-from src.utils import file_process
+from utils import json_utils
 
 
 ################################################################################
@@ -94,7 +94,7 @@ class ChatGPTEvaluator:
             filename (str): Name of the file for saving the data.
         """
         save_path = os.path.join(self.save_dir, filename)
-        file_process.save_json(data, save_path)
+        json_utils.save_json(data, save_path)
         LOGGER.info("Progress saved to %s", save_path)
 
 
@@ -142,7 +142,7 @@ class ChatGPTEvaluator:
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
             try:
-                data = file_process.load_json(load_path)
+                data = json_utils.load_json(load_path)
                 LOGGER.info("Resuming evaluation from saved progress.")
             except FileNotFoundError:
                 LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
