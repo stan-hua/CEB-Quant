@@ -10,8 +10,7 @@ from tqdm import tqdm
 
 # Custom libraries
 from src.config import config
-from utils import chatgpt_eval
-from utils import json_utils
+from utils import chatgpt_eval, json_utils, metric_utils
 
 
 ################################################################################
@@ -160,7 +159,7 @@ class ToxicityEval:
         ----------
         data : list of dict
             Each dict contains a LLM-generated response to a unique prompt for
-            predicting if a person will default on their credit card payments
+            predicting if a comment is toxic or not
 
         Returns
         -------
@@ -172,7 +171,7 @@ class ToxicityEval:
         direct_eval_data, to_parse_data = [], []
         for row in data:
             choices = ["yes", "no"]
-            answer = extract_valid_choice(row["res"].lower(), choices)
+            answer = metric_utils.extract_valid_choice(row["res"].lower(), choices)
             if answer is None:
                 to_parse_data.append(row)
             else:
@@ -181,13 +180,12 @@ class ToxicityEval:
         # Use LLM to parse response
         parsed_eval_data = self.evaluator.evaluate(
             to_parse_data,
-            task='stereotype-classification_credit'
+            task='toxicity-classification_jigsaw'
         )
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
         return compute_score_for_stereotype_classification(all_rows)
-        raise NotImplementedError()
 
 
 ################################################################################

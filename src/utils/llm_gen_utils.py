@@ -1,19 +1,23 @@
-import os, json
-import openai
-from openai import OpenAI
-from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-import google.generativeai as genai
-from google.generativeai.types import safety_types
-from fastchat.model import load_model, get_conversation_template
-from tenacity import retry, wait_random_exponential, stop_after_attempt
-import requests
+# Standard libraries
+import json
+import os
 import replicate
-import vllm
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import requests
 
+# Non-standard libraries
+import google.generativeai as genai
+from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
+from fastchat.model import get_conversation_template
+from openai import OpenAI
+from tenacity import retry, wait_random_exponential, stop_after_attempt
+
+# Custom libraries
 from src.config import config
-from utils import json_utils
 
+
+################################################################################
+#                                  Constants                                   #
+################################################################################
 # Load model information from configuration
 model_info = config.model_info
 online_model_list = model_info['online_model']
@@ -21,7 +25,9 @@ model_mapping = model_info['model_mapping']
 rev_model_mapping = {value: key for key, value in model_mapping.items()}
 
 
-
+################################################################################
+#                               Helper Functions                               #
+################################################################################
 # Retrieve model information
 def get_models():
     return model_mapping, online_model_list
@@ -104,7 +110,6 @@ def gemini_api(string, temperature):
     model = genai.GenerativeModel('gemini-pro')
     response = model.generate_content(string, temperature=temperature, safety_settings=safety_setting)
     return response
-
 
 
 @retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(6))

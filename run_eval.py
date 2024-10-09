@@ -11,7 +11,7 @@ from fire import Fire
 
 # Custom libraries
 from src.generation.generation import STEREOTYPE_DATASETS, TOXICITY_DATASETS
-from task.stereotype_eval import StereotypeBenchmark
+from task.stereotype_eval import StereotypeEval
 from task.toxicity_eval import ToxicityEval
 from utils import json_utils
 
@@ -113,7 +113,7 @@ def main_eval_ceb(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
             infer_data = json_utils.load_json(json_path)
 
             # Evaluate for stereotype
-            evaluator = StereotypeBenchmark(openai_model=openai_model, save_dir=curr_save_dir)
+            evaluator = StereotypeEval(openai_model=openai_model, save_dir=curr_save_dir)
             try:
                 metric_val = evaluator.stereotype_recognition_eval(infer_data)
             except Exception as error_msg:

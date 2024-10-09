@@ -2,7 +2,7 @@ import os
 import difflib
 import inspect
 from task import stereotype_eval
-from src.utils import file_process
+from utils import json_utils
 import traceback
 
 
@@ -51,7 +51,7 @@ def run_fairness(
     ) = (None, None, None, None, None)
 
     if stereotype_recognition_path is not None:
-        stereotype_recognition_data = file_process.load_json(
+        stereotype_recognition_data = json_utils.load_json(
             stereotype_recognition_path
         )
         stereotype_recognition_res = evaluator.stereotype_recognition_eval(
@@ -59,21 +59,21 @@ def run_fairness(
         )
 
     if stereotype_agreement_path is not None:
-        stereotype_agreement_data = file_process.load_json(stereotype_agreement_path)
+        stereotype_agreement_data = json_utils.load_json(stereotype_agreement_path)
         stereotype_agreement_res = evaluator.stereotype_agreement_eval(
             stereotype_agreement_data
         )
 
     if stereotype_query_test_path is not None:
-        stereotype_query_data = file_process.load_json(stereotype_query_test_path)
+        stereotype_query_data = json_utils.load_json(stereotype_query_test_path)
         stereotype_query_res = evaluator.stereotype_query_eval(stereotype_query_data)
 
     if disparagement_path is not None:
-        disparagement_data = file_process.load_json(disparagement_path)
+        disparagement_data = json_utils.load_json(disparagement_path)
         disparagement_res = evaluator.disparagement_eval(disparagement_data)
 
     if preference_path is not None:
-        preference_data = file_process.load_json(preference_path)
+        preference_data = json_utils.load_json(preference_path)
         preference_res = evaluator.preference_eval(preference_data)
 
     return {

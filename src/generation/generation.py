@@ -16,7 +16,7 @@ from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from src.utils.generation_utils import *
+from src.utils import json_utils, llm_gen_utils
 
 
 load_dotenv()
@@ -108,13 +108,17 @@ class LLMGeneration:
         self.num_gpus = num_gpus
         self.max_new_tokens = max_new_tokens                            # Number of max new tokens generated
         self.debug = debug
-        self.online_model_list = get_models()[1]                        # Online model list, typically contains models that are not huggingface models
-        self.model_mapping = get_models()[0]                            # Mapping between model path and model name
+        self.online_model_list = llm_gen_utils.get_models()[1]                        # Online model list, typically contains models that are not huggingface models
+        self.model_mapping = llm_gen_utils.get_models()[0]                            # Mapping between model path and model name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.use_replicate = use_replicate                              # Temporarily set to False as we don"t use replicate api
         self.use_deepinfra = use_deepinfra                              # Temporarily set to False as we don"t use deepinfra api
         self.use_vllm = use_vllm                                        # Set this to be True when using vLLM to run huggingface models
-        self.model_name = model_mapping.get(self.model_path, model_mapping.get(self.model_path.split("/")[-1], ""))        # Get the model name according to the model path
+        self.model_name = llm_gen_utils.model_mapping.get(
+            self.model_path,
+            llm_gen_utils.model_mapping.get(
+                self.model_path.split("/")[-1], ""
+        ))        # Get the model name according to the model path
 
         # Model related parameters to fill in
         self.llm = None
@@ -178,7 +182,7 @@ class LLMGeneration:
         """
         model, tokenizer = self._model, self._tokenizer
 
-        prompt = prompt2conversation(self.model_path, prompt)
+        prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
         inputs = tokenizer([prompt])
         inputs = {k: torch.tensor(v).to(self.device) for k, v in inputs.items()}
         output_ids = model.generate(
@@ -227,13 +231,13 @@ class LLMGeneration:
         try:
             if (model_name in self.online_model_list) and self.online_model:
                 # Using online models without using replicate or deepinfra apis
-                ans = gen_online(model_name,
+                ans = llm_gen_utils.gen_online(model_name,
                                  prompt, temperature,
                                  replicate=self.use_replicate,
                                  deepinfra=self.use_deepinfra)
             elif (model_name in self.online_model_list) and ((self.online_model and self.use_replicate) or (self.online_model and self.use_deepinfra)):
                 # Using online models with replicate or deepinfra apis
-                ans = gen_online(model_name,
+                ans = llm_gen_utils.gen_online(model_name,
                                  prompt, temperature,
                                  replicate=self.use_replicate,
                                  deepinfra=self.use_deepinfra)
