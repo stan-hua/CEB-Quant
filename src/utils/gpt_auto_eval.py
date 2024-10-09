@@ -95,75 +95,67 @@ class ChatGPTEvaluator:
         """
         save_path = os.path.join(self.save_dir, filename)
         file_process.save_json(data, save_path)
-        logging.info("Progress saved to %s", save_path)
+        LOGGER.info("Progress saved to %s", save_path)
 
 
-    def evaluate(self, data, task, resume=True, progress_filename='eval_progress.json', concat=True):
-        """
-        Evaluate a given dataset using a specified task.
-
-        Args:
-            data: Data to be evaluated.
-            task (str): The task identifier for the evaluation.
-            resume (bool): Flag to resume from saved progress. Default is False.
-            progress_filename (str): The filename for saving or resuming progress.
-            concat (bool): Flag to concatenate responses. Default is True.
-
-        Returns:
-            The evaluated data.
-        """
-
+    def evaluate(
+        self, data, task,
+        resume=True,
+        progress_filename="eval_progress.json",
+        llm_response_col="eval_res",
+    ):
         def save_progress_callback(future):
             if future.exception() is not None:
-                logging.error("An error occurred: %s", str(future.exception()))
-                # Save progress in case of an error
+                LOGGER.error("An error occurred: %s", str(future.exception()))
                 self.save_progress(data, filename=progress_filename)
 
         def process_item(item, row):
             try:
-                if 'eval_res' not in row:
-                    # print('Prompt: {}'.format(item))
-                    eval_res = get_res(item, model=self.model)
-                    print('Response: {}'.format(eval_res))
-                    row['eval_res'] = eval_res
-                    logging.info("Evaluated item: %s", item)
-                    logging.info("Evaluated result: %s", eval_res)
-            except Exception as e:
-                logging.error("Error processing item %s: %s", item, str(e))
-                # self.save_progress(data, filename=progress_filename)
-                raise
+                if llm_response_col not in row:
+                    llm_response = get_res(item, model=self.model)
+                    row[llm_response_col] = llm_response
+            except Exception as error_msg:
+                raise error_msg
 
-        task_prompt_dict = config.task_prompt
-        prompt_data = []
 
-        if not concat:
-            replace_dict = task_prompt_dict.get(task, {}).get('mapping', {})
-            prompt = task_prompt_dict.get(task, {}).get('prompt', '')
+        task_to_prompt = config.task_prompt
+        # If prompt contains row formatters, then fill them in with row information
+        use_prompt_formatter = "mapping" in task_to_prompt.get(task, {})
+
+        # Prepare prompts
+        # CASE 1: Prompt contains string formatters
+        prompts = []
+        if use_prompt_formatter:
+            replace_dict = task_to_prompt.get(task, {}).get('mapping', {})
+            prompt = task_to_prompt.get(task, {}).get('prompt', '')
             for row in data:
                 single_prompt = prompt
                 for k, v in replace_dict.items():
                     single_prompt = single_prompt.replace(k, str(row[v]))
-                prompt_data.append(single_prompt)
+                prompts.append(single_prompt)
+        # CASE 2: Otherwise, simply append LLM response to end of prompt
         else:
-            prompt = task_prompt_dict.get(task, {}).get('prompt', '')
-            prompt_data = [prompt + item['res'] for item in data]
+            prompt = task_to_prompt.get(task, {}).get('prompt', '')
+            prompts = [prompt + item['res'] for item in data]
 
+        # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
             try:
                 data = file_process.load_json(load_path)
-                logging.info("Resuming evaluation from saved progress.")
+                LOGGER.info("Resuming evaluation from saved progress.")
             except FileNotFoundError:
-                logging.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
+                LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
 
         assert isinstance(data, list), "Data must be a list."
         assert task is not None, "Task must be specified for evaluation."
 
-        logging.info('Total data number: %d', len(data))
-        logging.info('Evaluating...')
+        LOGGER.info('Total data number: %d', len(data))
+        LOGGER.info('Evaluating...')
 
+        # Perform LLM generation requests in parallel
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
-            futures = [executor.submit(process_item, item, row) for item, row in zip(prompt_data, data)]
+            futures = [executor.submit(process_item, item, row) for item, row in zip(prompts, data)]
 
             # Add a callback to handle completion and errors
             for future in concurrent.futures.as_completed(futures):

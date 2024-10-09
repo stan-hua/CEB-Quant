@@ -1,7 +1,7 @@
 import os
 import difflib
 import inspect
-from src.task import fairness
+from task import stereotype_eval
 from src.utils import file_process
 import traceback
 
@@ -40,7 +40,7 @@ def run_fairness(
         disparagement_path = os.path.join(all_folder_path, "disparagement.json")
         preference_path = os.path.join(all_folder_path, "preference.json")
 
-    evaluator = fairness.FairnessEval()
+    evaluator = stereotype_eval.StereotypeBenchmark()
 
     (
         stereotype_recognition_res,

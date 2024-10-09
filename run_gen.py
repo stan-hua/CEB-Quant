@@ -1,41 +1,61 @@
+# Standard libraries
+import logging
+import sys
+
+# Non-standard libraries
+from fire import Fire
+
+# Custom libraries
 from src.generation.generation import LLMGeneration
-import argparse
 
 
-def generate():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, help='Path to the model')
-    parser.add_argument('--test_type', type=str, help='Type of test')
-    parser.add_argument('--online_model', action='store_true', help='Use online model')
-    parser.add_argument('--use_vllm', type=bool, help='Use VLLM model')
-    args = parser.parse_args()
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    stream=sys.stdout,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
 
-    if args.online_model:
+
+################################################################################
+#                                  Functions                                   #
+################################################################################
+def generate(model_path: str, dataset_name: str, online_model: bool = False):
+    """
+    Run the generation task for the specified dataset(s).
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the model.
+    dataset_name : str
+        Name of the dataset.
+    online_model : bool
+        Whether to use the online model or not (vLLM).
+    """
+    # CASE 1: Online APIs (e.g., ChatGPT)
+    if online_model:
         print("Using online model")
-        #### ChatGPT (GPT-3.5-Turbo) and GPT-4-Turbo generation ####
         llm_gen = LLMGeneration(
-            model_path=args.model_path, 
-            test_type=args.test_type, 
+            model_path=model_path,
             data_path="./data/",
-            dataset_name=None,          # run on all datasets in the folder
-            online_model=True, 
+            dataset_name=dataset_name,          # run on all datasets in the folder
+            online_model=True,
             use_deepinfra=False,
             use_replicate=False,
             use_vllm=False,
             repetition_penalty=1.0,
-            num_gpus=1, 
-            max_new_tokens=512, 
+            num_gpus=1,
+            max_new_tokens=512,
             debug=False
         )
-    
+    # CASE 2: Offline models (vLLM)
     else:
         print("Using vLLM model")
-        #### Using local models such as Llama2 and Llama3 to generate ####
         llm_gen = LLMGeneration(
-            model_path=args.model_path, 
-            test_type=args.test_type, 
+            model_path=model_path,
             data_path="./data/",
-            dataset_name=None,          # run on all datasets in the folder
+            dataset_name=dataset_name,          # run on all datasets in the folder
             online_model=False, 
             use_deepinfra=False,
             use_replicate=False,
@@ -46,7 +66,8 @@ def generate():
             debug=False
         )
 
-    llm_gen.generation_results()
+    llm_gen.infer_dataset()
+
 
 if __name__ == "__main__":
-    generate()
+    Fire(generate)
