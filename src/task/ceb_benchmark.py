@@ -189,7 +189,7 @@ class CEBBenchmark:
                 try:
                     metrics = evaluator.eval_stereotype(dataset_name, infer_data)
                 except Exception as error_msg:
-                    LOGGER.info(f"Exception has occured with following trace:\n{error_msg}")
+                    LOGGER.info(f"Error occured while evaluating Stereotype Dataset: {dataset_name}\n\tError: {error_msg}")
                     continue
 
                 # Store metrics for dataset / filename
@@ -239,7 +239,7 @@ class CEBBenchmark:
                 try:
                     metrics = evaluator.eval_toxicity(dataset_name, infer_data)
                 except Exception as error_msg:
-                    LOGGER.info(f"Exception has occured with following trace:\n{error_msg}")
+                    LOGGER.info(f"Error occured while evaluating Toxicity Dataset: {dataset_name}\n\tError: {error_msg}")
                     continue
 
                 # Store metrics for dataset / filename

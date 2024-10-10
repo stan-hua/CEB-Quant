@@ -6,7 +6,7 @@ import sys
 from fire import Fire
 
 # Custom libraries
-from src.generation.generation import LLMGeneration
+from generation.llm_gen_wrapper import LLMGeneration
 
 
 # Configure logging

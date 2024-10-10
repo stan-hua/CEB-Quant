@@ -96,7 +96,6 @@ class ChatGPTEvaluator:
         """
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
-        LOGGER.info("Progress saved to %s", save_path)
 
 
     def evaluate(
@@ -121,14 +120,15 @@ class ChatGPTEvaluator:
 
         task_to_prompt = config.task_prompt
         # If prompt contains row formatters, then fill them in with row information
-        use_prompt_formatter = "mapping" in task_to_prompt.get(task, {})
+        task_prompt_dict = task_to_prompt.get(task, {})
+        use_prompt_formatter = "mapping" in task_prompt_dict
 
         # Prepare prompts
         # CASE 1: Prompt contains string formatters
         prompts = []
         if use_prompt_formatter:
-            replace_dict = task_to_prompt.get(task, {}).get('mapping', {})
-            prompt = task_to_prompt.get(task, {}).get('prompt', '')
+            replace_dict = task_prompt_dict.get('mapping', {})
+            prompt = task_prompt_dict.get('prompt', '')
             for row in data:
                 single_prompt = prompt
                 for k, v in replace_dict.items():
@@ -137,11 +137,8 @@ class ChatGPTEvaluator:
         # CASE 2: Otherwise, simply append LLM response to end of prompt
         else:
             LOGGER.debug("[ChatGPT Evaluator] Concatenating LLM response to prompt")
-            prompt = task_to_prompt.get(task, {}).get('prompt', '')
+            prompt = task_prompt_dict.get('prompt', '')
             prompts = [prompt + item['res'] for item in data]
-
-        if "rta" in task:
-            raise RuntimeError(f"Example RTA prompt: \n{prompts[0]}",)
 
         # If specified, resume from previous evaluation
         if resume:
