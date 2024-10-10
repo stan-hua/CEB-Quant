@@ -42,26 +42,49 @@ The CEB dataset is now publicly available to support further research and develo
 We encourage researchers and developers to utilize and contribute to this benchmark to enhance the evaluation and mitigation of biases in LLMs.
 
 
+## Setup
+```
+# Install all the necessary packages
+pip install envs/requirements.txt
+```
+
 ## Configuration
-Before running, specify the configurations (e.g., OpenAI API key) in ```./src/config/config.py```.
 
-## Running
-
-Execute the corresponding bash files in ```./script```. For example, to run the evaluation of an LLM on the conversation task regarding the bias type of stereotyping, execute the following command:
-
+Please add your OpenAI API key and Perspective API key to your shell config file
 ```
-bash run_gen_stereotype_conversation.sh
+# Add to ~/.bashrc file (or to your .envrc)
+echo 'export OPENAI_KEY="[ENTER HERE]"' >> ~/.bashrc
+echo 'export PERSPECTIVE_KEY="[ENTER HERE]"' >> ~/.bashrc
+
+# Reload shell
+source ~/.bashrc
 ```
 
-The specific LLM for evaluation should be specified in the same bash file.
+For modifying any models or changing any prompts, please refer to `./src/config/config.py`
 
-## Questions
+## CEB-Benchmark Evaluation
 
-If you encounter any cases and need help, feel free to contact ```sw3wv@virginia.edu``` and ```pw7nc@virginia.edu```. We are more than willing to help!
+0. If using custom HuggingFace model, create shorthand in `./src/config/config.py`
+```
+# Modify MODEL_INFO["model_mapping"] with shorthand for directory
+```
+
+1. Perform generations on ALL datasets (e.g., for a LLaMA 3.1 8B model on HuggingFace)
+```
+MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
+python run_gen.py --model_path ${MODEL_NAME};
+```
+
+2. Perform evaluation
+```
+RESULTS_DIR="./generation_results/llama3.1-8b"
+OPENAI_MODEL='gpt-4o-2024-08-06'    # OpenAI model for assessing stereotype bias
+python -m src.task.ceb_benchmark --results_dir ${RESULTS_DIR} --openai_model ${OPENAI_MODEL}
+```
 
 ## Citation
 
-If you find our work helpful, please kindly consider citing our paper. Thank you so much for your attention!
+Consider citing the original benchmark paper.
 ```
 @article{wang2024ceb,
   title={CEB: Compositional Evaluation Benchmark for Fairness in Large Language Models},

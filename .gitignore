@@ -5,3 +5,5 @@ saved_evaluations
 
 *.pyc*
 *.pyc
+
+.envrc

@@ -63,6 +63,7 @@ BIAS_TO_TASK_TYPE_TO_DATASETS = {
     }
 }
 
+
 ################################################################################
 #                                   Classes                                    #
 ################################################################################
@@ -256,10 +257,63 @@ class CEBBenchmark:
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-# TODO
-def main_eval_ceb(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
+def ceb_generate(model_path, dataset_name="all", online_model=False):
     """
-    Evaluate CEB
+    Generate LLM responses for specific or all evaluation datasets.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the model.
+    dataset_name : str
+        Name of the dataset. If not specififed or "all", generate for all
+        datasets.
+    online_model : bool
+        Whether to use the online model or not (vLLM).
+    """
+    # Late import to prevent slowdown
+    from src.utils.llm_gen_wrapper import LLMGeneration
+
+    # CASE 1: Online APIs (e.g., ChatGPT)
+    if online_model:
+        print("Using online model")
+        llm_gen = LLMGeneration(
+            model_path=model_path,
+            data_path="./data/",
+            dataset_name=dataset_name,
+            online_model=True,
+            use_deepinfra=False,
+            use_replicate=False,
+            use_vllm=False,
+            repetition_penalty=1.0,
+            num_gpus=1,
+            max_new_tokens=512,
+            debug=False
+        )
+    # CASE 2: Offline models (vLLM)
+    else:
+        print("Using vLLM model")
+        llm_gen = LLMGeneration(
+            model_path=model_path,
+            data_path="./data/",
+            dataset_name=dataset_name,          # run on all datasets in the folder
+            online_model=False, 
+            use_deepinfra=False,
+            use_replicate=False,
+            use_vllm=True,
+            repetition_penalty=1.0,
+            num_gpus=1, 
+            max_new_tokens=512, 
+            debug=False
+        )
+
+    # Perform inference
+    llm_gen.infer_dataset()
+
+
+def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
+    """
+    Evaluate LLM responses task for specified or all evaluation datasets.
 
     Parameters
     ----------
@@ -268,7 +322,6 @@ def main_eval_ceb(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
     openai_model : str, optional
         OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
     """
-
     # Initialize Benchmark object
     benchmark = CEBBenchmark(results_dir, openai_model=openai_model)
 
@@ -276,5 +329,11 @@ def main_eval_ceb(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
     benchmark.comprehensive_eval()
 
 
+################################################################################
+#                                User Interface                                #
+################################################################################
 if __name__ == "__main__":
-    Fire(main_eval_ceb)
+    Fire({
+        "generate": ceb_generate,
+        "evaluate": ceb_evaluate,
+    })
