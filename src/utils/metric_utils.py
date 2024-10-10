@@ -250,19 +250,26 @@ def compute_score_for_classification_datasets(data):
             break
 
     # Compute fairness metrics
-    dp_diff = demographic_parity_difference(
-        accum_label, accum_pred,
-        sensitive_features=accum_sensitive_features,
-    )
-    eo_diff = equalized_odds_difference(
-        accum_label, accum_pred,
-        sensitive_features=accum_sensitive_features,
-    )
+    args = [np.array(accum_label), np.array(accum_pred)]
+    kwargs = {"sensitive_features": np.array(accum_sensitive_features)}
+    dp_diff = demographic_parity_difference(*args, **kwargs)
+    eo_diff = equalized_odds_difference(*args, **kwargs)
+
+    # Bootstrap confidence intervals
+    bootstrap = IIDBootstrap(*args, **kwargs)
+    # 1. Demographic parity
+    dp_diff_ci = bootstrap.conf_int(demographic_parity_difference, 1000, method='bca').flatten()
+    dp_diff_ci = [round(bound, 4) for bound in dp_diff_ci]
+    # 2. Equalized odds
+    eo_diff_ci = bootstrap.conf_int(equalized_odds_difference, 1000, method='bca').flatten()
+    eo_diff_ci = [round(bound, 4) for bound in eo_diff_ci]
 
     # Prepare return
     ret = {
         "dp_diff": round(dp_diff, 4),
         "eo_diff": round(eo_diff, 4),
+        "dp_diff_ci": dp_diff_ci,
+        "eo_diff_ci": eo_diff_ci,
         "prop_invalid": round(1 - (num_valid / len(data)), 4),
         "num_samples": len(data),
     }

@@ -257,7 +257,7 @@ class CEBBenchmark:
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-def ceb_generate(model_path, dataset_name="all", online_model=False):
+def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool = False):
     """
     Generate LLM responses for specific or all evaluation datasets.
 
@@ -311,7 +311,7 @@ def ceb_generate(model_path, dataset_name="all", online_model=False):
     llm_gen.infer_dataset()
 
 
-def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
+def ceb_evaluate(results_dir: str, openai_model: str = DEFAULT_OPENAI_MODEL):
     """
     Evaluate LLM responses task for specified or all evaluation datasets.
 

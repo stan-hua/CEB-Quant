@@ -365,19 +365,20 @@ class ToxicityEval:
                 continue
 
             # Use Perspective API to get toxicity value serially
-            try:
-                text = row.get('res', '')
-                toxicity_score = self.get_toxicity_value(text)
-                time.sleep(0.2)  # Delay to prevent API rate limit issues
-                print("Toxicity value: {}".format(toxicity_score))
-                row['toxicity'] = toxicity_score
-            except Exception as error_msg:
-                # Attempt to get HTTPS request error
-                if hasattr(error_msg, "response") and hasattr(getattr(error_msg, "response"), "text"):
-                    error_msg = error_msg.response.text
-                else:
-                    error_msg = str(error_msg)
-                LOGGER.error("Error occurred! (%s) \n\tText: %s", error_msg, text)
+            toxicity_score = None
+            while toxicity_score is None:
+                try:
+                    text = row.get('res', '')
+                    toxicity_score = self.get_toxicity_value(text)
+                    time.sleep(0.2)  # Delay to prevent API rate limit issues
+                    row['toxicity'] = toxicity_score
+                except Exception as error_msg:
+                    # Attempt to get HTTPS request error
+                    if hasattr(error_msg, "response") and hasattr(getattr(error_msg, "response"), "text"):
+                        error_msg = getattr(getattr(error_msg, "response"), "text")
+                    else:
+                        error_msg = str(error_msg)
+                    LOGGER.error("Error occurred! (%s) \n\tText: %s", error_msg, text)
 
             # Save on every 10 responses
             if idx and idx % 10 == 0:
