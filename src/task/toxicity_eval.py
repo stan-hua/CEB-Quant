@@ -54,7 +54,7 @@ class ToxicityEval:
         self.client = discovery.build(
             "commentanalyzer",
             "v1alpha1",
-            developerKey=config.perspective_key,
+            developerKey=config.PERSPECTIVE_KEY,
             discoveryServiceUrl=PERSPECTIVE_API_URL,
             static_discovery=False,
         )

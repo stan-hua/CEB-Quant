@@ -19,7 +19,7 @@ from src.config import config
 #                                  Constants                                   #
 ################################################################################
 # Load model information from configuration
-model_info = config.model_info
+model_info = config.MODEL_INFO
 online_model_list = model_info['online_model']
 model_mapping = model_info['model_mapping']
 rev_model_mapping = {value: key for key, value in model_mapping.items()}
@@ -54,7 +54,7 @@ def get_ernie_res(string, temperature):
 def get_res_openai(string, model, temperature):
     gpt_model_mapping = {"gpt-4o-mini": "gpt-4o-mini-2024-07-18	", "gpt-4o": "gpt-4o-2024-08-06"}
     gpt_model = gpt_model_mapping[model]
-    api_key = config.openai_key
+    api_key = config.OPENAI_KEY
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(model=gpt_model,
                                               messages=[{"role": "user", "content": string}],

@@ -10,7 +10,7 @@ from glob import glob
 from fire import Fire
 
 # Custom libraries
-from generation.llm_gen_wrapper import STEREOTYPE_DATASETS, TOXICITY_DATASETS
+from src.utils.llm_gen_wrapper import STEREOTYPE_DATASETS, TOXICITY_DATASETS
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils

@@ -45,11 +45,11 @@ def get_res(string, model=DEFAULT_MODEL, temperature=0, message=None):
         if message is None:
             message = [{"role": "user", "content": string}]
 
-        api_key = config.openai_key
-        if config.openai_api_base is not None:
+        api_key = config.OPENAI_KEY
+        if config.OPENAI_API_URL is not None:
             client = OpenAI(
                 api_key=api_key,
-                base_url=config.openai_api_base
+                base_url=config.OPENAI_API_URL
             )
         else:
             client = OpenAI(api_key=api_key)
@@ -80,7 +80,7 @@ class ChatGPTEvaluator:
         """
         self.model = model
         self.save_dir = save_dir
-        self.max_worker = config.max_worker_auto_eval
+        self.max_worker = config.MAX_WORKER_AUTOEVAL
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         # openai.api_key = config.openai_key
@@ -118,7 +118,7 @@ class ChatGPTEvaluator:
                 raise error_msg
 
 
-        task_to_prompt = config.task_prompt
+        task_to_prompt = config.TASK_TO_PROMPT_DICT
         # If prompt contains row formatters, then fill them in with row information
         task_prompt_dict = task_to_prompt.get(task, {})
         use_prompt_formatter = "mapping" in task_prompt_dict
