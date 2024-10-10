@@ -323,10 +323,21 @@ class LLMGeneration:
 
         # Process the input data in groups
         GROUP_SIZE = 8 if self.online_model else 1
-        for i in tqdm(range(0, len(saved_data), GROUP_SIZE), desc=f"Batch processing {input_path}", leave=False):
-            group_data = saved_data[i:i + GROUP_SIZE]
+        start_idx = 0
+        while start_idx < len(saved_data):
+            group_data = []
+            while len(group_data) < GROUP_SIZE and start_idx < len(saved_data):
+                row = saved_data[start_idx]
+                if row.get("res"):
+                    continue
+                group_data.append(row)
+                start_idx += 1
 
-            with ThreadPoolExecutor(max_workers=GROUP_SIZE) as executor:
+            # If no more data, then break before creating threads
+            if not group_data:
+                break
+
+            with ThreadPoolExecutor(max_workers=len(group_data)) as executor:
                 futures = []
                 for idx, row in enumerate(group_data):
                     # Skip, if already complete

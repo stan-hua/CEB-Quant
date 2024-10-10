@@ -2,6 +2,7 @@
 import concurrent.futures
 import logging
 import os
+import threading
 
 # Non-standard libraries
 from openai import OpenAI
@@ -9,7 +10,7 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
 from src.config import config
-from utils import json_utils
+from src.utils import json_utils
 
 
 ################################################################################
@@ -85,7 +86,7 @@ class ChatGPTEvaluator:
         # openai.api_key = config.openai_key
 
 
-    def save_progress(self, data, filename='auto_eval.json'):
+    def save_progress(self, data, filename='auto_eval.json', **save_kwargs):
         """
         Save evaluation progress to a JSON file.
 
@@ -94,7 +95,7 @@ class ChatGPTEvaluator:
             filename (str): Name of the file for saving the data.
         """
         save_path = os.path.join(self.save_dir, filename)
-        json_utils.save_json(data, save_path)
+        json_utils.save_json(data, save_path, **save_kwargs)
         LOGGER.info("Progress saved to %s", save_path)
 
 
@@ -135,34 +136,46 @@ class ChatGPTEvaluator:
                 prompts.append(single_prompt)
         # CASE 2: Otherwise, simply append LLM response to end of prompt
         else:
+            LOGGER.debug("[ChatGPT Evaluator] Concatenating LLM response to prompt")
             prompt = task_to_prompt.get(task, {}).get('prompt', '')
             prompts = [prompt + item['res'] for item in data]
+
+        if "rta" in task:
+            raise RuntimeError(f"Example RTA prompt: \n{prompts[0]}",)
 
         # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
             try:
-                data = json_utils.load_json(load_path)
-                LOGGER.info("Resuming evaluation from saved progress.")
+                prev_data = json_utils.load_json(load_path)
+                if prev_data:
+                    LOGGER.info("Resuming evaluation from saved progress.")
+                    data = prev_data
             except FileNotFoundError:
                 LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
 
-        assert isinstance(data, list), "Data must be a list."
+        # Perform input sanitization
+        assert isinstance(data, list), f"Data must be a list. data={data}"
+        assert data, "Data provided is empty!"
         assert task is not None, "Task must be specified for evaluation."
 
-        LOGGER.info('Total data number: %d', len(data))
-        LOGGER.info('Evaluating...')
+        # Create thread lock
+        lock = threading.Lock()
 
         # Perform LLM generation requests in parallel
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
             futures = [executor.submit(process_item, item, row) for item, row in zip(prompts, data)]
 
             # Add a callback to handle completion and errors
-            for future in concurrent.futures.as_completed(futures):
+            for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                 future.add_done_callback(save_progress_callback)
+                if idx % 10 == 0:
+                    self.save_progress(data, filename=progress_filename, lock=lock)
 
             # Wait for all futures to complete
             concurrent.futures.wait(futures)
 
+        # Save progress
         self.save_progress(data, filename=progress_filename)
+
         return data

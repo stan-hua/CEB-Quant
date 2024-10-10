@@ -1,7 +1,7 @@
 from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 import logging
 import os
-from utils import json_utils
+from src.utils import json_utils
 from tqdm import tqdm
 
 import torch

@@ -2,7 +2,7 @@ import os
 import difflib
 import inspect
 from task import stereotype_eval
-from utils import json_utils
+from src.utils import json_utils
 import traceback
 
 

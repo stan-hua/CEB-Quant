@@ -11,9 +11,9 @@ from fire import Fire
 
 # Custom libraries
 from src.generation.generation import STEREOTYPE_DATASETS, TOXICITY_DATASETS
-from task.stereotype_eval import StereotypeEval
-from task.toxicity_eval import ToxicityEval
-from utils import json_utils
+from src.task.stereotype_eval import StereotypeEval
+from src.task.toxicity_eval import ToxicityEval
+from src.utils import json_utils
 
 
 ################################################################################
@@ -150,7 +150,7 @@ def main_eval_ceb(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
 
             # Evaluate for toxicity
             evaluator = ToxicityEval(save_dir=curr_save_dir)
-            metric_val = evaluator.eval_toxicity(infer_data, resume=True)
+            metric_val = evaluator.eval_toxicity_continuation_conversation(infer_data, resume=True)
 
             # If null returned, print data
             if metric_val is None:
