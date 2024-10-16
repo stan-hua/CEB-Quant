@@ -62,8 +62,8 @@ MODEL_INFO = {
         "meta-llama/Llama-2-13b-chat-hf": "llama2-13b",
         "meta-llama/Llama-2-70b-chat-hf": "llama2-70b",
 
-        "meta-llama/Llama-3.1-8B-Instruct":"llama3.1-8b",
-        "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4": "llama3.1-8b-gptq-4bit",
+        "meta-llama/Llama-3.1-8B-Instruct":"llama3.1-8b-instruct",
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4": "llama3.1-8b-instruct-gptq-4bit",
 
         "meta-llama/Meta-Llama-3-70B-Instruct":"llama3-70b",
 

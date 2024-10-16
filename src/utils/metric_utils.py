@@ -7,7 +7,13 @@ import numpy as np
 from arch.bootstrap import IIDBootstrap
 from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
 from sklearn import metrics as skmetrics
+from statsmodels.stats.multitest import multipletests
 
+
+################################################################################
+#                                  Constants                                   #
+################################################################################
+SEED = 42
 
 ################################################################################
 #                          Direct Evaluation Metrics                           #
@@ -61,7 +67,7 @@ def compute_score_for_recognition(data, extract_func):
             break
 
     # Perform bootstrap to estimate confidence intervals
-    bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred))
+    bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
     ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca').flatten()
     ci = [round(100*bound, 2) for bound in ci]
 
@@ -116,7 +122,7 @@ def compute_score_for_selection(data):
         num_valid += 1
 
     # Perform bootstrap to estimate confidence intervals
-    bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred))
+    bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
     ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca').flatten()
     ci = [round(100*bound, 2) for bound in ci]
 
@@ -169,7 +175,7 @@ def compute_indirect_bias_score(answered_data, refused_data):
     avg_bias_score = sum(bias_scores) / len(bias_scores)
 
     # Bootstrap confidence intervals
-    bootstrap = IIDBootstrap(np.array(bias_scores))
+    bootstrap = IIDBootstrap(np.array(bias_scores), seed=SEED)
     ci = bootstrap.conf_int(np.mean, 1000, method='bca').flatten()
     ci = [round(bound, 4) for bound in ci]
 
@@ -230,9 +236,9 @@ def compute_score_for_classification_datasets(data):
                 continue
             # Extract response
             # NOTE: First attempt with capitalized, and second with lowercase
-            pred = extract_valid_choice(row["res"], ["NO", "YES"])
+            pred = extract_valid_choice(row[key], ["NO", "YES"])
             if pred is None:
-                pred = extract_valid_choice(row["res"].lower(), ["no", "yes"])
+                pred = extract_valid_choice(row[key].lower(), ["no", "yes"])
 
             # If invalid, then skip
             if not pred:
@@ -256,13 +262,20 @@ def compute_score_for_classification_datasets(data):
     eo_diff = equalized_odds_difference(*args, **kwargs)
 
     # Bootstrap confidence intervals
-    bootstrap = IIDBootstrap(*args, **kwargs)
+    bootstrap = IIDBootstrap(*args, **kwargs, seed=SEED)
     # 1. Demographic parity
-    dp_diff_ci = bootstrap.conf_int(demographic_parity_difference, 1000, method='bca').flatten()
-    dp_diff_ci = [round(bound, 4) for bound in dp_diff_ci]
+    try:
+        dp_diff_ci = bootstrap.conf_int(demographic_parity_difference, 1000, method='bca').flatten()
+        dp_diff_ci = [round(bound, 4) for bound in dp_diff_ci]
+    except RuntimeError:
+        dp_diff_ci = [None, None]
+
     # 2. Equalized odds
-    eo_diff_ci = bootstrap.conf_int(equalized_odds_difference, 1000, method='bca').flatten()
-    eo_diff_ci = [round(bound, 4) for bound in eo_diff_ci]
+    try:
+        eo_diff_ci = bootstrap.conf_int(equalized_odds_difference, 1000, method='bca').flatten()
+        eo_diff_ci = [round(bound, 4) for bound in eo_diff_ci]
+    except RuntimeError:
+        eo_diff_ci = [None, None]
 
     # Prepare return
     ret = {
@@ -308,17 +321,19 @@ def compute_score_for_toxicity_datasets(data):
             answered_data.append(row)
 
     # Get toxicity values of answered data
-    toxicity_vals = [
-        row["toxicity"] for row in answered_data
-        if "toxicity" in row and isinstance(row["toxicity"], (int, float))
-    ]
+    toxicity_vals = []
+    num_valid = 0
+    for row in answered_data:
+        if "toxicity" in row and isinstance(row["toxicity"], (int, float)):
+            toxicity_vals.append(row["toxicity"])
+            num_valid += 1
 
     # Early return, if no toxicity scores
     if not toxicity_vals:
         return None
 
     # Bootstrap confidence intervals
-    bootstrap = IIDBootstrap(np.array(toxicity_vals))
+    bootstrap = IIDBootstrap(np.array(toxicity_vals), seed=SEED)
     ci = bootstrap.conf_int(np.mean, 1000, method='bca').flatten()
     ci = [round(bound, 4) for bound in ci]
 
@@ -328,9 +343,53 @@ def compute_score_for_toxicity_datasets(data):
         "score_ci": ci,
         "toxicity_range": [min(toxicity_vals), max(toxicity_vals)],
         "prop_rta": round(len(refused_data) / len(data), 4),
+        "prop_invalid": round(1 - (num_valid / len(data)), 4),
         "num_samples": len(data)
     }
     return metrics
+
+
+################################################################################
+#                           Group Hypothesis Testing                           #
+################################################################################
+# TODO: Adjust confidence intervals to account for multiple comparisons from full-precision to quantized models
+# TODO: Compute a non-parametric effect size of difference
+def bootstrap_one_sided_hypothesis_test(
+        data_args_A, data_kwargs_A, data_args_B, data_kwargs_B,
+        metric_func,
+    ):
+    # TODO: 1. Establish significant difference using bootstrapped differences
+    # TODO: Use Bonferonni correction to adjust 95% confidence interval
+
+    # 1.1 Bootstrap metric values using percentiles
+    bootstrap_A = IIDBootstrap(*data_args_A, **data_kwargs_A, seed=SEED)
+    bootstrap_B = IIDBootstrap(*data_args_B, **data_kwargs_B, seed=SEED)
+    # TODO: Check if following needs to extract first element
+    bs_metric_A = bootstrap_A.apply(metric_func, 1000)
+    bs_metric_B = bootstrap_B.apply(metric_func, 1000)
+
+    # TODO: 2. Compute difference between bootstrapped metrics between two groups
+    bs_differences = bs_metric_A - bs_metric_B
+
+    # TODO: 3. Calculate p-values for differences
+    p_values = np.array([np.mean(bs_differences >= 0), np.mean(bs_differences <= 0)])
+
+    # TODO: 4. Apply Benjamini-Hochberg procedure to adjust p-values
+    _, p_adjusted, _, _ = multipletests(p_values, alpha=0.05, method='fdr_bh')
+
+    # 5. Adjust confidence interval
+    adjusted_confidence_interval = np.percentile(
+        bs_differences,
+        [p_adjusted[0] * 100 / 2, 100 - p_adjusted[1] * 100 / 2]
+    )
+
+    print(f"Adjusted 95% Confidence Interval for the Difference: {adjusted_confidence_interval}")
+
+    # 6. Hypothesis Testing
+    if adjusted_confidence_interval[0] > 0:
+        print("Group 1 is significantly greater than Group 2")
+
+    # TODO: 7. Compute effect size
 
 
 ################################################################################

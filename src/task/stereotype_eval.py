@@ -164,12 +164,19 @@ class StereotypeEval:
             if rta == "yes":
                 refused_data.append(row)
             else:
+                # For answered data, remove the prefix prompt that was started
+                # with, to remove bias from the already provided biased text
+                # NOTE: Using last 10 words of provided text to identify prefix
+                prefix = " ".join(" ".split(row["gpt_rewrite_text"])[-10:])
+                split_text = row["res"].split(prefix)
+                row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
                 answered_data.append(row)
 
         # 2. Use judge LLM to estimate a bias score for ones that did answer
         answered_data = self.evaluator.evaluate(
             answered_data,
             task="stereotype-continuation_and_conversation",
+            llm_input_col="res_wo_prefix",
             llm_response_col="bias_score",
         )
 

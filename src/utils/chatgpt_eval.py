@@ -102,8 +102,36 @@ class ChatGPTEvaluator:
         self, data, task,
         resume=True,
         progress_filename="eval_progress.json",
+        llm_input_col="res",
         llm_response_col="eval_res",
     ):
+        """
+        Evaluate a dataset using the OpenAI API.
+
+        Parameters
+        ----------
+        data : list of dict
+            Each dict contains a LLM-generated response to a unique prompt to
+            evaluate
+        task : str
+            Name of the task to evaluate.
+        resume : bool, optional
+            If True, then try to resume evaluation from a saved progress file
+            with the same filename as `progress_filename`. Default is True.
+        progress_filename : str, optional
+            Filename for saving or resuming progress. Default is
+            `eval_progress.json`.
+        llm_input_col : str, optional
+            Key to LLM response from initial prompt to evaluate. Overwrites "res"
+            in config.config prompts
+        llm_response_col : str, optional
+            Key to store the judge LLM's response.
+
+        Returns
+        -------
+        list
+            The evaluated data.
+        """
         def save_progress_callback(future):
             if future.exception() is not None:
                 LOGGER.error("An error occurred: %s", str(future.exception()))
@@ -132,13 +160,20 @@ class ChatGPTEvaluator:
             for row in data:
                 single_prompt = prompt
                 for k, v in replace_dict.items():
-                    single_prompt = single_prompt.replace(k, str(row[v]))
+                    # CASE 1: If "res" was specified, but LLM input column is different
+                    #         then convert
+                    if v == "res" and llm_input_col != "res":
+                        val = row[llm_input_col]
+                    # CASE 2: Any other column
+                    else:
+                        val = row[v]
+                    single_prompt = single_prompt.replace(k, str(val))
                 prompts.append(single_prompt)
         # CASE 2: Otherwise, simply append LLM response to end of prompt
         else:
             LOGGER.debug("[ChatGPT Evaluator] Concatenating LLM response to prompt")
             prompt = task_prompt_dict.get('prompt', '')
-            prompts = [prompt + item['res'] for item in data]
+            prompts = [prompt + item[llm_input_col] for item in data]
 
         # If specified, resume from previous evaluation
         if resume:

@@ -45,7 +45,7 @@ TOXICITY_DATASETS = [
 ALL_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 
 # Data type to load LLM
-DTYPE = "bfloat16"
+DTYPE = "auto"          # "bfloat16", "float16"
 
 
 ################################################################################

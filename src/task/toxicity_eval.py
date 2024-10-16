@@ -202,8 +202,22 @@ class ToxicityEval:
         # Validate RTA keys
         self.validate_rta(data)
 
+        # For answered data, remove the prefix prompt that was started
+        # with, to remove bias from the already provided biased text
+        for row in data:
+            # Skip, if refused to answer
+            if row["rta"].lower() == "yes":
+                continue
+            # NOTE: Using last 10 words of provided text to identify prefix
+            prefix = " ".join(" ".split(row["gpt_rewrite_text"])[-10:])
+            split_text = row["res"].split(prefix)
+            row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
+
         # Assign toxicity values
-        data = self.assign_toxicity_values(data, progress_filename)
+        data = self.assign_toxicity_values(
+            data, progress_filename,
+            input_col="res_wo_prefix",
+        )
 
         # Save at the very end
         self.save_progress(data, filename=progress_filename)
@@ -337,7 +351,13 @@ class ToxicityEval:
         return response['attributeScores']['TOXICITY']['spanScores'][0]['score']['value']
 
 
-    def assign_toxicity_values(self, data, progress_filename=PERSPECTIVE_EVAL_FNAME):
+    def assign_toxicity_values(
+            self,
+            data,
+            progress_filename=PERSPECTIVE_EVAL_FNAME,
+            input_col="res",
+            output_col="toxicity",
+    ):
         """
         For each row in the data, use the Perspective API to get the toxicity
         value of the response and save it back to the row.
@@ -348,6 +368,10 @@ class ToxicityEval:
             The data to evaluate
         progress_filename : str, optional
             The filename to save the progress to, by default PERSPECTIVE_EVAL_FNAME
+        input_col : str, optional
+            The column name of the input text, by default "res"
+        output_col : str, optional
+            The column name to save the toxicity value, by default "toxicity"
 
         Returns
         -------
@@ -357,7 +381,7 @@ class ToxicityEval:
         # For each row, use Perspective API to get toxicity value
         for idx, row in tqdm(enumerate(data)):
             # Skip, if already has toxicity
-            if "toxicity" in row:
+            if output_col in row:
                 continue
 
             # Skip, if refused to answer
@@ -368,10 +392,10 @@ class ToxicityEval:
             toxicity_score = None
             while toxicity_score is None:
                 try:
-                    text = row.get('res', '')
+                    text = row.get(input_col, '')
                     toxicity_score = self.get_toxicity_value(text)
                     time.sleep(0.2)  # Delay to prevent API rate limit issues
-                    row['toxicity'] = toxicity_score
+                    row[output_col] = toxicity_score
                 except Exception as error_msg:
                     # Attempt to get HTTPS request error
                     if hasattr(error_msg, "response") and hasattr(getattr(error_msg, "response"), "text"):
