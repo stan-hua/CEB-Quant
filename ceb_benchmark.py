@@ -7,6 +7,8 @@ from collections import defaultdict
 from glob import glob
 
 # Non-standard libraries
+import pandas as pd
+import torch
 from fire import Fire
 
 # Custom libraries
@@ -90,7 +92,7 @@ class CEBBenchmark:
         overwrite : bool, optional
             If True, overwrite existing results
         """
-        assert os.path.exists(results_dir), "Directory doesn't exist!"
+        assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
         # Store attributes
         self.results_dir = results_dir
@@ -104,12 +106,12 @@ class CEBBenchmark:
         os.makedirs(self.saved_eval_dir, exist_ok=True)
 
         # Create directory to save metrics
-        metrics_dir = os.path.join(DIR_METRICS, model_name)
-        os.makedirs(metrics_dir, exist_ok=True)
+        self.metrics_dir = os.path.join(DIR_METRICS, model_name)
+        os.makedirs(self.metrics_dir, exist_ok=True)
 
         # Create paths to store metrics at
-        self.stereotype_metric_path = os.path.join(metrics_dir, "stereotype_metrics.json")
-        self.toxicity_metric_path = os.path.join(metrics_dir, "toxicity_metrics.json")
+        self.stereotype_metric_path = os.path.join(self.metrics_dir, "stereotype_metrics.json")
+        self.toxicity_metric_path = os.path.join(self.metrics_dir, "toxicity_metrics.json")
 
         # Store stereotype and toxicity metrics
         self.dset_stereotype_metrics = defaultdict(dict)
@@ -117,10 +119,10 @@ class CEBBenchmark:
 
         # Resume previous evaluations, if specified
         if not overwrite:
-            self.reload_previous_eval()
+            self.reload_computed_metrics()
 
 
-    def reload_previous_eval(self):
+    def reload_computed_metrics(self):
         """
         Resume evaluation from previous runs.
 
@@ -204,7 +206,6 @@ class CEBBenchmark:
             LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
 
 
-    # TODO: Implement this
     def toxicity_eval(self, task_type="direct"):
         """
         Evaluate all CEB - Toxicity direct/indirect evaluation datasets
@@ -254,6 +255,53 @@ class CEBBenchmark:
             LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
 
 
+    def save_metric_tables(self):
+        """
+        Save all metrics as individual tables.
+
+        Saves a table for each bias type (stereotype/toxicity) and
+        direct/indirect eval, with columns for each dataset and social group,
+        containing the score, dp_diff, and eo_diff, as well as the proportion of
+        invalid and refused-to-answer responses (if applicable).
+
+        Table is saved as a CSV file in the `metrics_dir` directory, with the
+        filename `metrics_{bias_type}_{task_type}.csv`.
+        """
+        # Stratify by bias type / direct vs. indirect eval
+        for bias_type, task_dict in BIAS_TO_TASK_TYPE_TO_DATASETS.items():
+            dataset_to_metric_dict = self.dset_stereotype_metrics if bias_type == "stereotype" else self.dset_toxicity_metrics
+
+            # For each bias type / direct vs. indirect eval, save a table
+            for task_type, datasets in task_dict.items():
+                row = {}
+                for dataset in datasets:
+                    # Raise error, if doesn't exist
+                    if dataset not in dataset_to_metric_dict:
+                        raise ValueError(f"Dataset {dataset} not found in metrics.\n\tFound metrics for: {list(dataset_to_metric_dict.keys())}")
+                    social_group_to_metric_dict = dataset_to_metric_dict[dataset]
+                    for social_group, metric_dict in social_group_to_metric_dict.items():
+                        # Add scores
+                        for score_col in ("score", "dp_diff", "eo_diff"):
+                            if score_col not in metric_dict:
+                                continue
+                            metric_val = f"{metric_dict[score_col]:.2f} {metric_dict[score_col+'_ci']}"
+                            row[f"{dataset}/{social_group}/{score_col}"] = metric_val
+
+                        # Add percentage of incorrect samples
+                        if "prop_rta" in metric_dict:
+                            row[f"{dataset}/{social_group}/ %RTA - Invalid"] = f"{100*metric_dict['prop_rta']:.2f} / {100*metric_dict['prop_invalid']:.2f}"
+                        elif "prop_invalid" in metric_dict:
+                            row[f"{dataset}/{social_group}/ %Invalid"] = f"{100*metric_dict['prop_invalid']:.2f}"
+
+                # Save as table
+                df_metrics = pd.DataFrame.from_dict([row])
+                save_path = os.path.join(
+                    self.metrics_dir,
+                    f"metrics_{bias_type}_{task_type}.csv"
+                )
+                df_metrics.to_csv(save_path, index=False)
+
+
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
@@ -286,7 +334,6 @@ def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool
             use_replicate=False,
             use_vllm=False,
             repetition_penalty=1.0,
-            num_gpus=1,
             max_new_tokens=512,
             debug=False
         )
@@ -302,7 +349,7 @@ def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool
             use_replicate=False,
             use_vllm=True,
             repetition_penalty=1.0,
-            num_gpus=1, 
+            num_gpus=min(torch.cuda.device_count(), 4), 
             max_new_tokens=512, 
             debug=False
         )
@@ -327,6 +374,9 @@ def ceb_evaluate(results_dir: str, openai_model: str = DEFAULT_OPENAI_MODEL):
 
     # Perform comprehensive evaluation
     benchmark.comprehensive_eval()
+
+    # Convert to table
+    benchmark.save_metric_tables()
 
 
 ################################################################################

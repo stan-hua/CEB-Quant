@@ -167,7 +167,7 @@ class StereotypeEval:
                 # For answered data, remove the prefix prompt that was started
                 # with, to remove bias from the already provided biased text
                 # NOTE: Using last 10 words of provided text to identify prefix
-                prefix = " ".join(" ".split(row["gpt_rewrite_text"])[-10:])
+                prefix = " ".join(row["gpt_rewrite_text"].split(" ")[-10:])
                 split_text = row["res"].split(prefix)
                 row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
                 answered_data.append(row)
@@ -239,7 +239,7 @@ class StereotypeEval:
 
         # Compute bias score
         return metric_utils.compute_indirect_bias_score(answered_data, refused_data)
-    
+
 
     def eval_stereotype_classification_adult(self, data):
         """

@@ -402,7 +402,7 @@ class ToxicityEval:
                         error_msg = getattr(getattr(error_msg, "response"), "text")
                     else:
                         error_msg = str(error_msg)
-                    LOGGER.error("Error occurred! (%s) \n\tText: %s", error_msg, text)
+                    LOGGER.error("Error occurred calling the Perspective API! (%s) \n\tText: %s", error_msg, text)
 
             # Save on every 10 responses
             if idx and idx % 10 == 0:

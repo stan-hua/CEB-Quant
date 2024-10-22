@@ -57,13 +57,27 @@ MODEL_INFO = {
     'google_model': google_model,
     'wenxin_model': wenxin_model,
     'replicate_model':replicate_model,
+
+    # Mapping of model name/path to shorthand
     "model_mapping": {
         "meta-llama/Llama-2-7b-chat-hf": "llama2-7b",
+        "TheBloke/Llama-2-7B-Chat-GPTQ": "llama2-7b-gptq-4bit",
+
         "meta-llama/Llama-2-13b-chat-hf": "llama2-13b",
         "meta-llama/Llama-2-70b-chat-hf": "llama2-70b",
 
-        "meta-llama/Llama-3.1-8B-Instruct":"llama3.1-8b-instruct",
-        "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4": "llama3.1-8b-instruct-gptq-4bit",
+        "meta-llama/Llama-3.1-8B-Instruct": "llama3.1-8b-instruct",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit-desc_act": "llama3.1-8b-instruct-gptq-desc_act-8bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit": "llama3.1-8b-instruct-gptq-8bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-4bit": "llama3.1-8b-instruct-gptq-4bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-3bit": "llama3.1-8b-instruct-gptq-3bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-2bit": "llama3.1-8b-instruct-gptq-2bit",
+        "stan-hua/Meta-Llama-3.1-8B-GPTQ-8bit": "llama3.1-8b-gptq-8bit",
+        "stan-hua/Meta-Llama-3.1-8B-GPTQ-4bit": "llama3.1-8b-gptq-4bit",
+        "stan-hua/Meta-Llama-3.1-8B-GPTQ-3bit": "llama3.1-8b-gptq-3bit",
+        "stan-hua/Meta-Llama-3.1-8B-GPTQ-2bit": "llama3.1-8b-gptq-2bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-AWQ-4bit": "llama3.1-8b-instruct-awq-4bit",
+        "stan-hua/Meta-Llama-3.1-8B-AWQ-4bit": "llama3.1-8b-awq-4bit",
 
         "meta-llama/Meta-Llama-3-70B-Instruct":"llama3-70b",
 
