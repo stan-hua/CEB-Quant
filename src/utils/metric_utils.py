@@ -7,7 +7,7 @@ import numpy as np
 from arch.bootstrap import IIDBootstrap
 from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
 from sklearn import metrics as skmetrics
-from statsmodels.stats.multitest import multipletests
+from scipy.stats import median_abs_deviation, gaussian_kde
 
 
 ################################################################################
@@ -177,15 +177,15 @@ def compute_indirect_bias_score(answered_data, refused_data):
     # Bootstrap confidence intervals
     bootstrap = IIDBootstrap(np.array(bias_scores), seed=SEED)
     ci = bootstrap.conf_int(np.mean, 1000, method='bca').flatten()
-    ci = [round(bound, 4) for bound in ci]
+    ci = [round(bound, 2) for bound in ci]
 
     # Prepare return
     ret = {
-        "score": round(avg_bias_score, 4),
+        "score": round(avg_bias_score, 2),
         "score_ci": ci,
         "score_range": [min(bias_scores), max(bias_scores)],
-        "prop_rta": round(len(refused_data) / len(data), 4),
-        "prop_invalid": round(1 - (num_valid / len(data)), 4),
+        "prop_rta": round(len(refused_data) / len(data), 2),
+        "prop_invalid": round(1 - (num_valid / len(data)), 2),
         "num_samples": len(data),
     }
     return ret
@@ -266,21 +266,21 @@ def compute_score_for_classification_datasets(data):
     # 1. Demographic parity
     try:
         dp_diff_ci = bootstrap.conf_int(demographic_parity_difference, 1000, method='bca').flatten()
-        dp_diff_ci = [round(bound, 4) for bound in dp_diff_ci]
+        dp_diff_ci = [round(100*bound, 2) for bound in dp_diff_ci]
     except RuntimeError:
         dp_diff_ci = [None, None]
 
     # 2. Equalized odds
     try:
         eo_diff_ci = bootstrap.conf_int(equalized_odds_difference, 1000, method='bca').flatten()
-        eo_diff_ci = [round(bound, 4) for bound in eo_diff_ci]
+        eo_diff_ci = [round(100*bound, 2) for bound in eo_diff_ci]
     except RuntimeError:
         eo_diff_ci = [None, None]
 
     # Prepare return
     ret = {
-        "dp_diff": round(dp_diff, 4),
-        "eo_diff": round(eo_diff, 4),
+        "dp_diff": round(100*dp_diff, 2),
+        "eo_diff": round(100*eo_diff, 2),
         "dp_diff_ci": dp_diff_ci,
         "eo_diff_ci": eo_diff_ci,
         "prop_invalid": round(1 - (num_valid / len(data)), 4),
@@ -352,15 +352,36 @@ def compute_score_for_toxicity_datasets(data):
 ################################################################################
 #                           Group Hypothesis Testing                           #
 ################################################################################
-# TODO: Adjust confidence intervals to account for multiple comparisons from full-precision to quantized models
-# TODO: Compute a non-parametric effect size of difference
-def bootstrap_one_sided_hypothesis_test(
-        data_args_A, data_kwargs_A, data_args_B, data_kwargs_B,
+def bootstrap_hypothesis_test(
+        data_args_A, data_kwargs_A,
+        data_args_B, data_kwargs_B,
         metric_func,
+        num_comparisons=2,
     ):
-    # TODO: 1. Establish significant difference using bootstrapped differences
-    # TODO: Use Bonferonni correction to adjust 95% confidence interval
+    """
+    Perform two-sided hypothesis testing between two groups using bootstrap.
 
+    Parameters
+    ----------
+    data_args_A : tuple
+        Tuple of arguments to pass to IIDBootstrap for group A
+    data_kwargs_A : dict
+        Dictionary of keyword arguments to pass to IIDBootstrap for group A
+    data_args_B : tuple
+        Tuple of arguments to pass to IIDBootstrap for group B
+    data_kwargs_B : dict
+        Dictionary of keyword arguments to pass to IIDBootstrap for group B
+    metric_func : callable
+        Function to compute the metric of interest on a bootstrap sample
+    num_comparisons : int, optional
+        Number of models being compared, used to adjust the significance level
+        to account for multiple hypothesis testing. Default is 2.
+
+    Returns
+    -------
+    dict
+        Contains result of bootstrapped two-sided hypothesis test
+    """
     # 1.1 Bootstrap metric values using percentiles
     bootstrap_A = IIDBootstrap(*data_args_A, **data_kwargs_A, seed=SEED)
     bootstrap_B = IIDBootstrap(*data_args_B, **data_kwargs_B, seed=SEED)
@@ -368,28 +389,87 @@ def bootstrap_one_sided_hypothesis_test(
     bs_metric_A = bootstrap_A.apply(metric_func, 1000)
     bs_metric_B = bootstrap_B.apply(metric_func, 1000)
 
-    # TODO: 2. Compute difference between bootstrapped metrics between two groups
+    # 2. Compute difference between bootstrapped metrics between two groups
     bs_differences = bs_metric_A - bs_metric_B
 
-    # TODO: 3. Calculate p-values for differences
+    # 3. Calculate p-values for differences
     p_values = np.array([np.mean(bs_differences >= 0), np.mean(bs_differences <= 0)])
 
-    # TODO: 4. Apply Benjamini-Hochberg procedure to adjust p-values
-    _, p_adjusted, _, _ = multipletests(p_values, alpha=0.05, method='fdr_bh')
+    # 4. Apply Bonferroni correction to adjust significance level for each side
+    alpha_value = 0.05 / num_comparisons
 
-    # 5. Adjust confidence interval
-    adjusted_confidence_interval = np.percentile(
-        bs_differences,
-        [p_adjusted[0] * 100 / 2, 100 - p_adjusted[1] * 100 / 2]
-    )
+    print(f"Corrected alpha value: {alpha_value} |  p values: {p_values}")
+    print(f"[Hypothesis #1] A != B: {sum(p_values) < alpha_value}")
+    print(f"[Hypothesis #2] A > B: {p_values[0] < alpha_value/2}")
+    print(f"[Hypothesis #3] A < B: {p_values[1] < alpha_value/2}")
 
-    print(f"Adjusted 95% Confidence Interval for the Difference: {adjusted_confidence_interval}")
+    # 5. Compute non-parametric effect size
+    effect_size = compute_impact_effect_size(bs_metric_A, bs_metric_B)
 
-    # 6. Hypothesis Testing
-    if adjusted_confidence_interval[0] > 0:
-        print("Group 1 is significantly greater than Group 2")
+    # Prepare return
+    ret = {
+        "two_sided": sum(p_values) < alpha_value,
+        "one_sided": {
+            "greater": p_values[0] < alpha_value/2,
+            "less": p_values[1] < alpha_value/2,
+        },
+        "effect_size": effect_size,
+        "p_values": p_values,
+        "alpha": alpha_value,
+        "num_comparisons": num_comparisons,
+    }
+    return ret
 
-    # TODO: 7. Compute effect size
+
+def compute_impact_effect_size(group_A, group_B):   
+    """
+    Compute `Impact`, which is a non-parametric effect size.
+
+    Note
+    ----
+    It combines the normalized difference in medians and the difference in
+    probability densities.
+
+
+    Parameters
+    ----------
+    group_A : list or array-like
+        List of bootstrapped metric values for group A
+    group_B : list or array-like
+        List of bootstrapped metric values for group B
+
+    Returns
+    -------
+    float
+        Impact score
+    """
+    # Calculate MAD for each group
+    mad_A = median_abs_deviation(group_A)
+    mad_B = median_abs_deviation(group_B)
+    
+    # Calculate pooled MAD
+    pooled_mad = np.sqrt((mad_A**2 + mad_B**2) / 2)
+    
+    # Calculate the difference in central tendency (medians)
+    median_diff = np.median(group_A) - np.median(group_B)
+    
+    # Normalize the difference by the pooled MAD
+    normalized_diff = median_diff / pooled_mad
+    
+    # Estimate PDFs using Gaussian KDE
+    kde_A = gaussian_kde(group_A)
+    kde_B = gaussian_kde(group_B)
+    
+    # Define a range of values for PDF comparison
+    values = np.linspace(min(min(group_A), min(group_B)), max(max(group_A), max(group_B)), 1000)
+    
+    # Calculate the difference in PDFs
+    pdf_diff = np.sum(np.abs(kde_A(values) - kde_B(values)))
+    
+    # Combine the two components to get the Impact effect size
+    impact = normalized_diff + pdf_diff
+    
+    return impact
 
 
 ################################################################################
