@@ -35,7 +35,6 @@ multiprocessing.set_start_method('spawn')
 ################################################################################
 #                                  Constants                                   #
 ################################################################################
-
 # General test types
 TEST_TYPES = ["Continuation", "Conversation", "Recognition", "Selection"]
 # Names of Stereotype Datasets
@@ -61,6 +60,10 @@ DTYPE = "float16"          # "bfloat16", "float16"
 
 # Number of threads to use in sending requests to LLM APIs
 NUM_WORKERS = 8
+
+# Maximum vLLM model input token length
+MAX_MODEL_LEN = 4096
+
 
 ################################################################################
 #                                   Classes                                    #
@@ -163,6 +166,7 @@ class LLMGeneration:
                 model=self.model_path,
                 tensor_parallel_size=self.num_gpus,
                 dtype=DTYPE,
+                max_model_len=MAX_MODEL_LEN,
             )
             self.sampling_params = SamplingParams(temperature=self.temperature,
                                                   top_p=1.0, seed=1,
@@ -343,8 +347,15 @@ class LLMGeneration:
             prompts = [row["prompt"] for row in filtered_rows]
             llm_responses = self._generation_vllm_multiple(prompts)
             for idx, row in enumerate(filtered_rows):
+                # CASE 1: Valid non-empty response
                 if llm_responses[idx]:
                     row["res"] = llm_responses[idx]
+                # CASE 2: Empty string returned
+                elif llm_responses[idx] == "":
+                    row["res"] = llm_responses[idx]
+                    row["num_attempts"] += 1
+                # CASE 3: Returned None
+                # NOTE: This branch may never execute
                 else:
                     row["num_attempts"] += 1
             return
@@ -455,15 +466,13 @@ class LLMGeneration:
         LOGGER.info(f"Evaluating target model: {self.model_name}")
 
         base_dir = os.path.join(self.data_path, dataset_name)
-        section = os.path.basename(base_dir)
-        result_dir = os.path.join("generation_results", self.model_name, section)
+        result_dir = os.path.join("generation_results", self.model_name, dataset_name)
         os.makedirs(result_dir, exist_ok=True)
 
         file_list = glob.glob(os.path.join(base_dir, "*.json"))
         for file_path in tqdm(file_list, desc="Processing files"):
             LOGGER.info("Processing file: %s", file_path)
-            file_name = os.path.basename(file_path)
-            save_path = os.path.join(result_dir, file_name)
+            save_path = os.path.join(result_dir, os.path.basename(file_path))
             self.process_file(file_path, save_path)
 
 
