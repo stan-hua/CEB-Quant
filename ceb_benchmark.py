@@ -78,7 +78,9 @@ class CEBBenchmark:
     Universal interface for running and evaluating CEB benchmark
     """
 
-    def __init__(self, results_dir, openai_model=DEFAULT_OPENAI_MODEL,
+    def __init__(self, results_dir,
+                 openai_model=DEFAULT_OPENAI_MODEL,
+                 alpha=0.05,
                  overwrite=False):
         """
         Initialize CEBBenchmark class.
@@ -89,14 +91,18 @@ class CEBBenchmark:
             Path to directory containing inference results for 1 model
         openai_model : str, optional
             OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
+        alpha : float
+            Alpha level for confidence interval
         overwrite : bool, optional
-            If True, overwrite existing results
+            If True, overwrite existing computed metrics. Does NOT overwrite
+            existing generations.
         """
         assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
         # Store attributes
         self.results_dir = results_dir
         self.openai_model = openai_model
+        self.alpha = alpha
 
         # Get model name
         model_name = os.path.basename(results_dir)
@@ -188,7 +194,11 @@ class CEBBenchmark:
                 infer_data = json_utils.load_json(json_path)
 
                 # Evaluate for specific stereotype
-                evaluator = StereotypeEval(model=self.openai_model, save_dir=curr_save_dir)
+                evaluator = StereotypeEval(
+                    model=self.openai_model,
+                    save_dir=curr_save_dir,
+                    alpha=self.alpha,
+                )
                 try:
                     metrics = evaluator.eval_stereotype(dataset_name, infer_data)
                 except Exception as error_msg:
@@ -237,7 +247,11 @@ class CEBBenchmark:
                 infer_data = json_utils.load_json(json_path)
 
                 # Evaluate for specific toxicity
-                evaluator = ToxicityEval(save_dir=curr_save_dir, model=self.openai_model)
+                evaluator = ToxicityEval(
+                    save_dir=curr_save_dir,
+                    alpha=self.alpha,
+                    model=self.openai_model,
+                )
                 try:
                     metrics = evaluator.eval_toxicity(dataset_name, infer_data)
                 except Exception as error_msg:
@@ -255,7 +269,7 @@ class CEBBenchmark:
             LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
 
 
-    def save_metric_tables(self):
+    def save_metric_tables(self, save=True):
         """
         Save all metrics as individual tables.
 
@@ -266,7 +280,20 @@ class CEBBenchmark:
 
         Table is saved as a CSV file in the `metrics_dir` directory, with the
         filename `metrics_{bias_type}_{task_type}.csv`.
+
+        Parameters
+        ----------
+        save : bool, optional
+            If True, save table
+
+        Returns
+        -------
+        dict
+            Mapping of filename to metrics row (pd.DataFrame)
         """
+        # Store the save filename to the metrics
+        fname_to_metrics = {}
+
         # Stratify by bias type / direct vs. indirect eval
         for bias_type, task_dict in BIAS_TO_TASK_TYPE_TO_DATASETS.items():
             dataset_to_metric_dict = self.dset_stereotype_metrics if bias_type == "stereotype" else self.dset_toxicity_metrics
@@ -293,19 +320,25 @@ class CEBBenchmark:
                         elif "prop_invalid" in metric_dict:
                             row[f"{dataset}/{social_group}/ %Invalid"] = f"{100*metric_dict['prop_invalid']:.2f}"
 
-                # Save as table
+                # Convert to table
                 df_metrics = pd.DataFrame.from_dict([row])
-                save_path = os.path.join(
-                    self.metrics_dir,
-                    f"metrics_{bias_type}_{task_type}.csv"
-                )
-                df_metrics.to_csv(save_path, index=False)
+                save_fname = f"metrics_{bias_type}_{task_type}.csv"
+                save_path = os.path.join(self.metrics_dir, save_fname)
+
+                # Store metrics
+                fname_to_metrics[save_fname] = row
+
+                # Save, if specified
+                if save:
+                    df_metrics.to_csv(save_path, index=False)
+
+        return fname_to_metrics
 
 
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool = False):
+def ceb_generate(model_path, dataset_name="all", online_model=False):
     """
     Generate LLM responses for specific or all evaluation datasets.
 
@@ -344,13 +377,13 @@ def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool
             model_path=model_path,
             data_path="./data/",
             dataset_name=dataset_name,          # run on all datasets in the folder
-            online_model=False, 
+            online_model=False,
             use_deepinfra=False,
             use_replicate=False,
             use_vllm=True,
             repetition_penalty=1.0,
-            num_gpus=min(torch.cuda.device_count(), 4), 
-            max_new_tokens=512, 
+            num_gpus=min(torch.cuda.device_count(), 4),
+            max_new_tokens=512,
             debug=False
         )
 
@@ -358,7 +391,7 @@ def ceb_generate(model_path: str, dataset_name: str = "all", online_model : bool
     llm_gen.infer_dataset()
 
 
-def ceb_evaluate(results_dir: str, openai_model: str = DEFAULT_OPENAI_MODEL):
+def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
     """
     Evaluate LLM responses task for specified or all evaluation datasets.
 
@@ -375,8 +408,75 @@ def ceb_evaluate(results_dir: str, openai_model: str = DEFAULT_OPENAI_MODEL):
     # Perform comprehensive evaluation
     benchmark.comprehensive_eval()
 
-    # Convert to table
-    benchmark.save_metric_tables()
+    # Convert to table and save
+    benchmark.save_metric_tables(save=True)
+
+
+def ceb_compare_multiple(
+        results_dirs, save_dir,
+        pairwise=False,
+        openai_model=DEFAULT_OPENAI_MODEL
+    ):
+    """
+    Re-computes metrics with confidence intervals adjusted for multiple
+    comparisons.
+
+    Parameters
+    ----------
+    results_dirs : list
+        List of result directories to compare
+    save_dir : str
+        Directory to save aggregated files
+    pairwise : bool, optional
+        If True, adjusts significance level to account for all possible pairwise
+        comparisons. Otherwise, assumes one-vs-all comparisons, by default False
+    openai_model : str, optional
+        Name of OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
+    """
+    LOGGER.info(
+        "[CEB Benchmark] Performing multiple comparisons with the following directories:\n"
+        "\n\t" + "\n\t".join(results_dir) + "\n"
+    )
+    # Determine significance level
+    # CASE 1: All possible pairwise comparisons (N*(N-1) comparisons)
+    if pairwise:
+        alpha = 0.05 / (len(results_dirs) * (len(results_dirs)-1))
+        LOGGER.info(f"[CEB Benchmark] Adjusting significance level for pairwise comparisons (a={alpha})")
+    # CASE 2: One vs all comparison (N-1 comparisons)
+    else:
+        alpha = 0.05 / (len(results_dirs)-1)
+        LOGGER.info(f"[CEB Benchmark] Adjusting significance level for one-vs-all comparisons (a={alpha})")
+
+    # Re-compute metrics with new significance level
+    fname_to_accum_metrics = []
+    for results_dir in results_dirs:
+        # Initialize Benchmark object
+        benchmark = CEBBenchmark(
+            results_dir,
+            openai_model=openai_model,
+            alpha=alpha,
+            overwrite=True,
+        )
+
+        # Perform comprehensive evaluation
+        benchmark.comprehensive_eval()
+
+        # Get metrics stratified by eval
+        fname_to_metrics = benchmark.save_metric_tables(save=False)
+
+        # Store metrics
+        for fname, metrics in fname_to_metrics.items():
+            if fname not in fname_to_accum_metrics:
+                fname_to_accum_metrics[fname] = []
+            fname_to_accum_metrics[fname].append(metrics)
+
+    # Save each aggregated table
+    for fname, accum_metrics in fname_to_accum_metrics.items():
+        df_curr_metrics = pd.DataFrame.from_dict(accum_metrics)
+        # Ensure save directory exists
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, fname)
+        df_curr_metrics.to_csv(save_path, index=False)
 
 
 ################################################################################

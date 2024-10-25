@@ -11,15 +11,18 @@ class StereotypeEval:
     Used to compute metrics on one stereotype dataset at a time
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, alpha=0.05, **kwargs):
         """
         Initializes the FairnessEval class.
 
         Parameters
         ----------
+        alpha : float
+            Alpha level for confidence interval
         **kwargs : Any
             Keyword arguments for ChatGPTEvaluator
         """
+        self.metric_kwargs = {"alpha": alpha}
         self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
 
 
@@ -77,7 +80,7 @@ class StereotypeEval:
         direct_eval_data, to_parse_data = [], []
         for row in data:
             answer = extract_stereotype_recognition_answer(row["res"])
-            if answer is None:
+            if answer is None and row["res"]:
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -94,7 +97,9 @@ class StereotypeEval:
         # Combine and compute F1-score
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
         metrics = metric_utils.compute_score_for_recognition(
-            all_rows, extract_stereotype_recognition_answer)
+            all_rows, extract_stereotype_recognition_answer,
+            **self.metric_kwargs,
+        )
         return metrics
 
 
@@ -114,7 +119,7 @@ class StereotypeEval:
             Contains micro F1-score of correctly selected stereotypes, and
             proportion of invalid responses
         """
-        return metric_utils.compute_score_for_selection(data)
+        return metric_utils.compute_score_for_selection(data, **self.metric_kwargs)
 
 
     ############################################################################
@@ -136,20 +141,24 @@ class StereotypeEval:
             Contains average bias score for ones that did answer, refusal to
             answer rate, proportion of invalid responses, and number of samples
         """
+        # Filter for invalid data
+        valid_data = [row for row in data if row["res"]]
+        invalid_data = [row for row in data if not row["res"]]
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be
         #       filtered for only answered data
-        data = self.evaluator.evaluate(
-            data,
+        valid_data = self.evaluator.evaluate(
+            valid_data,
             task="rta-continuation",
             progress_filename="rta_progress.json",
             llm_response_col="rta",
         )
 
         # Split LLM responses into answered vs. refused to answer
-        assert all("rta" in row for row in data), "All rows must contain a 'rta' key!"
+        assert all("rta" in row for row in valid_data), "All rows must contain a 'rta' key!"
         answered_data, refused_data = [], []
-        for row in data:
+        for row in valid_data:
             # 1. First attempt with capital YES and NO
             rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
             # 2. Second attempt with lowercase YES and NO, and lowercase text
@@ -181,7 +190,11 @@ class StereotypeEval:
         )
 
         # Compute bias score
-        return metric_utils.compute_indirect_bias_score(answered_data, refused_data)
+        metrics = metric_utils.compute_indirect_bias_score(
+            answered_data, refused_data, invalid_data
+            **self.metric_kwargs,
+        )
+        return metrics
 
 
     def eval_stereotype_conversation(self, data):
@@ -200,20 +213,24 @@ class StereotypeEval:
             Contains average bias score for ones that did answer, refusal to
             answer rate, proportion of invalid responses, and number of samples
         """
+        # Filter for invalid data
+        valid_data = [row for row in data if row["res"]]
+        invalid_data = [row for row in data if not row["res"]]
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be
         #       filtered for only answered data
-        data = self.evaluator.evaluate(
-            data,
+        valid_data = self.evaluator.evaluate(
+            valid_data,
             task="rta-conversation",
             progress_filename="rta_progress.json",
             llm_response_col="rta",
         )
 
         # Split LLM responses into answered vs. refused to answer
-        assert all("rta" in row for row in data), "All rows must contain a 'rta' key!"
+        assert all("rta" in row for row in valid_data), "All rows must contain a 'rta' key!"
         answered_data, refused_data = [], []
-        for row in data:
+        for row in valid_data:
             # 1. First attempt with capital YES and NO
             rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
             # 2. Second attempt with lowercase YES and NO, and lowercase text
@@ -238,7 +255,11 @@ class StereotypeEval:
         )
 
         # Compute bias score
-        return metric_utils.compute_indirect_bias_score(answered_data, refused_data)
+        metrics = metric_utils.compute_indirect_bias_score(
+            answered_data, refused_data, invalid_data,
+            **self.metric_kwargs,
+        )
+        return metrics
 
 
     def eval_stereotype_classification_adult(self, data):
@@ -258,7 +279,6 @@ class StereotypeEval:
             Contains demographic parity difference, equalized odds difference,
             proportion of invalid responses, and number of samples
         """
-
         # Split data into those needing an LLM to parse
         direct_eval_data, to_parse_data = [], []
         for row in data:
@@ -269,7 +289,7 @@ class StereotypeEval:
                 answer = metric_utils.extract_valid_choice(row["res"].lower(), ["yes", "no"])
 
             # Based on above result, check if needs LLM parsing
-            if answer is None:
+            if answer is None and row["res"]:
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -285,7 +305,10 @@ class StereotypeEval:
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
-        return metric_utils.compute_score_for_classification_datasets(all_rows)
+        metrics = metric_utils.compute_score_for_classification_datasets(
+            all_rows, **self.metric_kwargs,
+        )
+        return metrics
 
 
     def eval_stereotype_classification_credit(self, data):
@@ -315,7 +338,7 @@ class StereotypeEval:
                 answer = metric_utils.extract_valid_choice(row["res"].lower(), ["yes", "no"])
 
             # Based on above result, check if needs LLM parsing
-            if answer is None:
+            if answer is None and row["res"]:
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -331,7 +354,10 @@ class StereotypeEval:
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
-        return metric_utils.compute_score_for_classification_datasets(all_rows)
+        metrics = metric_utils.compute_score_for_classification_datasets(
+            all_rows, **self.metric_kwargs,
+        )
+        return metrics
 
 
 

@@ -34,7 +34,7 @@ class ToxicityEval:
     A class for evaluating text for toxicity using the Perspective API.
     """
 
-    def __init__(self, save_dir='saved_evaluations', **chatgpt_kwargs):
+    def __init__(self, save_dir='saved_evaluations', alpha=0.05, **chatgpt_kwargs):
         """
         Initialize the ToxicityEval class.
 
@@ -42,11 +42,14 @@ class ToxicityEval:
         ----------
         save_dir : str
             Directory to save the evaluation results.
+        alpha : float
+            Alpha level for confidence interval
         **chatgpt_kwargs : Any
             Keyword arguments to be passed to ChatGPTEvaluator
         """
-        self.save_dir = save_dir
+        self.metric_kwargs = {"alpha": alpha}
         # Create save directory if it doesn't exist
+        self.save_dir = save_dir
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
 
@@ -116,7 +119,7 @@ class ToxicityEval:
         direct_eval_data, to_parse_data = [], []
         for row in data:
             answer = extract_toxicity_recognition_answer(row["res"])
-            if answer is None:
+            if answer is None and row["res"]:
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -133,7 +136,9 @@ class ToxicityEval:
         # Combine and compute F1-score
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
         metrics = metric_utils.compute_score_for_recognition(
-            all_rows, extract_toxicity_recognition_answer)
+            all_rows, extract_toxicity_recognition_answer,
+            **self.metric_kwargs,
+        )
         return metrics
 
 
@@ -153,7 +158,7 @@ class ToxicityEval:
             Contains micro F1-score of correctly identified toxicity, and
             proportion of invalid responses
         """
-        return metric_utils.compute_score_for_selection(data)
+        return metric_utils.compute_score_for_selection(data, **self.metric_kwargs)
 
 
     ############################################################################
@@ -187,9 +192,13 @@ class ToxicityEval:
             Contains average toxicity score, proportion of invalid responses,
             and number of samples.
         """
+        # Filter for invalid data
+        valid_data = [row for row in data if row["res"]]
+        invalid_data = [row for row in data if not row["res"]]
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        data = self.evaluator.evaluate(
-            data,
+        valid_data = self.evaluator.evaluate(
+            valid_data,
             task="rta-continuation",
             progress_filename="rta_progress.json",
             llm_response_col="rta",
@@ -197,14 +206,17 @@ class ToxicityEval:
 
         # If specified, resume from previous evaluation
         if resume:
-            data = self.load_previous_progress(progress_filename) or data
+            prev_data = self.load_previous_progress(progress_filename)
+            if prev_data and len(valid_data) == len(prev_data):
+                LOGGER.info("Resuming evaluation from saved progress.")
+                valid_data = prev_data
 
         # Validate RTA keys
-        self.validate_rta(data)
+        self.validate_rta(valid_data)
 
         # For answered data, remove the prefix prompt that was started
         # with, to remove bias from the already provided biased text
-        for row in data:
+        for row in valid_data:
             # Skip, if refused to answer
             if row["rta"].lower() == "yes":
                 continue
@@ -214,15 +226,15 @@ class ToxicityEval:
             row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
 
         # Assign toxicity values
-        data = self.assign_toxicity_values(
-            data, progress_filename,
+        valid_data = self.assign_toxicity_values(
+            valid_data, progress_filename,
             input_col="res_wo_prefix",
         )
 
         # Save at the very end
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(valid_data, filename=progress_filename)
 
-        return metric_utils.compute_score_for_toxicity_datasets(data)
+        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
 
 
     def eval_toxicity_conversation(
@@ -253,9 +265,13 @@ class ToxicityEval:
             Contains average toxicity score, proportion of invalid responses,
             and number of samples.
         """
+        # Filter for invalid data
+        valid_data = [row for row in data if row["res"]]
+        invalid_data = [row for row in data if not row["res"]]
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        data = self.evaluator.evaluate(
-            data,
+        valid_data = self.evaluator.evaluate(
+            valid_data,
             task="rta-conversation",
             progress_filename="rta_progress.json",
             llm_response_col="rta",
@@ -263,18 +279,21 @@ class ToxicityEval:
 
         # If specified, resume from previous evaluation
         if resume:
-            data = self.load_previous_progress(progress_filename) or data
+            prev_data = self.load_previous_progress(progress_filename)
+            if prev_data and len(valid_data) == len(prev_data):
+                LOGGER.info("Resuming evaluation from saved progress.")
+                valid_data = prev_data
 
         # Validate RTA keys
-        self.validate_rta(data)
+        self.validate_rta(valid_data)
 
         # Assign toxicity values
-        data = self.assign_toxicity_values(data, progress_filename)
+        valid_data = self.assign_toxicity_values(valid_data, progress_filename)
 
         # Save at the very end
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(valid_data, filename=progress_filename)
 
-        return metric_utils.compute_score_for_toxicity_datasets(data)
+        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data **self.metric_kwargs)
 
 
     def eval_toxicity_classification_jigsaw(self, data):
@@ -304,7 +323,7 @@ class ToxicityEval:
                 answer = metric_utils.extract_valid_choice(row["res"].lower(), ["yes", "no"])
 
             # Based on above result, check if needs LLM parsing
-            if answer is None:
+            if answer is None and row["res"]:
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -320,7 +339,7 @@ class ToxicityEval:
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
-        return metric_utils.compute_score_for_classification_datasets(all_rows)
+        return metric_utils.compute_score_for_classification_datasets(all_rows, **self.metric_kwargs)
 
 
     ############################################################################
@@ -476,7 +495,6 @@ class ToxicityEval:
         try:
             prev_data = json_utils.load_json(eval_progress_path)
             if prev_data:
-                LOGGER.info("Resuming evaluation from saved progress.")
                 return prev_data
         except FileNotFoundError:
             LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", eval_progress_path)

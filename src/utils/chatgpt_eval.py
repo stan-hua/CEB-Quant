@@ -180,7 +180,7 @@ class ChatGPTEvaluator:
             load_path = os.path.join(self.save_dir, progress_filename)
             try:
                 prev_data = json_utils.load_json(load_path)
-                if prev_data:
+                if prev_data and len(data) == len(prev_data):
                     LOGGER.info("Resuming evaluation from saved progress.")
                     data = prev_data
             except FileNotFoundError:
