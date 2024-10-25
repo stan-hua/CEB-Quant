@@ -72,14 +72,22 @@ MODEL_INFO = {
         "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-4bit": "llama3.1-8b-instruct-gptq-4bit",
         "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-3bit": "llama3.1-8b-instruct-gptq-3bit",
         "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-2bit": "llama3.1-8b-instruct-gptq-2bit",
+        "stan-hua/Meta-Llama-3.1-8B-Instruct-AWQ-4bit": "llama3.1-8b-instruct-awq-4bit",
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4": "hf-llama3.1-8b-instruct-gptq-4bit",
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4": "hf-llama3.1-8b-instruct-awq-4bit",    # TODO: Rename folder to add instruct
+
         "stan-hua/Meta-Llama-3.1-8B-GPTQ-8bit": "llama3.1-8b-gptq-8bit",
         "stan-hua/Meta-Llama-3.1-8B-GPTQ-4bit": "llama3.1-8b-gptq-4bit",
         "stan-hua/Meta-Llama-3.1-8B-GPTQ-3bit": "llama3.1-8b-gptq-3bit",
         "stan-hua/Meta-Llama-3.1-8B-GPTQ-2bit": "llama3.1-8b-gptq-2bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-AWQ-4bit": "llama3.1-8b-instruct-awq-4bit",
         "stan-hua/Meta-Llama-3.1-8B-AWQ-4bit": "llama3.1-8b-awq-4bit",
+        "Xu-Ouyang/Meta-Llama-3.1-8B-int3-GPTQ-wikitext2": "hf-llama3.1-8b-gptq-3bit",
+        "Xu-Ouyang/Llama-3.1-8B-int2-GPTQ-wikitext2": "hf-llama3.1-8b-gptq-2bit",
 
-        "meta-llama/Meta-Llama-3-70B-Instruct":"llama3-70b",
+        "meta-llama/Llama-3.1-70B-Instruct": "llama3.1-70b-instruct",
+        "hugging-quants/Meta-Llama-3.1-70B-Instruct-GPTQ-INT4": "hf-llama3.1-70b-instruct-gptq-int4",
+        "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4": "hf-llama3.1-70b-instruct-awq-int4",
+        "ISTA-DASLab/Meta-Llama-3.1-70B-Instruct-AQLM-PV-2Bit-1x16": "hf-llama3.1-70b-instruct-aqlm-pv-2bit-1x16",
 
         "mistralai/Mistral-7B-Instruct-v0.3": "mistral-7b",
         "mistralai/Mixtral-8x7B-Instruct-v0.1": "mixtral-8x7B",
