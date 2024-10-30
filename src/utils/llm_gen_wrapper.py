@@ -167,9 +167,6 @@ class LLMGeneration:
                 tensor_parallel_size=self.num_gpus,
                 dtype=DTYPE,
                 max_model_len=MAX_MODEL_LEN,
-                # For increasing throughput on batched inference
-                enable_chunked_prefill=True,
-                max_num_batched_tokens=2048,
             )
             self.sampling_params = SamplingParams(temperature=self.temperature,
                                                   top_p=1.0, seed=1,
@@ -248,8 +245,10 @@ class LLMGeneration:
 
         Returns
         -------
-        generate_kwargs : dict
-            Keywords arguments to pass to `vllm.generate()`
+        generate_kwargs : dict or None
+            Keywords arguments to pass to `vllm.generate()`. If returns None,
+            then that implies that batched requests cannot be supported due
+            to some unmatched keyword arguments.
         """
         generate_kwargs = {}
 
@@ -258,8 +257,9 @@ class LLMGeneration:
         if choices and isinstance(choices, list) and isinstance(choices[0], list):
             final_choices = choices[0]
             for curr_choices in choices[1:]:
-                assert curr_choices == final_choices, \
-                    "All choices in a batch must be the same! Invalid input: `{choices}`"
+                if curr_choices != final_choices:
+                    LOGGER.debug("Not all choices in the batch are the same! Returning None")
+                    return None
             LOGGER.debug("[vLLM Generate] Flattening choices across batched requests...")
             choices = final_choices
 
@@ -268,7 +268,7 @@ class LLMGeneration:
             assert isinstance(choices, list) and len(choices) > 0, \
                 f"Choices must be a non-empty list! Invalid input: `{choices}`"
             generate_kwargs["guided_options_request"] = {
-                "guided_choices": choices,
+                "guided_choice": choices,
             }
         return generate_kwargs
 
@@ -299,6 +299,18 @@ class LLMGeneration:
             The generated responses.
         """
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        # CASE 1: Unable to do batched requests on texts, default to single
+        if gen_kwargs is None:
+            ret = []
+            for idx, prompt in enumerate(prompts):
+                curr_kwargs = {
+                    k: (v[idx] if len(v) == len(prompts) else v)
+                    for k, v in kwargs.items()
+                }
+                ret.append(self._generation_vllm(prompt, **curr_kwargs))
+            return ret
+
+        # CASE 2: Batched requests is possible
         responses = self.vllm.generate(prompts, self.sampling_params, **gen_kwargs)
         return [res.outputs[0].text for res in responses]
 
@@ -420,7 +432,7 @@ class LLMGeneration:
             prompts = [row["prompt"] for row in filtered_rows]
             # 2. Choices
             if "choices" in filtered_rows[0]:
-                kwargs["choices"] = [row["choice"] for row in filtered_rows]
+                kwargs["choices"] = [row["choices"] for row in filtered_rows]
 
             # Perform generation
             llm_responses = self._generation_vllm_multiple(prompts, **kwargs)
@@ -552,11 +564,11 @@ class LLMGeneration:
         result_dir = os.path.join("generation_results", self.model_name, dataset_name)
         os.makedirs(result_dir, exist_ok=True)
 
-        file_list = glob.glob(os.path.join(base_dir, "*.json"))
-        for file_path in tqdm(file_list, desc="Processing files"):
-            LOGGER.info("Processing file: %s", file_path)
-            save_path = os.path.join(result_dir, os.path.basename(file_path))
-            self.process_file(file_path, save_path)
+        json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))
+        for json_path in tqdm(json_paths):
+            LOGGER.info("Processing file: %s", json_path)
+            save_path = os.path.join(result_dir, os.path.basename(json_path))
+            self.process_file(json_path, save_path)
 
 
     def infer_dataset(self, max_retries=2, retry_interval=3):
@@ -586,8 +598,9 @@ class LLMGeneration:
                     self.infer_dataset_single(dataset)
                     successful = True
                 except Exception as e:
-                    LOGGER.debug(f"Test function failed on attempt {num_retries + 1}: {e}")
-                    LOGGER.debug(f"Retrying in {retry_interval} seconds...")
+                    LOGGER.error(f"Test function failed on attempt {num_retries + 1}: {e}")
+                    LOGGER.error(f"Retrying in {retry_interval} seconds...")
                     time.sleep(retry_interval)
+                    num_retries += 1
             if not successful:
-                LOGGER.debug("Test failed after maximum retries.")
+                LOGGER.error("Test failed after maximum retries.")
