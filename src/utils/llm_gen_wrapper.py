@@ -167,6 +167,9 @@ class LLMGeneration:
                 tensor_parallel_size=self.num_gpus,
                 dtype=DTYPE,
                 max_model_len=MAX_MODEL_LEN,
+                # For increasing throughput on batched inference
+                enable_chunked_prefill=True,
+                max_num_batched_tokens=2048,
             )
             self.sampling_params = SamplingParams(temperature=self.temperature,
                                                   top_p=1.0, seed=1,
@@ -201,6 +204,9 @@ class LLMGeneration:
         self._tokenizer = tokenizer
 
 
+    ############################################################################
+    #                           HuggingFace API                                #
+    ############################################################################
     def _generation_hf(self, prompt, temperature):
         """
         Generates a response using a HuggingFace model.
@@ -227,15 +233,56 @@ class LLMGeneration:
         return outputs
 
 
-    def _generation_vllm(self, prompt):
+    ############################################################################
+    #                                 vLLM                                     #
+    ############################################################################
+    def create_vllm_kwargs(self, choices=None):
+        """
+        Create keyword arguments for `vllm.generate()`.
+
+        Parameters
+        ----------
+        choices : list of str, optional
+            If provided, the VLLM will generate a response according to
+            the provided choices. The order of the choices is preserved.
+
+        Returns
+        -------
+        generate_kwargs : dict
+            Keywords arguments to pass to `vllm.generate()`
+        """
+        generate_kwargs = {}
+
+        # Guided Decoding
+        # CASE 0: Batched processing decoding requires all share the same choices
+        if choices and isinstance(choices, list) and isinstance(choices[0], list):
+            final_choices = choices[0]
+            for curr_choices in choices[1:]:
+                assert curr_choices == final_choices, \
+                    "All choices in a batch must be the same! Invalid input: `{choices}`"
+            LOGGER.debug("[vLLM Generate] Flattening choices across batched requests...")
+            choices = final_choices
+
+        # CASE 1: Single-row
+        if choices:
+            assert isinstance(choices, list) and len(choices) > 0, \
+                f"Choices must be a non-empty list! Invalid input: `{choices}`"
+            generate_kwargs["guided_options_request"] = {
+                "guided_choices": choices,
+            }
+        return generate_kwargs
+
+
+    def _generation_vllm(self, prompt, **kwargs):
         """
         Generates a response using a VLLM model.
         """
-        response = self.vllm.generate(prompt, self.sampling_params)
+        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        response = self.vllm.generate(prompt, self.sampling_params, **gen_kwargs)
         return response[0].outputs[0].text
     
 
-    def _generation_vllm_multiple(self, prompts):
+    def _generation_vllm_multiple(self, prompts, **kwargs):
         """
         Generates multiple responses using a VLLM model.
 
@@ -243,17 +290,23 @@ class LLMGeneration:
         ----------
         prompts : list of str
             The prompts to generate responses for.
+        **kwargs : Any
+            Additional keyword arguments for vLLM generation
 
         Returns
         -------
         list of str
             The generated responses.
         """
-        responses = self.vllm.generate(prompts, self.sampling_params)
+        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        responses = self.vllm.generate(prompts, self.sampling_params, **gen_kwargs)
         return [res.outputs[0].text for res in responses]
 
 
-    def generate_single(self, prompt, temperature=None):
+    ############################################################################
+    #                        Other Helper Functions                            #
+    ############################################################################
+    def generate_single(self, prompt, temperature=None, **kwargs):
         """
         Generates a response using a given model.
 
@@ -272,20 +325,26 @@ class LLMGeneration:
         try:
             # CASE 1: Online Models
             if self.online_model:
+                # Choices is not implemented for online model
+                if kwargs.get("choices"):
+                    raise NotImplementedError("Choices is not yet supported for online model!")
                 ans = llm_gen_utils.gen_online(self.model_name,
                                  prompt, temperature,
                                  replicate=self.use_replicate,
                                  deepinfra=self.use_deepinfra)
             # CASE 2: vLLM
             elif self.use_vllm:
-                ans = self._generation_vllm(prompt)
+                ans = self._generation_vllm(prompt, **kwargs)
             # CASE 3: HuggingFace
             else:
+                # Choices is not implemented for HuggingFace generation
+                if kwargs.get("choices"):
+                    raise NotImplementedError("Choices is not yet supported for HF inference!")
                 ans = self._generation_hf(prompt, temperature)
             if not ans:
                 raise ValueError("The response is NULL or an empty string!")
             return ans
-        except Exception as e:
+        except Exception:
             tb = traceback.format_exc()
             LOGGER.debug(tb)
 
@@ -310,7 +369,18 @@ class LLMGeneration:
         try:
             # If "res" key doesn"t exist or its value is empty, generate a new response
             if "res" not in row or not row["res"]:
-                res = self.generate_single(prompt=row[key_name], temperature=temperature)
+                # Prepare arguments
+                kwargs = {}
+                # 1. Choices
+                if "choices" in row:
+                    kwargs["choices"] = row["choices"]
+
+                # Perform generation
+                res = self.generate_single(
+                    prompt=row[key_name],
+                    temperature=temperature,
+                    **kwargs
+                )
                 if res:
                     row["res"] = res
         except Exception as e:
@@ -344,8 +414,18 @@ class LLMGeneration:
 
         # CASE 1: If vLLM, pass multiple row prompts at once
         if self.use_vllm:
+            # Prepare arguments
+            kwargs = {}
+            # 1. Prompts
             prompts = [row["prompt"] for row in filtered_rows]
-            llm_responses = self._generation_vllm_multiple(prompts)
+            # 2. Choices
+            if "choices" in filtered_rows[0]:
+                kwargs["choices"] = [row["choice"] for row in filtered_rows]
+
+            # Perform generation
+            llm_responses = self._generation_vllm_multiple(prompts, **kwargs)
+
+            # Check responses
             for idx, row in enumerate(filtered_rows):
                 # CASE 1: Valid non-empty response
                 if llm_responses[idx]:
@@ -378,6 +458,9 @@ class LLMGeneration:
         return
 
 
+    ############################################################################
+    #                            Main Functions                                #
+    ############################################################################
     def process_file(self, input_path, output_path, file_config=None, prompt_key="prompt"):
         """
         Processes a file containing multiple data points for text generation.
