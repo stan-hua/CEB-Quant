@@ -12,6 +12,7 @@ import torch
 from fire import Fire
 
 # Custom libraries
+from src.config import config
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils
@@ -155,7 +156,7 @@ class CEBBenchmark:
         This function runs both direct and indirect evaluations for both
         stereotype and toxicity tasks. 
         """
-        LOGGER.info("Performing full CEB Evaluation...")
+        LOGGER.info(f"Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
         # Perform direct/indirect evaluation evaluation
         for task_type in ["direct", "indirect"]:
             self.stereotype_eval(task_type=task_type)
@@ -225,6 +226,14 @@ class CEBBenchmark:
         task_type : str, optional
             Task type to evaluate, by default "direct"
         """
+        # Warn users if Perspective API file lock exists
+        if os.path.exists(config.PERSPECTIVE_LOCK_FNAME):
+            LOGGER.warning(
+                f"Perspective API lock file exists! `{config.PERSPECTIVE_LOCK_FNAME}`"
+                "\nPlease delete if you're not running multiple of `ceb_benchmark.py` at once!"
+                " This may be a result from a previously cancelled run."
+            )
+
         assert task_type in BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"]
         dataset_names = BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"][task_type]
         for dataset_name in dataset_names:
@@ -304,7 +313,11 @@ class CEBBenchmark:
                 for dataset in datasets:
                     # Raise error, if doesn't exist
                     if dataset not in dataset_to_metric_dict:
-                        raise ValueError(f"Dataset {dataset} not found in metrics.\n\tFound metrics for: {list(dataset_to_metric_dict.keys())}")
+                        raise ValueError(
+                            f"Dataset {dataset} not found in metrics for directory "
+                            f"`{self.results_dir}`.\n\tFound metrics for: "
+                            f"{list(dataset_to_metric_dict.keys())}"
+                        )
                     social_group_to_metric_dict = dataset_to_metric_dict[dataset]
                     for social_group, metric_dict in social_group_to_metric_dict.items():
                         # Add scores
@@ -413,7 +426,8 @@ def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
 
 
 def ceb_compare_multiple(
-        results_dirs, save_dir,
+        *results_dirs,
+        save_dir="metrics_comparisons",
         pairwise=False,
         openai_model=DEFAULT_OPENAI_MODEL
     ):
@@ -423,7 +437,7 @@ def ceb_compare_multiple(
 
     Parameters
     ----------
-    results_dirs : list
+    results_dirs : *args
         List of result directories to compare
     save_dir : str
         Directory to save aggregated files
@@ -435,8 +449,10 @@ def ceb_compare_multiple(
     """
     LOGGER.info(
         "[CEB Benchmark] Performing multiple comparisons with the following directories:\n"
-        "\n\t" + "\n\t".join(results_dir) + "\n"
+        "\n\t" + "\n\t".join(results_dirs) + "\n"
     )
+    assert len(results_dirs) > 1, f"[CEB Benchmark] Comparison requires >1 models to compare! Input: {results_dirs}"
+
     # Determine significance level
     # CASE 1: All possible pairwise comparisons (N*(N-1) comparisons)
     if pairwise:
@@ -448,7 +464,7 @@ def ceb_compare_multiple(
         LOGGER.info(f"[CEB Benchmark] Adjusting significance level for one-vs-all comparisons (a={alpha})")
 
     # Re-compute metrics with new significance level
-    fname_to_accum_metrics = []
+    fname_to_accum_metrics = {}
     for results_dir in results_dirs:
         # Initialize Benchmark object
         benchmark = CEBBenchmark(
@@ -470,9 +486,16 @@ def ceb_compare_multiple(
                 fname_to_accum_metrics[fname] = []
             fname_to_accum_metrics[fname].append(metrics)
 
+    # Extract model names from result directories
+    model_names = [os.path.basename(d) for d in results_dirs]
+
     # Save each aggregated table
     for fname, accum_metrics in fname_to_accum_metrics.items():
         df_curr_metrics = pd.DataFrame.from_dict(accum_metrics)
+        df_curr_metrics["Model"] = model_names
+        cols = df_curr_metrics.columns.tolist()
+        df_curr_metrics = df_curr_metrics[["Model"] + cols[:-1]]
+
         # Ensure save directory exists
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, fname)
@@ -486,4 +509,5 @@ if __name__ == "__main__":
     Fire({
         "generate": ceb_generate,
         "evaluate": ceb_evaluate,
+        "compare": ceb_compare_multiple,
     })
