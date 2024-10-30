@@ -142,8 +142,8 @@ class StereotypeEval:
             answer rate, proportion of invalid responses, and number of samples
         """
         # Filter for invalid data
-        valid_data = [row for row in data if row["res"]]
-        invalid_data = [row for row in data if not row["res"]]
+        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
+        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be
@@ -191,7 +191,7 @@ class StereotypeEval:
 
         # Compute bias score
         metrics = metric_utils.compute_indirect_bias_score(
-            answered_data, refused_data, invalid_data
+            answered_data, refused_data, invalid_data,
             **self.metric_kwargs,
         )
         return metrics
@@ -214,8 +214,8 @@ class StereotypeEval:
             answer rate, proportion of invalid responses, and number of samples
         """
         # Filter for invalid data
-        valid_data = [row for row in data if row["res"]]
-        invalid_data = [row for row in data if not row["res"]]
+        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
+        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be

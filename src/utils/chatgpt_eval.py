@@ -139,7 +139,7 @@ class ChatGPTEvaluator:
 
         def process_item(item, row):
             try:
-                if llm_response_col not in row:
+                if not row.get(llm_response_col):
                     llm_response = get_res(item, model=self.model)
                     row[llm_response_col] = llm_response
             except Exception as error_msg:

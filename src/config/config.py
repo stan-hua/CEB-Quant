@@ -17,6 +17,10 @@ OPENAI_API_URL = None
 # Number of concurrent workers to send API requests
 MAX_WORKER_AUTOEVAL = 1
 
+# Filename of Perspective API file lock
+# NOTE: We use this to prevent multiple processes from overloading the Perspective API server
+PERSPECTIVE_LOCK_FNAME = "perspective.api.lock"
+
 
 ################################################################################
 #                                Online Models                                 #
@@ -63,8 +67,8 @@ MODEL_INFO = {
         "meta-llama/Llama-2-7b-chat-hf": "llama2-7b",
         "TheBloke/Llama-2-7B-Chat-GPTQ": "llama2-7b-gptq-4bit",
 
-        "meta-llama/Llama-2-13b-chat-hf": "llama2-13b",
-        "meta-llama/Llama-2-70b-chat-hf": "llama2-70b",
+        "meta-llama/Llama-2-13b-chat-hf": "llama2-13b-instruct",
+        "meta-llama/Llama-2-70b-chat-hf": "llama2-70b-instruct",
 
         "meta-llama/Llama-3.1-8B-Instruct": "llama3.1-8b-instruct",
         "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit-desc_act": "llama3.1-8b-instruct-gptq-desc_act-8bit",

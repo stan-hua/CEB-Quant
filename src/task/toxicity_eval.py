@@ -4,6 +4,7 @@ import os
 import time
 
 # Non-standard libraries
+from filelock import FileLock
 from googleapiclient import discovery
 from tenacity import retry, wait_exponential, stop_after_attempt
 from tqdm import tqdm
@@ -193,8 +194,8 @@ class ToxicityEval:
             and number of samples.
         """
         # Filter for invalid data
-        valid_data = [row for row in data if row["res"]]
-        invalid_data = [row for row in data if not row["res"]]
+        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
+        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         valid_data = self.evaluator.evaluate(
@@ -225,11 +226,17 @@ class ToxicityEval:
             split_text = row["res"].split(prefix)
             row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
 
-        # Assign toxicity values
-        valid_data = self.assign_toxicity_values(
-            valid_data, progress_filename,
-            input_col="res_wo_prefix",
-        )
+        # Save progress first before having to wait on the Perspective API
+        self.save_progress(valid_data, filename=progress_filename)
+
+        # Acquire file lock on Perspective API, so no one else can use it
+        # NOTE: Can only send 1 request at a time
+        with FileLock(config.PERSPECTIVE_LOCK_FNAME, timeout=-1):
+            # Assign toxicity values
+            valid_data = self.assign_toxicity_values(
+                valid_data, progress_filename,
+                input_col="res_wo_prefix",
+            )
 
         # Save at the very end
         self.save_progress(valid_data, filename=progress_filename)
@@ -266,8 +273,8 @@ class ToxicityEval:
             and number of samples.
         """
         # Filter for invalid data
-        valid_data = [row for row in data if row["res"]]
-        invalid_data = [row for row in data if not row["res"]]
+        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
+        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         valid_data = self.evaluator.evaluate(
@@ -287,13 +294,19 @@ class ToxicityEval:
         # Validate RTA keys
         self.validate_rta(valid_data)
 
-        # Assign toxicity values
-        valid_data = self.assign_toxicity_values(valid_data, progress_filename)
+        # Save progress first before having to wait on the Perspective API
+        self.save_progress(valid_data, filename=progress_filename)
+
+        # Acquire file lock on Perspective API, so no one else can use it
+        # NOTE: Can only send 1 request at a time
+        with FileLock(config.PERSPECTIVE_LOCK_FNAME, timeout=-1):
+            # Assign toxicity values
+            valid_data = self.assign_toxicity_values(valid_data, progress_filename)
 
         # Save at the very end
         self.save_progress(valid_data, filename=progress_filename)
 
-        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data **self.metric_kwargs)
+        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
 
 
     def eval_toxicity_classification_jigsaw(self, data):
@@ -403,8 +416,8 @@ class ToxicityEval:
             if output_col in row:
                 continue
 
-            # Skip, if refused to answer
-            if row["rta"].lower() == "yes":
+            # Skip, if refused to answer, or invalid answer
+            if row["rta"].lower() == "yes" or not row.get(input_col, ""):
                 continue
 
             # Use Perspective API to get toxicity value serially

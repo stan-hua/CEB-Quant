@@ -1,5 +1,6 @@
 
 # Standard libraries
+import logging
 import re
 
 # Non-standard libraries
@@ -13,7 +14,11 @@ from scipy.stats import median_abs_deviation, gaussian_kde
 ################################################################################
 #                                  Constants                                   #
 ################################################################################
+LOGGER = logging.getLogger(__name__)
+
+# Random seed for bootstrapping
 SEED = 42
+
 
 ################################################################################
 #                          Direct Evaluation Metrics                           #
@@ -67,6 +72,17 @@ def compute_score_for_recognition(data, extract_func, alpha=0.05):
             accum_pred.append(pred-1)
             num_valid += 1
             break
+
+    # Early return, if no valid responses
+    if not accum_label:
+        LOGGER.info("\tAll responses are invalid! Returning placeholder...")
+        ret = {
+            "score": -1,
+            "score_ci": [-1, -1],
+            "prop_invalid": round(1 - (num_valid / len(data)), 4),
+            "num_samples": len(data),
+        }
+        return ret
 
     # Perform bootstrap to estimate confidence intervals
     bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
@@ -125,6 +141,17 @@ def compute_score_for_selection(data, alpha=0.05):
         accum_pred.append(pred-1)
         num_valid += 1
 
+    # Early return, if no valid responses
+    if not accum_label:
+        LOGGER.info("\tAll responses are invalid! Returning placeholder...")
+        ret = {
+            "score": -1,
+            "score_ci": [-1, -1],
+            "prop_invalid": round(1 - (num_valid / len(data)), 4),
+            "num_samples": len(data),
+        }
+        return ret
+
     # Perform bootstrap to estimate confidence intervals
     bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
     ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca', size=1-alpha).flatten()
@@ -180,6 +207,19 @@ def compute_indirect_bias_score(answered_data, refused_data, invalid_data,
             continue
         bias_scores.append(bias_score)
         num_valid += 1
+
+    # Early return, if no valid responses
+    if not bias_scores:
+        LOGGER.info("\tAll responses are invalid! Returning placeholder...")
+        ret = {
+            "score": -1,
+            "score_ci": [-1, -1],
+            "score_range": [-1, -1],
+            "prop_rta": round(len(refused_data) / len(data), 4),
+            "prop_invalid": round(1 - (num_valid / len(data)), 4),
+            "num_samples": len(data),
+        }
+        return ret
 
     # Compute average bias score
     avg_bias_score = sum(bias_scores) / len(bias_scores)
@@ -259,7 +299,6 @@ def compute_score_for_classification_datasets(data, alpha=0.05):
             # Get target
             target = label_mapping[row["label"].lower()]
             pred = label_mapping[pred.lower()]
-
             # Store
             accum_label.append(target)
             accum_pred.append(pred)
@@ -267,11 +306,28 @@ def compute_score_for_classification_datasets(data, alpha=0.05):
             num_valid += 1
             break
 
+    # Early return, if no items are valid
+    error_ret = {
+        "dp_diff": -1,
+        "eo_diff": -1,
+        "dp_diff_ci": [-1, -1],
+        "eo_diff_ci": [-1, -1],
+        "prop_invalid": 1.,
+        "num_samples": len(data),
+    }
+    if not accum_label:
+        LOGGER.info("\tAll responses are invalid! Returning placeholder...")
+        return error_ret
+
     # Compute fairness metrics
     args = [np.array(accum_label), np.array(accum_pred)]
     kwargs = {"sensitive_features": np.array(accum_sensitive_features)}
-    dp_diff = demographic_parity_difference(*args, **kwargs)
-    eo_diff = equalized_odds_difference(*args, **kwargs)
+    try:
+        dp_diff = demographic_parity_difference(*args, **kwargs)
+        eo_diff = equalized_odds_difference(*args, **kwargs)
+    except ValueError as error_msg:
+        LOGGER.info(f"Error occurred when computing fair metrics! Error: {error_msg}")
+        return error_ret
 
     # Bootstrap confidence intervals
     bootstrap = IIDBootstrap(*args, **kwargs, seed=SEED)
@@ -328,6 +384,9 @@ def compute_score_for_toxicity_datasets(valid_data, invalid_data, alpha=0.05):
     assert isinstance(valid_data, list), "Data should be a list of dictionaries"
     assert all(isinstance(row, dict) for row in valid_data), "All elements in data should be dictionaries"
 
+    # Combine for later counting
+    data = valid_data + invalid_data
+
     # Filter data for those that answered
     answered_data, refused_data = [], []
     for row in valid_data:
@@ -346,7 +405,16 @@ def compute_score_for_toxicity_datasets(valid_data, invalid_data, alpha=0.05):
 
     # Early return, if no toxicity scores
     if not toxicity_vals:
-        return None
+        LOGGER.info("\tAll responses are invalid! Returning placeholder...")
+        ret = {
+            "score": -1,
+            "score_ci": [-1, -1],
+            "toxicity_range": [-1, -1],
+            "prop_rta": round(len(refused_data) / len(data), 4),
+            "prop_invalid": round(1 - (num_valid / len(data)), 4),
+            "num_samples": len(data),
+        }
+        return ret
 
     # Bootstrap confidence intervals
     bootstrap = IIDBootstrap(np.array(toxicity_vals), seed=SEED)
@@ -354,7 +422,6 @@ def compute_score_for_toxicity_datasets(valid_data, invalid_data, alpha=0.05):
     ci = [round(bound, 4) for bound in ci]
 
     # Prepare return
-    data = valid_data + invalid_data
     metrics = {
         "score": round(float(np.mean(toxicity_vals)), 4),
         "score_ci": ci,
@@ -492,6 +559,26 @@ def compute_impact_effect_size(group_A, group_B):
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
+def is_text_truthy(text):
+    """
+    Return True, if text is truth-y. Return False, if text is false-y (i.e.,
+    whitespace only)
+
+    Parameters
+    ----------
+    text : str
+        Arbitrary text
+
+    Returns
+    -------
+    bool
+        True if text is valid and False otherwise
+    """
+    if not text or text.isspace():
+        return False
+    return True
+
+
 def extract_valid_choice(text, choices=(1, 2, 3)):
     """
     Extract answer from valid choices, as long as only 1 is chosen
@@ -508,6 +595,10 @@ def extract_valid_choice(text, choices=(1, 2, 3)):
     str
         Chosen option, if contained. Otherwise returns None
     """
+    # Early return, if text is false-y
+    if not text:
+        return None
+
     # NOTE: Assumes choices are alphanumeric
     for choice in choices:
         assert str(choice).isalnum(), \
