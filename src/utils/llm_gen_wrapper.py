@@ -168,9 +168,12 @@ class LLMGeneration:
                 dtype=DTYPE,
                 max_model_len=MAX_MODEL_LEN,
             )
-            self.sampling_params = SamplingParams(temperature=self.temperature,
-                                                  top_p=1.0, seed=1,
-                                                  max_tokens=self.max_new_tokens)
+            self.sampling_params = SamplingParams(
+                temperature=self.temperature,
+                top_p=1.0,
+                seed=1,
+                max_tokens=self.max_new_tokens
+            )
 
         # Early return, if model is already loaded
         if self._model is not None or self._tokenizer is not None:
@@ -204,7 +207,7 @@ class LLMGeneration:
     ############################################################################
     #                           HuggingFace API                                #
     ############################################################################
-    def _generation_hf(self, prompt, temperature):
+    def hf_generate(self, prompt, temperature):
         """
         Generates a response using a HuggingFace model.
         """
@@ -228,6 +231,10 @@ class LLMGeneration:
             output_ids, skip_special_tokens=True, spaces_between_special_tokens=False
         )
         return outputs
+
+
+    def vptq_generate(self, prompt, **kwargs):
+        raise NotImplementedError
 
 
     ############################################################################
@@ -267,13 +274,14 @@ class LLMGeneration:
         if choices:
             assert isinstance(choices, list) and len(choices) > 0, \
                 f"Choices must be a non-empty list! Invalid input: `{choices}`"
+            assert len(choices) >= 2, "There must be 2+ choices!"
             generate_kwargs["guided_options_request"] = {
                 "guided_choice": choices,
             }
         return generate_kwargs
 
 
-    def _generation_vllm(self, prompt, **kwargs):
+    def vllm_generate_single(self, prompt, **kwargs):
         """
         Generates a response using a VLLM model.
         """
@@ -282,7 +290,7 @@ class LLMGeneration:
         return response[0].outputs[0].text
     
 
-    def _generation_vllm_multiple(self, prompts, **kwargs):
+    def vllm_generate_multiple(self, prompts, **kwargs):
         """
         Generates multiple responses using a VLLM model.
 
@@ -307,7 +315,7 @@ class LLMGeneration:
                     k: (v[idx] if len(v) == len(prompts) else v)
                     for k, v in kwargs.items()
                 }
-                ret.append(self._generation_vllm(prompt, **curr_kwargs))
+                ret.append(self.vllm_generate_single(prompt, **curr_kwargs))
             return ret
 
         # CASE 2: Batched requests is possible
@@ -346,13 +354,13 @@ class LLMGeneration:
                                  deepinfra=self.use_deepinfra)
             # CASE 2: vLLM
             elif self.use_vllm:
-                ans = self._generation_vllm(prompt, **kwargs)
+                ans = self.vllm_generate_single(prompt, **kwargs)
             # CASE 3: HuggingFace
             else:
                 # Choices is not implemented for HuggingFace generation
                 if kwargs.get("choices"):
                     raise NotImplementedError("Choices is not yet supported for HF inference!")
-                ans = self._generation_hf(prompt, temperature)
+                ans = self.hf_generate(prompt, temperature)
             if not ans:
                 raise ValueError("The response is NULL or an empty string!")
             return ans
@@ -435,7 +443,7 @@ class LLMGeneration:
                 kwargs["choices"] = [row["choices"] for row in filtered_rows]
 
             # Perform generation
-            llm_responses = self._generation_vllm_multiple(prompts, **kwargs)
+            llm_responses = self.vllm_generate_multiple(prompts, **kwargs)
 
             # Check responses
             for idx, row in enumerate(filtered_rows):
