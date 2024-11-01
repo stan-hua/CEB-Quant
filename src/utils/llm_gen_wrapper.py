@@ -146,7 +146,6 @@ class LLMGeneration:
 
         # Model related parameters to fill in
         self.vllm = None
-        self.sampling_params = None
         self._model = None
         self._tokenizer = None
 
@@ -167,12 +166,7 @@ class LLMGeneration:
                 tensor_parallel_size=self.num_gpus,
                 dtype=DTYPE,
                 max_model_len=MAX_MODEL_LEN,
-            )
-            self.sampling_params = SamplingParams(
-                temperature=self.temperature,
-                top_p=1.0,
-                seed=1,
-                max_tokens=self.max_new_tokens
+                guided_decoding_backend="lm-format-enforcer",
             )
 
         # Early return, if model is already loaded
@@ -259,6 +253,13 @@ class LLMGeneration:
         """
         generate_kwargs = {}
 
+        # Create sampling parameters
+        generate_kwargs["sampling_params"] = SamplingParams(
+            temperature=self.temperature,
+            max_tokens=self.max_new_tokens,
+            seed=1,
+        )
+
         # Guided Decoding
         # CASE 0: Batched processing decoding requires all share the same choices
         if choices and isinstance(choices, list) and isinstance(choices[0], list):
@@ -286,7 +287,7 @@ class LLMGeneration:
         Generates a response using a VLLM model.
         """
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
-        response = self.vllm.generate(prompt, self.sampling_params, **gen_kwargs)
+        response = self.vllm.generate(prompt, **gen_kwargs)
         return response[0].outputs[0].text
     
 
@@ -319,7 +320,7 @@ class LLMGeneration:
             return ret
 
         # CASE 2: Batched requests is possible
-        responses = self.vllm.generate(prompts, self.sampling_params, **gen_kwargs)
+        responses = self.vllm.generate(prompts, **gen_kwargs)
         return [res.outputs[0].text for res in responses]
 
 
