@@ -99,6 +99,10 @@ class CEBBenchmark:
             If True, overwrite existing computed metrics. Does NOT overwrite
             existing generations.
         """
+        # If only exists in `generation_results`, then prepend directory
+        if not os.path.exists(results_dir) and os.path.exists(os.path.join("generation_results", results_dir)):
+            results_dir = os.path.join("generation_results", results_dir)
+
         assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
         # Store attributes
@@ -148,9 +152,14 @@ class CEBBenchmark:
                 self.dset_toxicity_metrics = json.load(f)
 
 
-    def comprehensive_eval(self):
+    def comprehensive_eval(self, task_type="all"):
         """
         Perform a comprehensive evaluation of CEB benchmark.
+
+        Parameters
+        ----------
+        task_type : str
+            One of ("all", "direct", "indirect"). Chooses datasets to evaluate
 
         Note
         ----
@@ -158,10 +167,19 @@ class CEBBenchmark:
         stereotype and toxicity tasks. 
         """
         LOGGER.info(f"Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
+        task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
+
         # Perform direct/indirect evaluation evaluation
-        for task_type in ["direct", "indirect"]:
+        for task_type in task_types:
+            # 1. Stereotype
+            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...")
             self.stereotype_eval(task_type=task_type)
+            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...DONE")
+
+            # 2. Toxicity
+            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...")
             self.toxicity_eval(task_type=task_type)
+            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...DONE")
         LOGGER.info("Performing full CEB Evaluation...DONE")
 
 
@@ -405,7 +423,7 @@ def ceb_generate(model_path, dataset_name="all", online_model=False):
     llm_gen.infer_dataset()
 
 
-def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
+def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL, **kwargs):
     """
     Evaluate LLM responses task for specified or all evaluation datasets.
 
@@ -420,7 +438,7 @@ def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL):
     benchmark = CEBBenchmark(results_dir, openai_model=openai_model)
 
     # Perform comprehensive evaluation
-    benchmark.comprehensive_eval()
+    benchmark.comprehensive_eval(**kwargs)
 
     # Convert to table and save
     benchmark.save_metric_tables(save=True)
