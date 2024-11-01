@@ -1,10 +1,10 @@
 
 # Standard libraries
 import logging
-import re
 
 # Non-standard libraries
 import numpy as np
+import regex as re
 from arch.bootstrap import IIDBootstrap
 from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
 from sklearn import metrics as skmetrics
@@ -613,8 +613,7 @@ def extract_valid_choice(text, choices=(1, 2, 3)):
 
     # NOTE: Assumes choices are alphanumeric
     for choice in choices:
-        assert str(choice).isalnum(), \
-            "`extract_valid_choice` assumes choices are alphanumeric!"
+        assert is_text_truthy(choice), f"All choices must be truthy! Failed: {choice}"
 
     # Replace newlines with spaces
     text = text.replace("\n", " ")

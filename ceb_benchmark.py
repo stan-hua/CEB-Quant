@@ -152,7 +152,7 @@ class CEBBenchmark:
                 self.dset_toxicity_metrics = json.load(f)
 
 
-    def comprehensive_eval(self, task_type="all"):
+    def comprehensive_eval(self, task_type="all", overwrite=False):
         """
         Perform a comprehensive evaluation of CEB benchmark.
 
@@ -160,6 +160,9 @@ class CEBBenchmark:
         ----------
         task_type : str
             One of ("all", "direct", "indirect"). Chooses datasets to evaluate
+        overwrite : bool
+            If True, overwrite existing computed metrics. Does NOT overwrite
+            existing generations.
 
         Note
         ----
@@ -173,17 +176,17 @@ class CEBBenchmark:
         for task_type in task_types:
             # 1. Stereotype
             LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...")
-            self.stereotype_eval(task_type=task_type)
+            self.stereotype_eval(task_type=task_type, overwrite=overwrite)
             LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...DONE")
 
             # 2. Toxicity
             LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...")
-            self.toxicity_eval(task_type=task_type)
+            self.toxicity_eval(task_type=task_type, overwrite=overwrite)
             LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...DONE")
         LOGGER.info("Performing full CEB Evaluation...DONE")
 
 
-    def stereotype_eval(self, task_type="direct"):
+    def stereotype_eval(self, task_type="direct", overwrite=False):
         """
         Evaluate all CEB - Stereotype direct/indirect evaluation datasets
 
@@ -191,6 +194,8 @@ class CEBBenchmark:
         ----------
         task_type : str, optional
             Task type to evaluate, by default "direct"
+        overwrite : bool, optional
+            If True, overwrite existing computed metrics
         """
         assert task_type in BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"]
         dataset_names = BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"][task_type]
@@ -207,7 +212,7 @@ class CEBBenchmark:
                 curr_save_dir = os.path.join(self.saved_eval_dir, dataset_name, fname)
 
                 # Skip, if already evaluated
-                if fname in self.dset_stereotype_metrics.get(dataset_name, {}):
+                if not overwrite and fname in self.dset_stereotype_metrics.get(dataset_name, {}):
                     continue
 
                 # Load inferred data
@@ -236,7 +241,7 @@ class CEBBenchmark:
             LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
 
 
-    def toxicity_eval(self, task_type="direct"):
+    def toxicity_eval(self, task_type="direct", overwrite=False):
         """
         Evaluate all CEB - Toxicity direct/indirect evaluation datasets
 
@@ -244,6 +249,8 @@ class CEBBenchmark:
         ----------
         task_type : str, optional
             Task type to evaluate, by default "direct"
+        overwrite : bool, optional
+            If True, overwrite existing computed metrics
         """
         # Warn users if Perspective API file lock exists
         if os.path.exists(config.PERSPECTIVE_LOCK_FNAME):
@@ -268,7 +275,7 @@ class CEBBenchmark:
                 curr_save_dir = os.path.join(self.saved_eval_dir, dataset_name, fname)
 
                 # Skip, if already evaluated
-                if fname in self.dset_toxicity_metrics.get(dataset_name, {}):
+                if not overwrite and fname in self.dset_toxicity_metrics.get(dataset_name, {}):
                     continue
 
                 # Load inferred data
@@ -370,7 +377,7 @@ class CEBBenchmark:
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-def ceb_generate(model_path, dataset_name="all", online_model=False):
+def ceb_generate(model_path, dataset_name="all", model_provider="vllm"):
     """
     Generate LLM responses for specific or all evaluation datasets.
 
@@ -381,43 +388,29 @@ def ceb_generate(model_path, dataset_name="all", online_model=False):
     dataset_name : str
         Name of the dataset. If not specififed or "all", generate for all
         datasets.
-    online_model : bool
-        Whether to use the online model or not (vLLM).
+    model_provider : str
+        One of local hosting: ("vllm", "huggingface", "vptq"), or one of online
+        hosting: ("deepinfra", "replicate", "other")
     """
     # Late import to prevent slowdown
     from src.utils.llm_gen_wrapper import LLMGeneration
 
-    # CASE 1: Online APIs (e.g., ChatGPT)
-    if online_model:
-        print("Using online model")
-        llm_gen = LLMGeneration(
-            model_path=model_path,
-            data_path="./data/",
-            dataset_name=dataset_name,
-            online_model=True,
-            use_deepinfra=False,
-            use_replicate=False,
-            use_vllm=False,
-            repetition_penalty=1.0,
-            max_new_tokens=512,
-            debug=False
-        )
-    # CASE 2: Offline models (vLLM)
-    else:
-        print("Using vLLM model")
-        llm_gen = LLMGeneration(
-            model_path=model_path,
-            data_path="./data/",
-            dataset_name=dataset_name,          # run on all datasets in the folder
-            online_model=False,
-            use_deepinfra=False,
-            use_replicate=False,
-            use_vllm=True,
-            repetition_penalty=1.0,
-            num_gpus=min(torch.cuda.device_count(), 4),
-            max_new_tokens=512,
-            debug=False
-        )
+    # Shared keyword arguments
+    shared_kwargs = {
+        "model_path": model_path,
+        "data_path": "data/",
+        "dataset_name": dataset_name,
+        "repetition_penalty": 1.0,
+        "max_new_tokens": 512,
+        "debug": False
+    }
+
+    # Add number of GPUs if available
+    if torch.cuda.is_available():
+        shared_kwargs["num_gpus"] = min(torch.cuda.device_count(), 4)
+
+    # Instantiate LLMGeneration wrapper
+    llm_gen = LLMGeneration(model_provider=model_provider, **shared_kwargs)
 
     # Perform inference
     llm_gen.infer_dataset()
