@@ -120,7 +120,7 @@ class ToxicityEval:
         direct_eval_data, to_parse_data = [], []
         for row in data:
             answer = extract_toxicity_recognition_answer(row["res"])
-            if answer is None and row["res"]:
+            if answer is None and metric_utils.is_text_truthy(row["res"]):
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
@@ -336,7 +336,7 @@ class ToxicityEval:
                 answer = metric_utils.extract_valid_choice(row["res"].lower(), ["yes", "no"])
 
             # Based on above result, check if needs LLM parsing
-            if answer is None and row["res"]:
+            if answer is None and metric_utils.is_text_truthy(row["res"]):
                 to_parse_data.append(row)
             else:
                 direct_eval_data.append(row)
