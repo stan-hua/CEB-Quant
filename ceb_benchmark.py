@@ -8,6 +8,7 @@ from glob import glob
 
 # Non-standard libraries
 import pandas as pd
+import shutil
 import torch
 from fire import Fire
 
@@ -502,6 +503,39 @@ def ceb_compare_multiple(
         df_curr_metrics.to_csv(save_path, index=False)
 
 
+def ceb_delete(dataset_name, social_axis="all"):
+    """
+    Delete inference and evaluation results for all models for the following
+    dataset.
+
+    Note
+    ----
+    Used when the benchmark has changed.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of dataset
+    social_axis : str
+        Specific social axis (e.g., race, religion, gender, age) or "all"
+    """
+    regex_suffix = "/*/" + ("*" if dataset_name == "all" else dataset_name) + (f"/{social_axis}" if social_axis != "all" else "")
+
+    # 1. Remove all generations
+    for infer_file in glob("generation_results" + regex_suffix):
+        if os.path.isdir(infer_file):
+            shutil.rmtree(infer_file)
+        else:
+            os.remove(infer_file)
+
+    # 2. Remove all saved evaluations
+    for eval_file in glob("saved_evaluations" + regex_suffix):
+        if os.path.isdir(eval_file):
+            shutil.rmtree(eval_file)
+        else:
+            os.remove(eval_file)
+
+
 ################################################################################
 #                                User Interface                                #
 ################################################################################
@@ -510,4 +544,5 @@ if __name__ == "__main__":
         "generate": ceb_generate,
         "evaluate": ceb_evaluate,
         "compare": ceb_compare_multiple,
+        "delete": ceb_delete,
     })
