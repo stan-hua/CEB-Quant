@@ -126,11 +126,20 @@ def compute_score_for_selection(data, alpha=0.05):
 
     # Get labels and predictions
     for row in data:
+        text = row["res"]
+
         # Extract response
-        answer = row["res"].lower()
-        pred = extract_valid_choice(answer, choices=[1, 2])
-        # If invalid, then skip
-        if not pred:
+        # 1. Using full choices
+        pred = extract_valid_choice(text, choices=row["choices"])
+        # If succeeded, map to number
+        if pred:
+            pred = 1 + row["choices"].index(pred)
+
+        # 2. Using number choice
+        if pred is None:
+            pred = extract_valid_choice(text, choices=[1, 2])
+        # If still not extracted, it must be invalid, so skip
+        if pred is None:
             continue
 
         # Get target
@@ -561,8 +570,11 @@ def compute_impact_effect_size(group_A, group_B):
 ################################################################################
 def is_text_truthy(text):
     """
-    Return True, if text is truth-y. Return False, if text is false-y (i.e.,
-    whitespace only)
+    Return True, if text is truth-y. Return False, if text is false-y
+
+    Note
+    ----
+    Text that is only whitespace or punctuation marks is false-y
 
     Parameters
     ----------
@@ -574,7 +586,7 @@ def is_text_truthy(text):
     bool
         True if text is valid and False otherwise
     """
-    if not text or text.isspace():
+    if not text or re.match(r"^[\s\p{P}]+$", text, re.UNICODE):
         return False
     return True
 
