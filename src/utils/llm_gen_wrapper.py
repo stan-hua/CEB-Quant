@@ -13,11 +13,12 @@ import traceback
 import urllib3
 from dotenv import load_dotenv
 from fastchat.model import load_model
+from transformers import AutoTokenizer
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from src.config import config
+from src.config.config import MODEL_INFO
 from src.utils import json_utils, llm_gen_utils
 
 
@@ -55,14 +56,27 @@ TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
 # Names of all datasets
 ALL_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 
-# Data type to load LLM
-DTYPE = "float16"          # "bfloat16", "float16"
-
 # Number of threads to use in sending requests to LLM APIs
 NUM_WORKERS = 8
 
 # Maximum vLLM model input token length
 MAX_MODEL_LEN = 4096
+
+# Default configuration parameters
+DEFAULT_CONFIG = {
+    "model_provider": "vllm",
+    # Local model loading
+    "num_gpus": 1,
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
+    "dtype": "float16",
+    "debug": False,
+    # Generation parameters
+    "use_chat_template": False,
+    "temperature": 0,
+    "repetition_penalty": 1.0,
+    "max_model_len": 4096,      # Maximum input size
+    "max_new_tokens": 512,      # Maximum output size
+}
 
 
 ################################################################################
@@ -74,14 +88,7 @@ class LLMGeneration:
             data_path,
             dataset_name,
             model_path,
-            online_model=False,
-            use_deepinfra=False,
-            use_replicate=False,
-            use_vllm=False,
-            repetition_penalty=1.0,
-            num_gpus=1,
-            max_new_tokens=512,
-            debug=False,
+            **overwrite_config,
         ):
         """
         Initialize the LLMGeneration class.
@@ -93,23 +100,28 @@ class LLMGeneration:
         dataset_name : str
             Name of the dataset.
         model_path : str
-            Path to the model. If using huggingface model, it should be the model path. Otherwise, it should be the model name.
-        online_model : bool, optional
-            Whether to use the online model or not. Default is False.
-        use_deepinfra : bool, optional
-            Whether to use the deepinfra API or not. Default is False.
-        use_replicate : bool, optional
-            Whether to use the replicate API or not. Default is False.
-        use_vllm : bool, optional
-            Whether to use the vLLM to run huggingface models or not. Default is False.
-        repetition_penalty : float, optional
-            Repetition penalty, default is 1.0.
-        num_gpus : int, optional
-            Number of GPUs to use, default is 1.
-        max_new_tokens : int, optional
-            Number of max new tokens generated, default is 512.
-        debug : bool, optional
-            Whether to print debug messages or not. Default is False.
+            Model name, or path to HuggingFace model
+        **overwrite_config : Any
+            Keyword arguments, which includes:
+            model_provider : str
+                One of local hosting: ("vllm", "huggingface", "vptq"), or one
+                of online hosting: ("deepinfra", "replicate", "other")
+            online_model : bool, optional
+                Whether to use the online model or not. Default is False.
+            use_deepinfra : bool, optional
+                Whether to use the deepinfra API or not. Default is False.
+            use_replicate : bool, optional
+                Whether to use the replicate API or not. Default is False.
+            use_vllm : bool, optional
+                Whether to use the vLLM to run huggingface models or not. Default is False.
+            repetition_penalty : float, optional
+                Repetition penalty, default is 1.0.
+            num_gpus : int, optional
+                Number of GPUs to use, default is 1.
+            max_new_tokens : int, optional
+                Number of max new tokens generated, default is 512.
+            debug : bool, optional
+                Whether to print debug messages or not. Default is False.
         """
         # Check that dataset is valid
         if not (dataset_name == "all" or dataset_name in ALL_DATASETS):
@@ -119,35 +131,20 @@ class LLMGeneration:
         self.model_path = model_path        # model path. If using huggingface model, it should be the model path. Otherwise, it should be the model name.
         self.data_path = data_path          # path to the dataset
         self.dataset_name = dataset_name    # the dataset name, e.g., "winobias"
-        self.online_model = online_model
-        self.temperature = 0                                            # temperature setting for text generation, default 0.0 (greedy decoding)
-        self.repetition_penalty = repetition_penalty                    # repetition penalty, default is 1.0
-        self.num_gpus = num_gpus
-        self.max_new_tokens = max_new_tokens                            # Number of max new tokens generated
-        self.debug = debug
-        self.online_model_list = llm_gen_utils.get_models()[1]                        # Online model list, typically contains models that are not huggingface models
-        self.model_mapping = llm_gen_utils.get_models()[0]                            # Mapping between model path and model name
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.use_replicate = use_replicate                              # Temporarily set to False as we don"t use replicate api
-        self.use_deepinfra = use_deepinfra                              # Temporarily set to False as we don"t use deepinfra api
-        self.use_vllm = use_vllm                                        # Set this to be True when using vLLM to run huggingface models
+
+        # Store configuration
+        self.llm_config = DEFAULT_CONFIG.copy()
+        self.llm_config.update(**overwrite_config)
 
         # Get the model name according to the model path
-        self.model_name = None
-        model_mapping = config.MODEL_INFO["model_mapping"]
-        if self.model_path in model_mapping:
-            self.model_name = model_mapping[self.model_path]
-        elif self.model_path.split("/")[-1] in model_mapping:
-            self.model_name = model_mapping[self.model_path.split("/")[-1]]
-        else:
-            raise RuntimeError(
-                "Please ensure model path has mapping in `src/config/config.py`!"
-                f"\n\tModel Path: `{self.model_path}`")
+        self.model_name = extract_model_name(self.model_path, self.llm_config["model_provider"])
 
         # Model related parameters to fill in
+        # 1. vLLM engine
         self.vllm = None
-        self._model = None
-        self._tokenizer = None
+        # 2. HuggingFace model/tokenizer (loaded by FastChat or VPTQ)
+        self.hf_model = None
+        self.hf_tokenizer = None
 
         # Load models
         self.load_model_and_tokenizer()
@@ -157,78 +154,86 @@ class LLMGeneration:
         """
         Loads model and tokenizer
         """
-        # CASE 1: Instantiate vLLM instance, if needed
-        if self.use_vllm:
+        model_provider = self.llm_config["model_provider"]
+        # CASE 1: Using vLLM instance, if needed
+        if model_provider == "vllm":
             LOGGER.debug("Using VLLM model for generation. Load model from: %s", self.model_path)
-            LOGGER.debug(f"Loading onto {self.num_gpus} GPUs...")
+            LOGGER.debug(f"Loading onto {self.llm_config['num_gpus']} GPUs...")
             self.vllm = LLM(
                 model=self.model_path,
-                tensor_parallel_size=self.num_gpus,
-                dtype=DTYPE,
-                max_model_len=MAX_MODEL_LEN,
+                tensor_parallel_size=self.llm_config["num_gpus"],
+                dtype=self.llm_config["dtype"],
+                max_model_len=self.llm_config["max_model_len"],
                 guided_decoding_backend="lm-format-enforcer",
             )
-
-        # Early return, if model is already loaded
-        if self._model is not None or self._tokenizer is not None:
-            return None
-
-        # CASE 1: Using online models without using replicate or deepinfra apis
-        if self.online_model:
-            assert self.model_name in self.online_model_list, \
-                f"Online model provided `{self.model_name}` is not in " \
-                f"online model list! \n\t{self.online_model_list}"
-            return
-        # CASE 2: Using vLLM
-        elif self.use_vllm:
             return
 
-        # CASE 3: Loading using FastChat
-        model, tokenizer = load_model(
-            self.model_path,
-            self.online_model,
-            self.use_replicate,
-            self.use_deepinfra,
-            self.use_vllm,
-            self.num_gpus,
-            self.device,
-            self.debug,
-        )
-        self._model = model
-        self._tokenizer = tokenizer
+        # CASE 2: Loading HuggingFace model using FastChat
+        if model_provider == "huggingface":
+            hf_kwargs = {
+                k:v for k,v in self.llm_config.items()
+                if k in ["device", "num_gpus", "dtype", "max_gpu_memory", "debug"]
+            }
+            self.hf_model, self.hf_tokenizer = load_model(self.model_path, **hf_kwargs)
+            return
+
+        # CASE 3: Loading VPTQ-compressed HuggingFace model
+        if model_provider == "vptq":
+            # Late import to prevent import slowdown
+            try:
+                import vptq
+            except ImportError:
+                raise ImportError("Please install vptq: `pip install git+https://github.com/microsoft/VPTQ.git --no-build-isolation`")
+
+            # Load model and tokenizer
+            self.hf_model = vptq.AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                trust_remote_code=True,
+                device_map="auto",
+                torch_dtype=self.llm_config["dtype"],
+                debug=self.llm_config["debug"],
+            )
+            self.hf_tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path,
+                trust_remote_code=True
+            )
+            return
+
+
 
 
     ############################################################################
     #                           HuggingFace API                                #
     ############################################################################
-    def hf_generate(self, prompt, temperature):
+    def huggingface_generate(self, prompt, temperature):
         """
         Generates a response using a HuggingFace model.
         """
-        model, tokenizer = self._model, self._tokenizer
+        model, tokenizer = self.hf_model, self.hf_tokenizer
 
-        prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
-        inputs = tokenizer([prompt])
-        inputs = {k: torch.tensor(v).to(self.device) for k, v in inputs.items()}
+        # Convert to chat format
+        if self.llm_config["use_chat_template"]:
+            prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
+
+        # Tokenize the input prompt
+        inputs = tokenizer(prompt, return_tensors="pt").to(self.llm_config["device"])
+
+        # Generate output ids
         output_ids = model.generate(
             **inputs,
-            do_sample=True if temperature > 1e-5 else False,
-            temperature=temperature,
-            repetition_penalty=self.repetition_penalty,
-            max_new_tokens=self.max_new_tokens,
+            do_sample=temperature > 1e-5,
+            temperature=temperature or self.llm_config["temperature"],
+            repetition_penalty=self.llm_config["repetition_penalty"],
+            max_new_tokens=self.llm_config["max_new_tokens"],
         )
-        if model.config.is_encoder_decoder:
-            output_ids = output_ids[0]
-        else:
-            output_ids = output_ids[0][len(inputs["input_ids"][0]):]
-        outputs = tokenizer.decode(
-            output_ids, skip_special_tokens=True, spaces_between_special_tokens=False
-        )
-        return outputs
 
+        # Adjust output ids for decoder-only models
+        if not model.config.is_encoder_decoder:
+            output_ids = output_ids[:, inputs["input_ids"].shape[-1]:]
 
-    def vptq_generate(self, prompt, **kwargs):
-        raise NotImplementedError
+        # Decode the output ids to text
+        text_response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        return text_response
 
 
     ############################################################################
@@ -255,8 +260,8 @@ class LLMGeneration:
 
         # Create sampling parameters
         generate_kwargs["sampling_params"] = SamplingParams(
-            temperature=self.temperature,
-            max_tokens=self.max_new_tokens,
+            temperature=self.llm_config["temperature"],
+            max_tokens=self.llm_config["max_new_tokens"],
             seed=1,
         )
 
@@ -344,27 +349,38 @@ class LLMGeneration:
             The generated text as a string.
         """
         try:
-            # CASE 1: Online Models
-            if self.online_model:
-                # Choices is not implemented for online model
+            model_provider = self.llm_config["model_provider"]
+
+            # Generate LLM response
+            response = None
+            # CASE 1: vLLM
+            if model_provider == "vllm":
+                # NOTE: Temperature isn't passed into vLLM
+                response = self.vllm_generate_single(prompt, **kwargs)
+            # CASE 2: Online Models
+            if is_provider_online(model_provider):
                 if kwargs.get("choices"):
-                    raise NotImplementedError("Choices is not yet supported for online model!")
-                ans = llm_gen_utils.gen_online(self.model_name,
-                                 prompt, temperature,
-                                 replicate=self.use_replicate,
-                                 deepinfra=self.use_deepinfra)
-            # CASE 2: vLLM
-            elif self.use_vllm:
-                ans = self.vllm_generate_single(prompt, **kwargs)
-            # CASE 3: HuggingFace
-            else:
+                    raise NotImplementedError("Choices is not supported for online models!")
+                response = llm_gen_utils.gen_online(
+                    self.model_name,
+                    prompt=prompt,
+                    temperature=temperature,
+                    replicate=(model_provider == "replicate"),
+                    deepinfra=(model_provider == "deepinfra"),
+                )
+            # CASE 3: HuggingFace / VPTQ
+            elif model_provider in ["huggingface", "vptq"]:
                 # Choices is not implemented for HuggingFace generation
                 if kwargs.get("choices"):
-                    raise NotImplementedError("Choices is not yet supported for HF inference!")
-                ans = self.hf_generate(prompt, temperature)
-            if not ans:
+                    raise NotImplementedError(f"Choices is not supported for provider `{model_provider}`!")
+                response = self.huggingface_generate(prompt, temperature)
+            else:
+                raise RuntimeError("This branch should never execute!")
+
+            # Check if the response is valid before returning
+            if not response:
                 raise ValueError("The response is NULL or an empty string!")
-            return ans
+            return response
         except Exception:
             tb = traceback.format_exc()
             LOGGER.debug(tb)
@@ -433,8 +449,9 @@ class LLMGeneration:
             LOGGER.debug("No grouped rows to process")
             return
 
+        model_provider = self.llm_config["model_provider"]
         # CASE 1: If vLLM, pass multiple row prompts at once
-        if self.use_vllm:
+        if model_provider == "vllm":
             # Prepare arguments
             kwargs = {}
             # 1. Prompts
@@ -462,20 +479,26 @@ class LLMGeneration:
             return
 
         # CASE 2: If online model, send parallel requests to LLM API
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(filtered_rows)) as executor:
-            futures = [
-                executor.submit(
-                        self.process_row,
-                        row=row,
-                        index=idx,
-                        temperature=temperature,
-                        key_name=key_name,
-                    )
-                for idx, row in enumerate(filtered_rows)
-            ]
+        if is_provider_online(model_provider):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(filtered_rows)) as executor:
+                futures = [
+                    executor.submit(
+                            self.process_row,
+                            row=row,
+                            index=idx,
+                            temperature=temperature,
+                            key_name=key_name,
+                        )
+                    for idx, row in enumerate(filtered_rows)
+                ]
 
-            # Wait for all futures to complete
-            concurrent.futures.wait(futures)
+                # Wait for all futures to complete
+                concurrent.futures.wait(futures)
+            return
+
+        # TODO: CASE 3: If FastChat, pass multiple prompts sequentially
+
+        raise NotImplementedError()
         return
 
 
@@ -518,7 +541,7 @@ class LLMGeneration:
         lock = threading.Lock()
 
         # Process the input data in groups
-        batch_size = 32 if self.use_vllm else NUM_WORKERS
+        batch_size = 32 if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
 
         # Add number of attempts to each row
         MAX_ATTEMPTS = 3
@@ -566,7 +589,7 @@ class LLMGeneration:
         dataset_name : str
             The name of the dataset to use for evaluation.
         """
-        LOGGER.info(f"Beginning generation with `{dataset_name}` evaluation at temperature {self.temperature}.")
+        LOGGER.info(f"Beginning generation with `{dataset_name}` evaluation at temperature {self.llm_config['temperature']}.")
         LOGGER.info(f"Evaluating target model: {self.model_name}")
 
         base_dir = os.path.join(self.data_path, dataset_name)
@@ -613,3 +636,66 @@ class LLMGeneration:
                     num_retries += 1
             if not successful:
                 LOGGER.error("Test failed after maximum retries.")
+
+
+################################################################################
+#                               Helper Functions                               #
+################################################################################
+def is_provider_online(model_provider):
+    """
+    Check if the model provider is an online provider.
+
+    Parameters
+    ----------
+    model_provider : str
+        Name of model provider
+
+    Returns
+    -------
+    bool
+        True if the model provider is one of the online providers
+    """
+    return model_provider in ["deepinfra", "replicate", "other"]
+
+
+def extract_model_name(model_path, model_provider="vllm"):
+    """
+    Extract model name from model path.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the model
+    model_provider : str
+        Model provider name
+
+    Returns
+    -------
+    str
+        Model name
+
+    Raises
+    ------
+    RuntimeError
+        If the model path is not found in the model mapping
+    """
+    # Get the model name according to the model path
+    model_name = None
+    model_mapping = MODEL_INFO["model_mapping"]
+    if model_path in model_mapping:
+        model_name = model_mapping[model_path]
+    elif model_path.split("/")[-1] in model_mapping:
+        model_name = model_mapping[model_path.split("/")[-1]]
+    else:
+        raise RuntimeError(
+            "Please ensure model path has mapping in `src/config/config.py`!"
+            f"\n\tModel Path: `{model_path}`")
+
+    # Ensure model name is valid, if online model is chosen
+    if is_provider_online(model_provider):
+        assert model_name in MODEL_INFO['online_model'], (
+            f"Online model provided `{model_name}` is invalid! "
+            f"\nValid options: {MODEL_INFO['online_model']}"
+        )
+
+    return model_name
