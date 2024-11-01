@@ -183,7 +183,7 @@ class LLMGeneration:
             try:
                 import vptq
             except ImportError:
-                raise ImportError("Please install vptq: `pip install git+https://github.com/microsoft/VPTQ.git --no-build-isolation`")
+                raise ImportError("Please install vptq: `pip install vptq`")
 
             # Load model and tokenizer
             self.hf_model = vptq.AutoModelForCausalLM.from_pretrained(
