@@ -37,7 +37,7 @@ multiprocessing.set_start_method('spawn')
 #                                  Constants                                   #
 ################################################################################
 # General test types
-TEST_TYPES = ["Continuation", "Conversation", "Recognition", "Selection"]
+TEST_TYPES = ["Recognition", "Selection", "Continuation", "Conversation"]
 # Names of Stereotype Datasets
 STEREOTYPE_DATASETS = [f"CEB-{test}-S" for test in TEST_TYPES] + [
     "CEB-Adult",
@@ -200,8 +200,6 @@ class LLMGeneration:
             return
 
 
-
-
     ############################################################################
     #                           HuggingFace API                                #
     ############################################################################
@@ -291,7 +289,14 @@ class LLMGeneration:
         """
         Generates a response using a VLLM model.
         """
+        # Create vLLM arguments
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
+
+        # Convert to chat format
+        if self.llm_config["use_chat_template"]:
+            prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
+
+        # Use vLLM to generate
         response = self.vllm.generate(prompt, **gen_kwargs)
         return response[0].outputs[0].text
     
@@ -312,6 +317,7 @@ class LLMGeneration:
         list of str
             The generated responses.
         """
+        # Create vLLM arguments
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
         # CASE 1: Unable to do batched requests on texts, default to single
         if gen_kwargs is None:
@@ -325,6 +331,11 @@ class LLMGeneration:
             return ret
 
         # CASE 2: Batched requests is possible
+        # Convert to chat format
+        if self.llm_config["use_chat_template"]:
+            convert_func = llm_gen_utils.prompt2conversation
+            prompts = [convert_func(self.model_path, p) for p in prompts]
+
         responses = self.vllm.generate(prompts, **gen_kwargs)
         return [res.outputs[0].text for res in responses]
 
