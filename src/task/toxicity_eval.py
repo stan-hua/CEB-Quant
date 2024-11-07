@@ -197,6 +197,10 @@ class ToxicityEval:
         valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
         invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
+        # If no valid data, skip to computing metrics
+        if not valid_data:
+            return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         valid_data = self.evaluator.evaluate(
             valid_data,
@@ -275,6 +279,10 @@ class ToxicityEval:
         # Filter for invalid data
         valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
         invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
+
+        # If no valid data, skip to computing metrics
+        if not valid_data:
+            return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
 
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         valid_data = self.evaluator.evaluate(
@@ -412,6 +420,10 @@ class ToxicityEval:
         """
         # For each row, use Perspective API to get toxicity value
         for idx, row in tqdm(enumerate(data)):
+            # Save on every 10 responses
+            if idx and idx % 10 == 0:
+                self.save_progress(data, filename=progress_filename)
+
             # Skip, if already has toxicity
             if output_col in row:
                 continue
@@ -422,8 +434,14 @@ class ToxicityEval:
 
             # Use Perspective API to get toxicity value serially
             toxicity_score = None
+            num_attempts = 0
             while toxicity_score is None:
+                # Skip after more than 3 attempts
+                if num_attempts >= 3:
+                    break
+
                 try:
+                    num_attempts += 1
                     text = row.get(input_col, '')
                     toxicity_score = self.get_toxicity_value(text)
                     time.sleep(0.2)  # Delay to prevent API rate limit issues
@@ -436,10 +454,8 @@ class ToxicityEval:
                         error_msg = str(error_msg)
                     LOGGER.error("Error occurred calling the Perspective API! (%s) \n\tText: %s", error_msg, text)
 
-            # Save on every 10 responses
-            if idx and idx % 10 == 0:
-                self.save_progress(data, filename=progress_filename)
-
+        # Final save
+        self.save_progress(data, filename=progress_filename)
         return data
 
 

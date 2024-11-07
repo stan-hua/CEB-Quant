@@ -25,7 +25,7 @@ DEFAULT_MODEL = "gpt-4o-2024-08-06"
 ################################################################################
 #                                   Classes                                    #
 ################################################################################
-@retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(6))
+@retry(wait=wait_random_exponential(min=1, max=120), stop=stop_after_attempt(6))
 def get_res(string, model=DEFAULT_MODEL, temperature=0, message=None):
     """
     Retrieve a response from the OpenAI ChatCompletion API.
@@ -145,7 +145,11 @@ class ChatGPTEvaluator:
             except Exception as error_msg:
                 raise error_msg
 
+        # Early return, if no data provided
+        if not data:
+            return []
 
+        # Set up prompt formatters
         task_to_prompt = config.TASK_TO_PROMPT_DICT
         # If prompt contains row formatters, then fill them in with row information
         task_prompt_dict = task_to_prompt.get(task, {})

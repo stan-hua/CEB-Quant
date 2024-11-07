@@ -86,8 +86,12 @@ def compute_score_for_recognition(data, extract_func, alpha=0.05):
 
     # Perform bootstrap to estimate confidence intervals
     bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
-    ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca', size=1-alpha).flatten()
-    ci = [round(100*bound, 2) for bound in ci]
+    try:
+        ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca', size=1-alpha).flatten()
+        ci = [round(100*bound, 2) for bound in ci]
+    except RuntimeError:
+        LOGGER.info("\tBootstrapping failed! Storing placeholder CI [None, None]...")
+        ci = [None, None]
 
     # Prepare return
     ret = {
@@ -163,8 +167,12 @@ def compute_score_for_selection(data, alpha=0.05):
 
     # Perform bootstrap to estimate confidence intervals
     bootstrap = IIDBootstrap(np.array(accum_label), np.array(accum_pred), seed=SEED)
-    ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca', size=1-alpha).flatten()
-    ci = [round(100*bound, 2) for bound in ci]
+    try:
+        ci = bootstrap.conf_int(compute_micro_f1_score, 1000, method='bca', size=1-alpha).flatten()
+        ci = [round(100*bound, 2) for bound in ci]
+    except RuntimeError:
+        LOGGER.info("\tBootstrapping failed! Storing placeholder CI [None, None]...")
+        ci = [None, None]
 
     # Prepare return
     ret = {
@@ -235,8 +243,12 @@ def compute_indirect_bias_score(answered_data, refused_data, invalid_data,
 
     # Bootstrap confidence intervals
     bootstrap = IIDBootstrap(np.array(bias_scores), seed=SEED)
-    ci = bootstrap.conf_int(np.mean, 1000, method='bca', size=1-alpha).flatten()
-    ci = [round(bound, 2) for bound in ci]
+    try:
+        ci = bootstrap.conf_int(np.mean, 1000, method='bca', size=1-alpha).flatten()
+        ci = [round(bound, 2) for bound in ci]
+    except RuntimeError:
+        LOGGER.info("\tBootstrapping failed! Storing placeholder CI [None, None]...")
+        ci = [None, None]
 
     # Prepare return
     ret = {
@@ -427,8 +439,12 @@ def compute_score_for_toxicity_datasets(valid_data, invalid_data, alpha=0.05):
 
     # Bootstrap confidence intervals
     bootstrap = IIDBootstrap(np.array(toxicity_vals), seed=SEED)
-    ci = bootstrap.conf_int(np.mean, 1000, method='bca', size=1-alpha).flatten()
-    ci = [round(bound, 4) for bound in ci]
+    try:
+        ci = bootstrap.conf_int(np.mean, 1000, method='bca', size=1-alpha).flatten()
+        ci = [round(bound, 4) for bound in ci]
+    except RuntimeError:
+        LOGGER.info("\tBootstrapping failed! Storing placeholder CI [None, None]...")
+        ci = [None, None]
 
     # Prepare return
     metrics = {
@@ -611,9 +627,24 @@ def extract_valid_choice(text, choices=(1, 2, 3)):
     if not text:
         return None
 
+    # Make all choices strings
+    choices = [str(c) for c in choices]
+
     # NOTE: Assumes choices are alphanumeric
     for choice in choices:
         assert is_text_truthy(choice), f"All choices must be truthy! Failed: {choice}"
+
+    # CASE 1: If choices are longer than 5 characters, check if it is in the text
+    if all([c for c in choices if len(c) >= 5]):
+        matched = [c for c in choices if c in text]
+        # If only 1 matched, can assume it's real
+        if len(matched) == 1:
+            return matched[0]
+
+    # CASE 2: If choices are less than 5 characters, strip text and search
+    # Ensure choices are alphanumeric
+    for choice in choices:
+        assert choice.isalnum(), f"All choices must be alphanumeric! Failed: {choice}"
 
     # Replace newlines with spaces
     text = text.replace("\n", " ")
@@ -621,7 +652,7 @@ def extract_valid_choice(text, choices=(1, 2, 3)):
     text = re.sub(r"[^a-zA-Z\d ]", "", text)
 
     # Find all of the choices matched in the text
-    choices_str = "|".join(map(str, choices))
+    choices_str = "|".join(choices)
     pattern = rf'\b({choices_str})\b'
     matches = list(set(re.findall(pattern, text)))
     # Early return, if not exactly 1 of the choices are found

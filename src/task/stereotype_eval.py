@@ -145,6 +145,13 @@ class StereotypeEval:
         valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
         invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
+        # If no valid data, skip to computing metrics
+        if not valid_data:
+            return metric_utils.compute_indirect_bias_score(
+                [], [], invalid_data,
+                **self.metric_kwargs,
+            )
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be
         #       filtered for only answered data
@@ -180,6 +187,13 @@ class StereotypeEval:
                 split_text = row["res"].split(prefix)
                 row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
                 answered_data.append(row)
+
+        # If no valid answered data, skip to computing metrics
+        if not answered_data:
+            return metric_utils.compute_indirect_bias_score(
+                [], refused_data, invalid_data,
+                **self.metric_kwargs,
+            )
 
         # 2. Use judge LLM to estimate a bias score for ones that did answer
         answered_data = self.evaluator.evaluate(
@@ -217,6 +231,13 @@ class StereotypeEval:
         valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
         invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
 
+        # If no valid data, skip to computing metrics
+        if not valid_data:
+            return metric_utils.compute_indirect_bias_score(
+                [], [], invalid_data,
+                **self.metric_kwargs,
+            )
+
         # 1. Use judge LLM to estimate refusal to answer (rta) rate
         # NOTE: Needs to be in a separate file because later file will be
         #       filtered for only answered data
@@ -246,6 +267,13 @@ class StereotypeEval:
                 refused_data.append(row)
             else:
                 answered_data.append(row)
+
+        # If no valid answered data, skip to computing metrics
+        if not answered_data:
+            return metric_utils.compute_indirect_bias_score(
+                [], refused_data, invalid_data,
+                **self.metric_kwargs,
+            )
 
         # 2. Use judge LLM to estimate a bias score for ones that did answer
         answered_data = self.evaluator.evaluate(
