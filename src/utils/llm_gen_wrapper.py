@@ -18,7 +18,7 @@ from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from src.config.config import MODEL_INFO
+from src.config.config import MODEL_INFO, ALL_DATASETS
 from src.utils import json_utils, llm_gen_utils
 
 
@@ -36,26 +36,6 @@ multiprocessing.set_start_method('spawn')
 ################################################################################
 #                                  Constants                                   #
 ################################################################################
-# General test types
-TEST_TYPES = ["Recognition", "Selection", "Continuation", "Conversation"]
-# Names of Stereotype Datasets
-STEREOTYPE_DATASETS = [f"CEB-{test}-S" for test in TEST_TYPES] + [
-    "CEB-Adult",
-    "CEB-Credit",
-    # TODO: Handle later
-    # "CEB-RB-Recognition",
-    # "CEB-WB-Recognition",
-    # "CEB-CP-Recognition",
-]
-# Names of Toxicity Datasets
-TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
-    "CEB-Jigsaw",
-    # TODO: Handle later
-    # "CEB-SS-Recognition",
-]
-# Names of all datasets
-ALL_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
-
 # Number of threads to use in sending requests to LLM APIs
 NUM_WORKERS = 8
 
@@ -106,14 +86,6 @@ class LLMGeneration:
             model_provider : str
                 One of local hosting: ("vllm", "huggingface", "vptq"), or one
                 of online hosting: ("deepinfra", "replicate", "other")
-            online_model : bool, optional
-                Whether to use the online model or not. Default is False.
-            use_deepinfra : bool, optional
-                Whether to use the deepinfra API or not. Default is False.
-            use_replicate : bool, optional
-                Whether to use the replicate API or not. Default is False.
-            use_vllm : bool, optional
-                Whether to use the vLLM to run huggingface models or not. Default is False.
             repetition_penalty : float, optional
                 Repetition penalty, default is 1.0.
             num_gpus : int, optional
@@ -190,7 +162,7 @@ class LLMGeneration:
                 self.model_path,
                 trust_remote_code=True,
                 device_map="auto",
-                torch_dtype=self.llm_config["dtype"],
+                # torch_dtype=self.llm_config["dtype"],  # NOTE: Not supported by VPTQ library
                 debug=self.llm_config["debug"],
             )
             self.hf_tokenizer = AutoTokenizer.from_pretrained(

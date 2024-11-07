@@ -20,7 +20,6 @@ from src.config import config
 ################################################################################
 # Load model information from configuration
 model_info = config.MODEL_INFO
-online_model_list = model_info['online_model']
 model_mapping = model_info['model_mapping']
 rev_model_mapping = {value: key for key, value in model_mapping.items()}
 
@@ -28,10 +27,6 @@ rev_model_mapping = {value: key for key, value in model_mapping.items()}
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
-# Retrieve model information
-def get_models():
-    return model_mapping, online_model_list
-
 # Function to obtain access token for APIs
 def get_access_token():
     url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={config.client_id}&client_secret={config.client_secret}"
