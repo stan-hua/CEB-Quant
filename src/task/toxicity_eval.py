@@ -10,7 +10,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 from tqdm import tqdm
 
 # Custom libraries
-from src.config import config
+import config
 from src.utils import chatgpt_eval, json_utils, metric_utils
 
 

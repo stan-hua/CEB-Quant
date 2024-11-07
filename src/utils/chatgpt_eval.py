@@ -9,7 +9,7 @@ from openai import OpenAI
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
-from src.config import config
+import config
 from src.utils import json_utils
 
 

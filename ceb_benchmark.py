@@ -14,8 +14,8 @@ from fire import Fire
 from tqdm import tqdm
 
 # Custom libraries
-from src.config import config
-from src.config.config import DIR_GENERATIONS, DIR_EVALUATIONS
+import config
+from config import DIR_GENERATIONS, DIR_EVALUATIONS
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils

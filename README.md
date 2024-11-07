@@ -2,7 +2,7 @@
 
 ![The framework of CEB.](framework.png)
 
-This repository contains the data release for the paper [CEB: A Compositional Evaluation Benchmark for Bias in Large Language Models](https://arxiv.org/pdf/2407.02408).
+This repository contains the **refactored version** of the benchmark released in the paper [CEB: A Compositional Evaluation Benchmark for Bias in Large Language Models](https://arxiv.org/pdf/2407.02408).
 
 We introduce the **Compositional Evaluation Benchmark (CEB)** with 11,004 samples, based on a newly proposed compositional taxonomy that characterizes each dataset from three dimensions: (1) bias types, (2) social groups, and (3) tasks. Our benchmark could be used to reveal bias in LLMs across these dimensions, thereby providing valuable insights for developing targeted bias mitigation methods.
 
@@ -41,6 +41,7 @@ The CEB dataset is now publicly available to support further research and develo
 
 We encourage researchers and developers to utilize and contribute to this benchmark to enhance the evaluation and mitigation of biases in LLMs.
 
+---
 
 ## Setup
 ```
@@ -60,31 +61,44 @@ echo 'export PERSPECTIVE_KEY="[ENTER HERE]"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-For modifying any models or changing any prompts, please refer to `./src/config/config.py`
+For modifying any models or changing any prompts, please refer to `config.py`
+
+---
 
 ## CEB-Benchmark Evaluation
 
-0. If using custom HuggingFace model, create shorthand in `./src/config/config.py`
+#### 0. If using custom HuggingFace model, create shorthand in `config.py`
 ```
 # Modify MODEL_INFO["model_mapping"] with shorthand for directory
 ```
 
-1. Perform generations on ALL datasets (e.g., for a LLaMA 3.1 8B model on HuggingFace)
+#### 1. Perform generations on ALL datasets (e.g., for a LLaMA 3.1 8B model on HuggingFace)
 ```
+# Option 1. In shell
 MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
-python run_gen.py --model_path ${MODEL_NAME};
-```
+python -m ceb_benchmark generate --model_path ${MODEL_NAME};
 
-2. Perform evaluation
+# Option 2. In SLURM server
+sbatch slurm/run_ceb.sh
 ```
+NOTE: Ensure that the model path has a shorthand mapping in `src/config/config.py`
+
+#### 2. Evaluate stereotyping/toxicity using OpenAI's ChatGPT (Stereotype) & Google's Perspective API (Toxicity)
+```
+# Option 1. In shell
 RESULTS_DIR="./generation_results/llama3.1-8b"
 OPENAI_MODEL='gpt-4o-2024-08-06'    # OpenAI model for assessing stereotype bias
-python -m src.task.ceb_benchmark --results_dir ${RESULTS_DIR} --openai_model ${OPENAI_MODEL}
+python -m src.task.ceb_benchmark evaluate --results_dir ${RESULTS_DIR} --openai_model ${OPENAI_MODEL}
+
+# Option 2. In SLURM server
+sbatch slurm/eval_ceb.sh
 ```
+
+---
 
 ## Citation
 
-Consider citing the original benchmark paper.
+Please cite the original benchmark paper.
 ```
 @article{wang2024ceb,
   title={CEB: Compositional Evaluation Benchmark for Fairness in Large Language Models},

@@ -18,7 +18,7 @@ from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from src.config.config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS
+from config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS
 from src.utils import json_utils, llm_gen_utils
 
 
