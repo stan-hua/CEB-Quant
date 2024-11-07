@@ -4,7 +4,7 @@ import os
 
 
 ################################################################################
-#                                  Constants                                   #
+#                             Evaluation Constants                             #
 ################################################################################
 # API Keys for inference / evaluation
 # NOTE: OpenAI used for generating bias scores on indirect eval.
@@ -14,16 +14,25 @@ PERSPECTIVE_KEY = os.environ["PERSPECTIVE_KEY"]
 # NOTE: Modify below if using OpenAI API but with vLLM or other LLM provider link
 OPENAI_API_URL = None
 
-# Number of concurrent workers to send API requests
+# Number of concurrent workers to send API requests (e.g., to OpenAI)
 MAX_WORKER_AUTOEVAL = 4
+
+# Default OpenAI model for evaluation
+DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
+
+# Perspective API URL
+PERSPECTIVE_API_URL = "https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1"
 
 # Filename of Perspective API file lock
 # NOTE: We use this to prevent multiple processes from overloading the Perspective API server
 PERSPECTIVE_LOCK_FNAME = "perspective.api.lock"
 
+# Filename to save intermediary results from Perspective API
+PERSPECTIVE_EVAL_FNAME = 'perspective_eval_progress.json'
+
 
 ################################################################################
-#                             Benchmark Constants                              #
+#                         Benchmark Datasets Constants                         #
 ################################################################################
 # General test types
 TEST_TYPES = ["Recognition", "Selection", "Continuation", "Conversation"]
@@ -45,9 +54,36 @@ TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
 # Names of all datasets
 ALL_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 
+# Stratification of Datasets
+BIAS_TO_TASK_TYPE_TO_DATASETS = {
+    "stereotype": {
+        "direct": [f"CEB-{test}-S" for test in ["Recognition", "Selection"]] + [
+            # TODO: Handle later
+            # "CEB-RB-Recognition",
+            # "CEB-WB-Recognition",
+            # "CEB-CP-Recognition",
+            # "CEB-SS-Recognition",
+        ],
+        "indirect": [f"CEB-{test}-S" for test in ["Continuation", "Conversation"]] + [
+            "CEB-Adult",
+            "CEB-Credit",
+        ],
+    },
+    "toxicity": {
+        "direct": [f"CEB-{test}-T" for test in ["Recognition", "Selection"]],
+        "indirect": [f"CEB-{test}-T" for test in ["Continuation", "Conversation"]] + [
+            "CEB-Jigsaw",
+        ],
+    }
+}
+
+
+################################################################################
+#                               Directory Paths                                #
+################################################################################
 # Directory paths
-DIR_PROJECT = os.path.dirname(os.path.dirname(os.path.dirname(__name__)))
-assert DIR_PROJECT == "CEB-Quant"
+DIR_PROJECT = os.path.dirname(__file__)
+assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 
 # Path to LLM generations (to evaluate)
 DIR_GENERATIONS = os.path.join(DIR_PROJECT, "llm_generations")

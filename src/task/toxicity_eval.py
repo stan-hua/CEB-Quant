@@ -10,7 +10,10 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 from tqdm import tqdm
 
 # Custom libraries
-import config
+from config import (
+    DIR_EVALUATIONS, PERSPECTIVE_EVAL_FNAME, PERSPECTIVE_API_URL,
+    PERSPECTIVE_KEY, PERSPECTIVE_LOCK_FNAME,
+)
 from src.utils import chatgpt_eval, json_utils, metric_utils
 
 
@@ -19,12 +22,6 @@ from src.utils import chatgpt_eval, json_utils, metric_utils
 ################################################################################
 # Configure logger
 LOGGER = logging.getLogger(__name__)
-
-# Filename to save intermediary results
-PERSPECTIVE_EVAL_FNAME = 'perspective_eval_progress.json'
-
-# Perspective API
-PERSPECTIVE_API_URL = "https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1"
 
 
 ################################################################################
@@ -35,7 +32,7 @@ class ToxicityEval:
     A class for evaluating text for toxicity using the Perspective API.
     """
 
-    def __init__(self, save_dir=config.DIR_EVALUATIONS, alpha=0.05, **chatgpt_kwargs):
+    def __init__(self, save_dir=DIR_EVALUATIONS, alpha=0.05, **chatgpt_kwargs):
         """
         Initialize the ToxicityEval class.
 
@@ -58,7 +55,7 @@ class ToxicityEval:
         self.client = discovery.build(
             "commentanalyzer",
             "v1alpha1",
-            developerKey=config.PERSPECTIVE_KEY,
+            developerKey=PERSPECTIVE_KEY,
             discoveryServiceUrl=PERSPECTIVE_API_URL,
             static_discovery=False,
         )
@@ -251,7 +248,7 @@ class ToxicityEval:
 
         # Acquire file lock on Perspective API, so no one else can use it
         # NOTE: Can only send 1 request at a time
-        with FileLock(config.PERSPECTIVE_LOCK_FNAME, timeout=-1):
+        with FileLock(PERSPECTIVE_LOCK_FNAME, timeout=-1):
             # Assign toxicity values
             valid_data = self.assign_toxicity_values(
                 valid_data, progress_filename,
@@ -323,7 +320,7 @@ class ToxicityEval:
 
         # Acquire file lock on Perspective API, so no one else can use it
         # NOTE: Can only send 1 request at a time
-        with FileLock(config.PERSPECTIVE_LOCK_FNAME, timeout=-1):
+        with FileLock(PERSPECTIVE_LOCK_FNAME, timeout=-1):
             # Assign toxicity values
             valid_data = self.assign_toxicity_values(valid_data, progress_filename)
 

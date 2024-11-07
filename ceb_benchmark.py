@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 from collections import defaultdict
 from glob import glob
 
@@ -14,8 +15,11 @@ from fire import Fire
 from tqdm import tqdm
 
 # Custom libraries
-import config
-from config import DIR_GENERATIONS, DIR_EVALUATIONS
+from config import (
+    DIR_GENERATIONS, DIR_EVALUATIONS, DIR_METRICS,
+    BIAS_TO_TASK_TYPE_TO_DATASETS, DEFAULT_OPENAI_MODEL,
+    PERSPECTIVE_LOCK_FNAME, ALL_DATASETS
+)
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils
@@ -36,38 +40,6 @@ logging.basicConfig(
 #                                  Constants                                   #
 ################################################################################
 LOGGER = logging.getLogger(__name__)
-
-# Default eval OpenAI model
-DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
-
-# Path to saved GPT-4 evaluations
-DIR_SAVED_EVAL = os.path.join(os.path.dirname(__name__), DIR_EVALUATIONS)
-# Path to stored metrics
-DIR_METRICS = os.path.join(os.path.dirname(__name__), "metrics")
-
-
-# Stratification of Datasets
-BIAS_TO_TASK_TYPE_TO_DATASETS = {
-    "stereotype": {
-        "direct": [f"CEB-{test}-S" for test in ["Recognition", "Selection"]] + [
-            # TODO: Handle later
-            # "CEB-RB-Recognition",
-            # "CEB-WB-Recognition",
-            # "CEB-CP-Recognition",
-            # "CEB-SS-Recognition",
-        ],
-        "indirect": [f"CEB-{test}-S" for test in ["Continuation", "Conversation"]] + [
-            "CEB-Adult",
-            "CEB-Credit",
-        ],
-    },
-    "toxicity": {
-        "direct": [f"CEB-{test}-T" for test in ["Recognition", "Selection"]],
-        "indirect": [f"CEB-{test}-T" for test in ["Continuation", "Conversation"]] + [
-            "CEB-Jigsaw",
-        ],
-    }
-}
 
 
 ################################################################################
@@ -116,7 +88,7 @@ class CEBBenchmark:
         model_name = os.path.basename(results_dir)
 
         # Create directory to save evaluations
-        self.saved_eval_dir = os.path.join(DIR_SAVED_EVAL, model_name)
+        self.saved_eval_dir = os.path.join(DIR_EVALUATIONS, model_name)
         os.makedirs(self.saved_eval_dir, exist_ok=True)
 
         # Create directory to save metrics
@@ -255,9 +227,9 @@ class CEBBenchmark:
             If True, overwrite existing computed metrics
         """
         # Warn users if Perspective API file lock exists
-        if os.path.exists(config.PERSPECTIVE_LOCK_FNAME):
+        if os.path.exists(PERSPECTIVE_LOCK_FNAME):
             LOGGER.warning(
-                f"Perspective API lock file exists! `{config.PERSPECTIVE_LOCK_FNAME}`"
+                f"Perspective API lock file exists! `{PERSPECTIVE_LOCK_FNAME}`"
                 "\nPlease delete if you're not running multiple of `ceb_benchmark.py` at once!"
                 " This may be a result from a previously cancelled run."
             )
@@ -490,7 +462,7 @@ def ceb_compare_multiple(
             else (len(results_dirs)-1)
 
     # Determine number of actual comparisons (model comparisons x dataset comparisons)
-    total_comparisons = model_comparisons * len(config.ALL_DATASETS)
+    total_comparisons = model_comparisons * len(ALL_DATASETS)
 
     # Compute alpha score
     alpha = 0.05 / (total_comparisons)
@@ -551,7 +523,7 @@ def ceb_find_unfinished(pattern="*"):
         model_name = os.path.basename(result_dir)
 
         # Check each dataset
-        for dataset_name in config.ALL_DATASETS:
+        for dataset_name in ALL_DATASETS:
             json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
 
             # Early return if missing JSON files
@@ -582,7 +554,11 @@ def ceb_find_unfinished(pattern="*"):
         )
 
 
-def ceb_delete(dataset_regex="*", social_regex="*", file_regex="*"):
+def ceb_delete(
+        model_regex="*", dataset_regex="*", social_regex="*", file_regex="*",
+        inference=False,
+        evaluation=False,
+    ):
     """
     Delete inference and evaluation results for all models for the following
     dataset.
@@ -593,31 +569,39 @@ def ceb_delete(dataset_regex="*", social_regex="*", file_regex="*"):
 
     Parameters
     ----------
+    model_regex : str
+        Regex that matches model name in saved LLM generations folder
     dataset_regex : str
         Regex that matches dataset
     social_regex : str
         Regex that matches social axis (e.g., race, religion, gender, age) or "all"
     file_regex : str
         Regex that matches a specific filename
+    inference : bool
+        If True, delete inference results (produced by LLMs)
+    evaluation : bool
+        If True, delete intermediate evaluation files (from Perspective/ChatGPT)
     """
-    regex_suffix = f"*/{dataset_regex}/{social_regex}/{file_regex}"
-
-    # TODO: Remove this
-    assert regex_suffix == "*/*/*/perspective_eval.json"
+    assert inference or evaluation
+    regex_suffix = f"{model_regex}/{dataset_regex}/{social_regex}/{file_regex}"
+    print("[CEB Benchmark] Deleting inference and evaluation results matching following regex: ", regex_suffix)
+    time.sleep(3)
 
     # 1. Remove all generations
-    for infer_file in glob(DIR_GENERATIONS + "/" + regex_suffix):
-        if os.path.isdir(infer_file):
-            shutil.rmtree(infer_file)
-        else:
-            os.remove(infer_file)
+    if inference:
+        for infer_file in tqdm(glob(DIR_GENERATIONS + "/" + regex_suffix)):
+            if os.path.isdir(infer_file):
+                shutil.rmtree(infer_file)
+            else:
+                os.remove(infer_file)
 
     # 2. Remove all saved evaluations
-    for eval_file in glob(DIR_EVALUATIONS + "/" + regex_suffix):
-        if os.path.isdir(eval_file):
-            shutil.rmtree(eval_file)
-        else:
-            os.remove(eval_file)
+    if evaluation:
+        for eval_file in tqdm(glob(DIR_EVALUATIONS + "/" + regex_suffix)):
+            if os.path.isdir(eval_file):
+                shutil.rmtree(eval_file)
+            else:
+                os.remove(eval_file)
 
 
 ################################################################################

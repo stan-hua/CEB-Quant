@@ -2,6 +2,9 @@
 from src.utils import chatgpt_eval, metric_utils
 
 
+################################################################################
+#                                   Classes                                    #
+################################################################################
 class StereotypeEval:
     """
     StereotypeEval class.
@@ -400,7 +403,6 @@ class StereotypeEval:
             all_rows, **self.metric_kwargs,
         )
         return metrics
-
 
 
 ################################################################################
