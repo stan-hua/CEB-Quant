@@ -18,7 +18,7 @@ from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from src.config.config import MODEL_INFO, ALL_DATASETS
+from src.config.config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS
 from src.utils import json_utils, llm_gen_utils
 
 
@@ -576,7 +576,7 @@ class LLMGeneration:
         LOGGER.info(f"Evaluating target model: {self.model_name}")
 
         base_dir = os.path.join(self.data_path, dataset_name)
-        result_dir = os.path.join("generation_results", self.model_name, dataset_name)
+        result_dir = os.path.join(DIR_GENERATIONS, self.model_name, dataset_name)
         os.makedirs(result_dir, exist_ok=True)
 
         json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))

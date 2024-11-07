@@ -1,12 +1,15 @@
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+# Standard libraries
 import logging
 import os
-from src.utils import json_utils
-from tqdm import tqdm
 
+# Non-standard libraries
 import torch
-import src.config as config
+from tqdm import tqdm
+from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 
+# Custom libraries
+import src.config as config
+from src.utils import json_utils
 
 PROGRESS_FILENAME = 'longformer_eval.json'
 
@@ -16,7 +19,7 @@ class HuggingFaceEvaluator:
     """
     A class for evaluating text using a Hugging Face model.
     """
-    def __init__(self, model_name='LibrAI/longformer-harmful-ro', device=None, save_dir='saved_evaluations'):
+    def __init__(self, model_name='LibrAI/longformer-harmful-ro', device=None, save_dir=config.DIR_EVALUATIONS):
         """
         Initialize the HuggingFaceEvaluator class.
 

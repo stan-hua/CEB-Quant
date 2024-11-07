@@ -71,7 +71,7 @@ class ChatGPTEvaluator:
     A class for automating the evaluation of text using the OpenAI API.
     """
 
-    def __init__(self, model=DEFAULT_MODEL, save_dir='saved_evaluations'):
+    def __init__(self, model=DEFAULT_MODEL, save_dir=config.DIR_EVALUATIONS):
         """
         Initialize the AutoEvaluator class.
 

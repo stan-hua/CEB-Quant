@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 # Custom libraries
 from src.config import config
+from src.config.config import DIR_GENERATIONS, DIR_EVALUATIONS
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils
@@ -40,7 +41,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
 
 # Path to saved GPT-4 evaluations
-DIR_SAVED_EVAL = os.path.join(os.path.dirname(__name__), "saved_evaluations")
+DIR_SAVED_EVAL = os.path.join(os.path.dirname(__name__), DIR_EVALUATIONS)
 # Path to stored metrics
 DIR_METRICS = os.path.join(os.path.dirname(__name__), "metrics")
 
@@ -100,9 +101,9 @@ class CEBBenchmark:
             If True, overwrite existing computed metrics. Does NOT overwrite
             existing generations.
         """
-        # If only exists in `generation_results`, then prepend directory
-        if not os.path.exists(results_dir) and os.path.exists(os.path.join("generation_results", results_dir)):
-            results_dir = os.path.join("generation_results", results_dir)
+        # If exists in `DIR_GENERATIONS`, then prepend directory
+        if not os.path.exists(results_dir) and os.path.exists(os.path.join(DIR_GENERATIONS, results_dir)):
+            results_dir = os.path.join(DIR_GENERATIONS, results_dir)
 
         assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
@@ -546,7 +547,7 @@ def ceb_find_unfinished(pattern="*"):
     model_to_missing_results = defaultdict(list)
 
     # Iterate over model directories
-    for result_dir in tqdm(glob(os.path.join("generation_results", pattern))):
+    for result_dir in tqdm(glob(os.path.join(DIR_GENERATIONS, pattern))):
         model_name = os.path.basename(result_dir)
 
         # Check each dataset
@@ -581,7 +582,7 @@ def ceb_find_unfinished(pattern="*"):
         )
 
 
-def ceb_delete(dataset_name, social_axis="all"):
+def ceb_delete(dataset_regex="*", social_regex="*", file_regex="*"):
     """
     Delete inference and evaluation results for all models for the following
     dataset.
@@ -592,22 +593,27 @@ def ceb_delete(dataset_name, social_axis="all"):
 
     Parameters
     ----------
-    dataset_name : str
-        Name of dataset
-    social_axis : str
-        Specific social axis (e.g., race, religion, gender, age) or "all"
+    dataset_regex : str
+        Regex that matches dataset
+    social_regex : str
+        Regex that matches social axis (e.g., race, religion, gender, age) or "all"
+    file_regex : str
+        Regex that matches a specific filename
     """
-    regex_suffix = "/*/" + ("*" if dataset_name == "all" else dataset_name) + (f"/{social_axis}" if social_axis != "all" else "")
+    regex_suffix = f"*/{dataset_regex}/{social_regex}/{file_regex}"
+
+    # TODO: Remove this
+    assert regex_suffix == "*/*/*/perspective_eval.json"
 
     # 1. Remove all generations
-    for infer_file in glob("generation_results" + regex_suffix):
+    for infer_file in glob(DIR_GENERATIONS + "/" + regex_suffix):
         if os.path.isdir(infer_file):
             shutil.rmtree(infer_file)
         else:
             os.remove(infer_file)
 
     # 2. Remove all saved evaluations
-    for eval_file in glob("saved_evaluations" + regex_suffix):
+    for eval_file in glob(DIR_EVALUATIONS + "/" + regex_suffix):
         if os.path.isdir(eval_file):
             shutil.rmtree(eval_file)
         else:

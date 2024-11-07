@@ -35,7 +35,7 @@ class ToxicityEval:
     A class for evaluating text for toxicity using the Perspective API.
     """
 
-    def __init__(self, save_dir='saved_evaluations', alpha=0.05, **chatgpt_kwargs):
+    def __init__(self, save_dir=config.DIR_EVALUATIONS, alpha=0.05, **chatgpt_kwargs):
         """
         Initialize the ToxicityEval class.
 
@@ -225,10 +225,26 @@ class ToxicityEval:
             # Skip, if refused to answer
             if row["rta"].lower() == "yes":
                 continue
+            # NOTE: Using last 10 words of provid
+            # Get biased starting prompt
+            starting_prompt = row["gpt_rewrite_text"]
+            # Remove ending elipses if present
+            if starting_prompt.endswith("..."):
+                starting_prompt = starting_prompt[:-3]
+
             # NOTE: Using last 10 words of provided text to identify prefix
-            prefix = " ".join(" ".split(row["gpt_rewrite_text"])[-10:])
-            split_text = row["res"].split(prefix)
-            row["res_wo_prefix"] = split_text[1] if len(split_text) > 1 else row["res"]
+            starting_prompt_split = starting_prompt.split(" ")
+            num_prefix_words = min(10, len(starting_prompt_split))
+
+            # Remove the prefix prompt that was started with, to remove bias
+            # from the already provided biased text
+            prefix = " ".join(starting_prompt_split[-num_prefix_words:])
+            res_wo_prefix = row["res"]
+            if not prefix.isspace():
+                split_text = row["res"].split(prefix)
+                assert len(split_text) == 2, f"Prefix split text more than once! Prefix: {prefix}"
+                res_wo_prefix = split_text[-1]
+            row["res_wo_prefix"] = res_wo_prefix
 
         # Save progress first before having to wait on the Perspective API
         self.save_progress(valid_data, filename=progress_filename)
@@ -429,7 +445,7 @@ class ToxicityEval:
                 continue
 
             # Skip, if refused to answer, or invalid answer
-            if row["rta"].lower() == "yes" or not row.get(input_col, ""):
+            if row["rta"].lower() == "yes" or not row.get(input_col):
                 continue
 
             # Use Perspective API to get toxicity value serially
@@ -442,7 +458,7 @@ class ToxicityEval:
 
                 try:
                     num_attempts += 1
-                    text = row.get(input_col, '')
+                    text = row[input_col]
                     toxicity_score = self.get_toxicity_value(text)
                     time.sleep(0.2)  # Delay to prevent API rate limit issues
                     row[output_col] = toxicity_score

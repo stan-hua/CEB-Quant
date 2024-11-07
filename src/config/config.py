@@ -45,6 +45,19 @@ TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
 # Names of all datasets
 ALL_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 
+# Directory paths
+DIR_PROJECT = os.path.dirname(os.path.dirname(os.path.dirname(__name__)))
+assert DIR_PROJECT == "CEB-Quant"
+
+# Path to LLM generations (to evaluate)
+DIR_GENERATIONS = os.path.join(DIR_PROJECT, "llm_generations")
+# Path to saved GPT-4 evaluations
+DIR_EVALUATIONS = os.path.join(DIR_PROJECT, "llm_evaluations")
+# Path to stored metrics
+DIR_METRICS = os.path.join(DIR_PROJECT, "metrics")
+# Path to store metrics comparisons
+DIR_COMPARISONS = os.path.join(DIR_PROJECT, "metrics_comparisons")
+
 
 ################################################################################
 #                                Online Models                                 #
