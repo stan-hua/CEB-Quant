@@ -11,6 +11,7 @@ import pandas as pd
 import shutil
 import torch
 from fire import Fire
+from tqdm import tqdm
 
 # Custom libraries
 from src.config import config
@@ -441,11 +442,22 @@ def ceb_compare_multiple(
         *results_dirs,
         save_dir="metrics_comparisons",
         pairwise=False,
+        model_comparisons=-1,
         openai_model=DEFAULT_OPENAI_MODEL
     ):
     """
     Re-computes metrics with confidence intervals adjusted for multiple
     comparisons.
+
+    Note
+    ----
+    Usage of `model_comparisons`. If you specify 4 result directories, e.g.,
+        - LLaMA 3.1 8B
+        - LLaMA 3.1 8B Instruct
+        - LLaMA 3.1 70B
+        - LLaMA 3.1 70B Instruct
+    And you're only comparing between base and instruct models, then you have
+    2 model comparisons
 
     Parameters
     ----------
@@ -456,6 +468,10 @@ def ceb_compare_multiple(
     pairwise : bool, optional
         If True, adjusts significance level to account for all possible pairwise
         comparisons. Otherwise, assumes one-vs-all comparisons, by default False
+    model_comparisons : bool, optional
+        Number of 1:1 comparisons to make with the provided models, excluding
+        the number of datasets compared, that is suppllied. If
+        `model_comparisons` >= 1, then `pairwise` argument is ignored
     openai_model : str, optional
         Name of OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
     """
@@ -465,15 +481,19 @@ def ceb_compare_multiple(
     )
     assert len(results_dirs) > 1, f"[CEB Benchmark] Comparison requires >1 models to compare! Input: {results_dirs}"
 
-    # Determine significance level
-    # CASE 1: All possible pairwise comparisons (N*(N-1) comparisons)
-    if pairwise:
-        alpha = 0.05 / (len(results_dirs) * (len(results_dirs)-1))
-        LOGGER.info(f"[CEB Benchmark] Adjusting significance level for pairwise comparisons (a={alpha})")
-    # CASE 2: One vs all comparison (N-1 comparisons)
-    else:
-        alpha = 0.05 / (len(results_dirs)-1)
-        LOGGER.info(f"[CEB Benchmark] Adjusting significance level for one-vs-all comparisons (a={alpha})")
+    # Determine number of (model) comparisons, if not provided
+    if not model_comparisons:
+        # CASE 1: All possible pairwise comparisons (N*(N-1) comparisons)
+        # CASE 2: One vs all comparison (N-1 comparisons)
+        model_comparisons = (len(results_dirs) * (len(results_dirs)-1)) if pairwise \
+            else (len(results_dirs)-1)
+
+    # Determine number of actual comparisons (model comparisons x dataset comparisons)
+    total_comparisons = model_comparisons * len(config.ALL_DATASETS)
+
+    # Compute alpha score
+    alpha = 0.05 / (total_comparisons)
+    LOGGER.info(f"[CEB Benchmark] Adjusting significance level for pairwise comparisons (a={alpha})")
 
     # Re-compute metrics with new significance level
     fname_to_accum_metrics = {}
@@ -512,6 +532,53 @@ def ceb_compare_multiple(
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, fname)
         df_curr_metrics.to_csv(save_path, index=False)
+
+
+def ceb_find_unfinished(pattern="*"):
+    """
+    Find all models, matching pattern, who are unfinished with inference
+
+    Parameters
+    ----------
+    pattern : str
+        Pattern to identify model result directories
+    """
+    model_to_missing_results = defaultdict(list)
+
+    # Iterate over model directories
+    for result_dir in tqdm(glob(os.path.join("generation_results", pattern))):
+        model_name = os.path.basename(result_dir)
+
+        # Check each dataset
+        for dataset_name in config.ALL_DATASETS:
+            json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
+
+            # Early return if missing JSON files
+            if not json_paths:
+                model_to_missing_results[model_name].extend([
+                    f"{dataset_name}/{os.path.basename(json_path)}"
+                    for json_path in json_paths
+                ])
+                break
+
+            # Check if any of the `res` are missing
+            for json_path in json_paths:
+                # Load json
+                infer_data = json_utils.load_json(json_path)
+                # Check if any of the `res` are missing
+                if any(not row.get("res") for row in infer_data):
+                    model_to_missing_results[model_name].append(
+                        f"{dataset_name}/{os.path.basename(json_path)}"
+                    )
+                    print("[CEB Benchmark] Missing results for:", model_name, dataset_name, os.path.basename(json_path))
+                    print(f"Res: " + "'".join(['"{}"'.format(row.get("res")) for row in infer_data if not row.get("res")]))
+
+    # Log all incomplete models
+    if model_to_missing_results:
+        LOGGER.error(
+            "[CEB Benchmark] The following models are incomplete:"
+            "\n" + json.dumps(model_to_missing_results, indent=4)
+        )
 
 
 def ceb_delete(dataset_name, social_axis="all"):
@@ -555,5 +622,6 @@ if __name__ == "__main__":
         "generate": ceb_generate,
         "evaluate": ceb_evaluate,
         "compare": ceb_compare_multiple,
+        "find_unfinished": ceb_find_unfinished,
         "delete": ceb_delete,
     })
