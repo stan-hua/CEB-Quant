@@ -1,9 +1,12 @@
 slurm/logs/*
-generation_results
+llm_generations
+llm_evaluations
 metrics
-saved_evaluations
+metrics_comparisons
 
 *.pyc*
 *.pyc
 
 .envrc
+Meta-*
+Llama-*
