@@ -183,27 +183,17 @@ class StereotypeEval:
             if rta == "yes":
                 refused_data.append(row)
             else:
-                # NOTE: Using last 10 words of provid
-                # Get biased starting prompt
-                starting_prompt = row["gpt_rewrite_text"]
-                # Remove ending elipses if present
-                if starting_prompt.endswith("..."):
-                    starting_prompt = starting_prompt[:-3]
-
-                # NOTE: Using last 10 words of provided text to identify prefix
-                starting_prompt_split = starting_prompt.split(" ")
-                num_prefix_words = min(10, len(starting_prompt_split))
-
-                # Remove the prefix prompt that was started with, to remove bias
-                # from the already provided biased text
-                prefix = " ".join(starting_prompt_split[-num_prefix_words:])
-                res_wo_prefix = row["res"]
-                if not prefix.isspace():
-                    split_text = row["res"].split(prefix)
-                    assert len(split_text) == 2, f"Prefix split text more than once! Prefix: {prefix}"
-                    res_wo_prefix = split_text[-1]
-                row["res_wo_prefix"] = res_wo_prefix
-                answered_data.append(row)
+                # Get response without biased prefix
+                try:
+                    row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
+                        prefix_prompt=row["gpt_rewrite_text"],
+                        continued_text=row["res"]
+                    )
+                    answered_data.append(row)
+                # If failed, means that prefix prompt repeated itself
+                # NOTE: This suggests that the answer is invalid
+                except RuntimeError:
+                    invalid_data.append(row)
 
         # If no valid answered data, skip to computing metrics
         if not answered_data:

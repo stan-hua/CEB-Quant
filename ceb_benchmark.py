@@ -56,8 +56,7 @@ class CEBBenchmark:
 
     def __init__(self, results_dir,
                  openai_model=DEFAULT_OPENAI_MODEL,
-                 alpha=0.05,
-                 overwrite=False):
+                 alpha=0.05):
         """
         Initialize CEBBenchmark class.
 
@@ -104,8 +103,7 @@ class CEBBenchmark:
         self.dset_toxicity_metrics = defaultdict(dict)
 
         # Resume previous evaluations, if specified
-        if not overwrite:
-            self.reload_computed_metrics()
+        self.reload_computed_metrics()
 
 
     def reload_computed_metrics(self):
@@ -476,11 +474,11 @@ def ceb_compare_multiple(
             results_dir,
             openai_model=openai_model,
             alpha=alpha,
-            overwrite=True,
         )
 
         # Perform comprehensive evaluation
-        benchmark.comprehensive_eval()
+        # NOTE: Need to overwrite to re-do bootstrapped confidence intervals
+        benchmark.comprehensive_eval(overwrite=True)
 
         # Get metrics stratified by eval
         fname_to_metrics = benchmark.save_metric_tables(save=False)

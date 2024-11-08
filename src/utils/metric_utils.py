@@ -1,6 +1,7 @@
 
 # Standard libraries
 import logging
+import string
 
 # Non-standard libraries
 import numpy as np
@@ -705,3 +706,71 @@ def compute_micro_f1_score(label, pred):
         Micro F1-score
     """
     return skmetrics.f1_score(label, pred, average="micro")
+
+
+def remove_biased_prefix_in_continuation(prefix_prompt, continued_text):
+    """
+    In a Continuation Task, attempt to remove the biased prefix prompt
+
+    Parameters
+    ----------
+    prefix_prompt : str
+        Biased starting prefix prompt
+    continued_text : str
+        Text continued from prefix prompt
+
+    Returns
+    -------
+    str
+        Continued text without biased starting prefix prompt
+    """
+    # Use last 10 words of provided text to identify prefix
+    prefix_prompt_split = prefix_prompt.split(" ")
+    num_prefix_words = min(10, len(prefix_prompt_split))
+    prefix = " ".join(prefix_prompt_split[-num_prefix_words:])
+
+    # Skip, if prefix prompt is not truth-y (i.e., space/punctuation only)
+    if not is_text_truthy(prefix):
+        return continued_text
+
+    # Remove the prefix prompt that was started with, to remove bias
+    # from the already provided biased text
+    split_text = continued_text.split(prefix)
+    # CASE 1: Failed to split, potentially due to omitted punctuation
+    if len(split_text) == 1:
+        # Try prefix removing all punctuations in the last word
+        prefix = remove_punctuation_suffix_from_last_word(prefix)
+        split_text = continued_text.split(prefix)
+
+    # CASE 2: If split more than twice, there must be an error
+    if len(split_text) > 2:
+        raise RuntimeError(
+            "Prefix split text more than twice! "
+            f"\n\tPrefix: {prefix}"
+            f"\n\tText: {continued_text}"
+        )
+
+    # CASE 3: If split exactly twice, then take the latter
+    if len(split_text) == 2:
+        return split_text[-1]
+    return continued_text
+
+
+def remove_punctuation_suffix_from_last_word(text):
+    """
+    If the last word in the text ends with punctuations, remove them
+
+    Parameters
+    ----------
+    text : str
+        Arbitrary string
+
+    Returns
+    -------
+    str
+        Sentence where last word doesn't end with punctuations
+    """
+    words = text.split(" ")
+    while words[-1][-1] in string.punctuation:
+        words[-1] = words[-1][:-1]  # Remove the last character
+    return " ".join(words)
