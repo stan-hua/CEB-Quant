@@ -3,6 +3,7 @@ llm_generations
 llm_evaluations
 metrics
 metrics_comparisons
+wildguard_experiments
 
 *.pyc*
 *.pyc

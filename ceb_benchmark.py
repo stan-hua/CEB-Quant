@@ -464,7 +464,7 @@ def ceb_compare_multiple(
 
     # Compute alpha score
     alpha = 0.05 / (total_comparisons)
-    LOGGER.info(f"[CEB Benchmark] Adjusting significance level for pairwise comparisons (a={alpha})")
+    LOGGER.info(f"[CEB Benchmark] Adjusting significance level for (model x dataset) comparisons (a={alpha})")
 
     # Re-compute metrics with new significance level
     fname_to_accum_metrics = {}
