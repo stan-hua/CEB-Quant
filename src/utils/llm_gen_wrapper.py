@@ -18,7 +18,7 @@ from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS
+from config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS, DIR_MODELS
 from src.utils import json_utils, llm_gen_utils
 
 
@@ -109,7 +109,19 @@ class LLMGeneration:
         self.llm_config.update(**overwrite_config)
 
         # Get the model name according to the model path
-        self.model_name = extract_model_name(self.model_path, self.llm_config["model_provider"])
+        self.model_name = extract_model_name(
+            model_path,
+            self.llm_config["model_provider"],
+            self.llm_config["use_chat_template"]
+        )
+
+        # If local model, check if it's stored in the `models` directory
+        # NOTE: If it is, then update the model path
+        if self.llm_config["model_provider"] in ["vllm", "huggingface", "vptq"]:
+            if os.path.exists(model_path):
+                pass
+            elif os.path.exists(os.path.join(DIR_MODELS, model_path)):
+                self.model_path = os.path.join(DIR_MODELS, model_path)
 
         # Model related parameters to fill in
         # 1. vLLM engine
@@ -515,6 +527,14 @@ class LLMGeneration:
             LOGGER.info(f"Loading data from {input_path}")
             saved_data = json_utils.load_json(input_path)
 
+        # If there are options, ensure they're only two choices at most
+        for row in saved_data:
+            if "choices" in row:
+                assert len(row["choices"]) == 2, (
+                    f"Found row with more than two choices in `{input_path}`\n"
+                    f"Choices: {row['choices']}"
+                )
+
         # Early return, if all rows are done
         if all([bool(row.get("res")) for row in saved_data]):
             LOGGER.info("Already done, returning early!")
@@ -641,7 +661,7 @@ def is_provider_online(model_provider):
     return model_provider in ["deepinfra", "replicate", "other"]
 
 
-def extract_model_name(model_path, model_provider="vllm"):
+def extract_model_name(model_path, model_provider="vllm", use_chat_template=False):
     """
     Extract model name from model path.
 
@@ -651,6 +671,8 @@ def extract_model_name(model_path, model_provider="vllm"):
         Path to the model
     model_provider : str
         Model provider name
+    use_chat_template : bool
+        If True, use chat template
 
     Returns
     -------
@@ -680,5 +702,9 @@ def extract_model_name(model_path, model_provider="vllm"):
             f"Online model provided `{model_name}` is invalid! "
             f"\nValid options: {MODEL_INFO['online_model']}"
         )
+
+    # If using chat template, append "-chat" to model name
+    if use_chat_template:
+        model_name += "-chat"
 
     return model_name

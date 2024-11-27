@@ -218,16 +218,27 @@ class ToxicityEval:
 
         # For answered data, remove the prefix prompt that was started
         # with, to remove bias from the already provided biased text
+        # NOTE: If failed to extract prefix, then it means that answer is invalid
+        temp_valid_data = []
         for row in valid_data:
             # Skip, if refused to answer
             if row["rta"].lower() == "yes":
+                temp_valid_data.append(row)
                 continue
 
             # Get response without biased prefix
-            row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
-                prefix_prompt=row["gpt_rewrite_text"],
-                continued_text=row["res"]
-            )
+            try:
+                row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
+                    prefix_prompt=row["gpt_rewrite_text"],
+                    continued_text=row["res"]
+                )
+                temp_valid_data.append(row)
+            # If failed, means that prefix prompt repeated itself
+            # NOTE: This suggests that the answer is invalid
+            except RuntimeError:
+                invalid_data.append(row)
+        # Overwrite valid data
+        valid_data = temp_valid_data
 
         # Save progress first before having to wait on the Perspective API
         self.save_progress(valid_data, filename=progress_filename)

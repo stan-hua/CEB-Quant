@@ -99,16 +99,29 @@ class ChatGPTEvaluator:
         list
             The evaluated data.
         """
+        # Get the max number of tokens to generate, if provided
+        max_num_tokens = config.TASK_TO_PROMPT_DICT.get(task, {}).get("max_num_tokens")
+        # Valid options
+        valid_responses = config.TASK_TO_PROMPT_DICT.get(task, {}).get("valid_responses")
+
         def save_progress_callback(future):
             if future.exception() is not None:
                 LOGGER.error("An error occurred: %s", str(future.exception()))
                 self.save_progress(data, filename=progress_filename)
 
-        def process_row(item, row):
+        def process_row(prompt, row):
+            # Early return, if row is already processed
+            prev_response = row.get(llm_response_col)
+            if prev_response:
+                if valid_responses is None:
+                    return
+                if prev_response in valid_responses:
+                    return
+
+            # Process row
             try:
-                if not row.get(llm_response_col):
-                    llm_response = openai_chat_completion(item, model=self.model)
-                    row[llm_response_col] = llm_response
+                llm_response = openai_chat_completion(prompt, model=self.model, max_tokens=max_num_tokens)
+                row[llm_response_col] = llm_response
             except Exception as error_msg:
                 raise error_msg
 
@@ -140,7 +153,7 @@ class ChatGPTEvaluator:
 
         # Perform LLM generation requests in parallel
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
-            futures = [executor.submit(process_row, item, row) for item, row in zip(prompts, data)]
+            futures = [executor.submit(process_row, prompt, row) for prompt, row in zip(prompts, data)]
 
             # Add a callback to handle completion and errors
             for idx, future in enumerate(concurrent.futures.as_completed(futures)):
@@ -184,17 +197,19 @@ class ChatGPTGenerator:
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
 
-    def save_progress(self, data, filename="chatgpt_gen.json", **save_kwargs):
+
+    def save_progress(self, data, filename="infer_progress.json", **save_kwargs):
         """
         Save progress to a JSON file.
 
         Parameters
         ----------
-            data : list of dict
-                Data to be saved.
-            filename : str
-                Filename to save date
+        data : list of dict
+            Data to be saved.
+        filename : str
+            Filename to save date
         """
+        os.makedirs(self.save_dir, exist_ok=True)
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
 
@@ -232,10 +247,10 @@ class ChatGPTGenerator:
                 LOGGER.error("An error occurred: %s", str(future.exception()))
                 self.save_progress(data, filename=progress_filename)
 
-        def process_row(item, row):
+        def process_row(prompt, row):
             try:
                 if not row.get(llm_response_col):
-                    llm_response = openai_chat_completion(item, model=self.model)
+                    llm_response = openai_chat_completion(prompt, model=self.model)
                     row[llm_response_col] = llm_response
             except Exception as error_msg:
                 raise error_msg
@@ -270,7 +285,7 @@ class ChatGPTGenerator:
 
         # Perform LLM generation requests in parallel
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
-            futures = [executor.submit(process_row, item, row) for item, row in zip(prompts, data)]
+            futures = [executor.submit(process_row, prompt, row) for prompt, row in zip(prompts, data)]
 
             # Add a callback to handle completion and errors
             for idx, future in enumerate(concurrent.futures.as_completed(futures)):
@@ -291,7 +306,10 @@ class ChatGPTGenerator:
 #                               Helper Functions                               #
 ################################################################################
 @retry(wait=wait_random_exponential(min=1, max=120), stop=stop_after_attempt(6))
-def openai_chat_completion(text_or_msgs=None, model=DEFAULT_MODEL, temperature=0):
+def openai_chat_completion(
+        text_or_msgs=None, model=DEFAULT_MODEL,
+        temperature=0, max_tokens=None,
+    ):
     """
     Sends string/messages from the OpenAI ChatCompletion API.
 
@@ -304,6 +322,8 @@ def openai_chat_completion(text_or_msgs=None, model=DEFAULT_MODEL, temperature=0
         The model to use for the API request. Default is "gpt-4o-2024-08-06".
     temperature : float, optional
         The temperature to use for the API request. Default is 0.
+    max_tokens : int, optional
+        Maximum number of tokens to generate
 
     Returns
     -------
@@ -336,6 +356,7 @@ def openai_chat_completion(text_or_msgs=None, model=DEFAULT_MODEL, temperature=0
             model=model,
             messages=messages,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
         if not stream.choices[0].message.content:
             raise ValueError("The response from the API is NULL or an empty string!")

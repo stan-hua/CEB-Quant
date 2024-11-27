@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 # Custom libraries
 from config import (
-    DIR_GENERATIONS, DIR_EVALUATIONS, DIR_METRICS,
+    DIR_GENERATIONS, DIR_EVALUATIONS, DIR_METRICS, DIR_COMPARISONS,
     BIAS_TO_TASK_TYPE_TO_DATASETS, DEFAULT_OPENAI_MODEL,
     PERSPECTIVE_LOCK_FNAME, ALL_DATASETS
 )
@@ -124,12 +124,14 @@ class CEBBenchmark:
                 self.dset_toxicity_metrics = json.load(f)
 
 
-    def comprehensive_eval(self, task_type="all", overwrite=False):
+    def comprehensive_eval(self, bias_type="all", task_type="all", overwrite=False):
         """
         Perform a comprehensive evaluation of CEB benchmark.
 
         Parameters
         ----------
+        bias_type : str
+            One of ("all", "stereotype", "toxicity"). Chooses bias types to evaluate
         task_type : str
             One of ("all", "direct", "indirect"). Chooses datasets to evaluate
         overwrite : bool
@@ -147,14 +149,16 @@ class CEBBenchmark:
         # Perform direct/indirect evaluation evaluation
         for task_type in task_types:
             # 1. Stereotype
-            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...")
-            self.stereotype_eval(task_type=task_type, overwrite=overwrite)
-            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...DONE")
+            if bias_type in ["all", "stereotype"]:
+                LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...")
+                self.stereotype_eval(task_type=task_type, overwrite=overwrite)
+                LOGGER.info(f"Starting CEB Evaluation / {task_type} / Stereotype...DONE")
 
             # 2. Toxicity
-            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...")
-            self.toxicity_eval(task_type=task_type, overwrite=overwrite)
-            LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...DONE")
+            if bias_type in ["all", "toxicity"]:
+                LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...")
+                self.toxicity_eval(task_type=task_type, overwrite=overwrite)
+                LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...DONE")
         LOGGER.info("Performing full CEB Evaluation...DONE")
 
 
@@ -276,7 +280,7 @@ class CEBBenchmark:
             LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
 
 
-    def save_metric_tables(self, save=True):
+    def save_metric_tables(self, bias_type="all", task_type="all", save=True):
         """
         Save all metrics as individual tables.
 
@@ -290,6 +294,10 @@ class CEBBenchmark:
 
         Parameters
         ----------
+        bias_type : str, optional
+            Bias type to save metrics for, by default "all"
+        task_type : str, optional
+            Task type to save metrics for, by default "all"
         save : bool, optional
             If True, save table
 
@@ -300,13 +308,23 @@ class CEBBenchmark:
         """
         # Store the save filename to the metrics
         fname_to_metrics = {}
+        valid_bias_types = ["stereotype", "toxicity"] if bias_type == "all" else [bias_type]
+        valid_task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
 
         # Stratify by bias type / direct vs. indirect eval
         for bias_type, task_dict in BIAS_TO_TASK_TYPE_TO_DATASETS.items():
-            dataset_to_metric_dict = self.dset_stereotype_metrics if bias_type == "stereotype" else self.dset_toxicity_metrics
+            # Skip, if not valid bias type
+            if bias_type not in valid_bias_types:
+                continue
 
             # For each bias type / direct vs. indirect eval, save a table
+            dataset_to_metric_dict = self.dset_stereotype_metrics if bias_type == "stereotype" else self.dset_toxicity_metrics
             for task_type, datasets in task_dict.items():
+                # Skip, if not valid task type
+                if task_type not in valid_task_types:
+                    continue
+
+                # Save bias type / task type
                 row = {}
                 for dataset in datasets:
                     # Raise error, if doesn't exist
@@ -325,11 +343,13 @@ class CEBBenchmark:
                             metric_val = f"{metric_dict[score_col]:.2f} {metric_dict[score_col+'_ci']}"
                             row[f"{dataset}/{social_group}/{score_col}"] = metric_val
 
-                        # Add percentage of incorrect samples
+                        # Add percentages for refusal to answer, invalid responses or positive responses
                         if "prop_rta" in metric_dict:
                             row[f"{dataset}/{social_group}/ %RTA - Invalid"] = f"{100*metric_dict['prop_rta']:.2f} / {100*metric_dict['prop_invalid']:.2f}"
                         elif "prop_invalid" in metric_dict:
                             row[f"{dataset}/{social_group}/ %Invalid"] = f"{100*metric_dict['prop_invalid']:.2f}"
+                        elif "prop_positive" in metric_dict:
+                            row[f"{dataset}/{social_group}/ %Positive"] = f"{100*metric_dict['prop_positive']:.2f}"
 
                 # Convert to table
                 df_metrics = pd.DataFrame.from_dict([row])
@@ -349,7 +369,12 @@ class CEBBenchmark:
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-def ceb_generate(model_path, dataset_name="all", model_provider="vllm"):
+def ceb_generate(
+        model_path,
+        dataset_name="all",
+        model_provider="vllm",
+        use_chat_template=False,
+    ):
     """
     Generate LLM responses for specific or all evaluation datasets.
 
@@ -363,18 +388,24 @@ def ceb_generate(model_path, dataset_name="all", model_provider="vllm"):
     model_provider : str
         One of local hosting: ("vllm", "huggingface", "vptq"), or one of online
         hosting: ("deepinfra", "replicate", "other")
+    use_chat_template : str
+        If True, use chat template for local models
     """
     # Late import to prevent slowdown
     from src.utils.llm_gen_wrapper import LLMGeneration
 
     # Shared keyword arguments
     shared_kwargs = {
+        # Provided arguments
         "model_path": model_path,
-        "data_path": "data/",
         "dataset_name": dataset_name,
+        "model_provider": model_provider,
+        "use_chat_template": use_chat_template,
+        # Default arguments
+        "data_path": "data/",
         "repetition_penalty": 1.0,
         "max_new_tokens": 512,
-        "debug": False
+        "debug": False,
     }
 
     # Add number of GPUs if available
@@ -382,7 +413,7 @@ def ceb_generate(model_path, dataset_name="all", model_provider="vllm"):
         shared_kwargs["num_gpus"] = min(torch.cuda.device_count(), 4)
 
     # Instantiate LLMGeneration wrapper
-    llm_gen = LLMGeneration(model_provider=model_provider, **shared_kwargs)
+    llm_gen = LLMGeneration(**shared_kwargs)
 
     # Perform inference
     llm_gen.infer_dataset()
@@ -411,7 +442,9 @@ def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL, **kwargs):
 
 def ceb_compare_multiple(
         *results_dirs,
-        save_dir="metrics_comparisons",
+        bias_type="all",
+        task_type="all",
+        save_dir=DIR_COMPARISONS,
         pairwise=False,
         model_comparisons=-1,
         openai_model=DEFAULT_OPENAI_MODEL
@@ -434,6 +467,10 @@ def ceb_compare_multiple(
     ----------
     results_dirs : *args
         List of result directories to compare
+    bias_type : str
+        Bias type to compare, by default "all"
+    task_type : str
+        Task type to compare, by default "all"
     save_dir : str
         Directory to save aggregated files
     pairwise : bool, optional
@@ -478,10 +515,18 @@ def ceb_compare_multiple(
 
         # Perform comprehensive evaluation
         # NOTE: Need to overwrite to re-do bootstrapped confidence intervals
-        benchmark.comprehensive_eval(overwrite=True)
+        benchmark.comprehensive_eval(
+            bias_type=bias_type,
+            task_type=task_type,
+            overwrite=True,
+        )
 
         # Get metrics stratified by eval
-        fname_to_metrics = benchmark.save_metric_tables(save=False)
+        fname_to_metrics = benchmark.save_metric_tables(
+            bias_type=bias_type,
+            task_type=task_type,
+            save=False,
+        )
 
         # Store metrics
         for fname, metrics in fname_to_metrics.items():
@@ -503,6 +548,61 @@ def ceb_compare_multiple(
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, fname)
         df_curr_metrics.to_csv(save_path, index=False)
+
+
+def ceb_concatenate_comparisons(*save_dirs, save_dir=DIR_COMPARISONS):
+    """
+    Concatenate evaluation metrics from multiple directories into a single CSV file 
+    per evaluation type.
+
+    Note
+    ----
+    This function reads metric CSV files from multiple specified directories, concatenates 
+    them with an empty row between each dataset to improve readability, and saves the 
+    aggregated results for each evaluation type (stereotype direct/indirect, toxicity 
+    direct/indirect) into a specified save directory.
+
+    Parameters
+    ----------
+    *save_dirs : *args
+        List of directories containing metric CSV files to concatenate.
+    save_dir : str, optional
+        Directory to save the concatenated CSV files, by default DIR_COMPARISONS.
+    """
+    accum_dict = {
+        "stereotype_direct": [],
+        "stereotype_indirect": [],
+        "toxicity_direct": [],
+        "toxicity_indirect": [],
+    }
+    for curr_save_dir in save_dirs:
+        if not os.path.exists(curr_save_dir) and os.path.exists(os.path.join(DIR_COMPARISONS, curr_save_dir)):
+            curr_save_dir = os.path.join(DIR_COMPARISONS, curr_save_dir)
+        assert os.path.exists(curr_save_dir), f"Directory provided doesn't exist! \nInvalid: {curr_save_dir}"
+        for eval_key in list(accum_dict.keys()):
+            accum_dict[eval_key].append(
+                pd.read_csv(os.path.join(curr_save_dir, f"metrics_{eval_key}.csv"))
+            )
+
+    # Concatenate tables with space (row) in between
+    empty_row = pd.DataFrame({"Model": [""]})
+    for eval_key, accum_tables in tqdm(accum_dict.items()):
+        # Insert empty row between questions
+        accum_tables = insert_between_elements(accum_tables, empty_row.copy())
+        # Concatenate
+        df_accum = pd.concat(accum_tables, ignore_index=True)
+        # Remove deprecated columns
+        keep_cols = []
+        for col in df_accum.columns:
+            if col.startswith("CEB-Recognition") or col.startswith("CEB-Selection"):
+                if col.endswith("%Invalid"):
+                    continue
+            keep_cols.append(col)
+        df_accum = df_accum[keep_cols]
+        # Save to directory
+        save_path = os.path.join(save_dir, f"accum_{eval_key}.csv")
+        LOGGER.info(f"Saving to `{save_path}`")
+        df_accum.to_csv(save_path, index=False)
 
 
 def ceb_find_unfinished(pattern="*"):
@@ -580,13 +680,13 @@ def ceb_delete(
     evaluation : bool
         If True, delete intermediate evaluation files (from Perspective/ChatGPT)
     """
-    assert inference or evaluation
-    regex_suffix = f"{model_regex}/{dataset_regex}/{social_regex}/{file_regex}"
-    print("[CEB Benchmark] Deleting inference and evaluation results matching following regex: ", regex_suffix)
-    time.sleep(3)
+    assert inference or evaluation, "At least one of `inference` or `evaluation` must be True"
 
     # 1. Remove all generations
     if inference:
+        regex_suffix = f"{model_regex}/{dataset_regex}/{file_regex}"
+        print("[CEB Delete] Deleting inference results matching following regex: ", regex_suffix)
+        time.sleep(3)
         for infer_file in tqdm(glob(DIR_GENERATIONS + "/" + regex_suffix)):
             if os.path.isdir(infer_file):
                 shutil.rmtree(infer_file)
@@ -595,11 +695,23 @@ def ceb_delete(
 
     # 2. Remove all saved evaluations
     if evaluation:
+        regex_suffix = f"{model_regex}/{dataset_regex}/{social_regex}/{file_regex}"
+        print("[CEB Delete] Deleting evaluation results matching following regex: ", regex_suffix)
+        time.sleep(3)
         for eval_file in tqdm(glob(DIR_EVALUATIONS + "/" + regex_suffix)):
             if os.path.isdir(eval_file):
                 shutil.rmtree(eval_file)
             else:
                 os.remove(eval_file)
+
+
+def insert_between_elements(lst, value):
+    result = []
+    for i in range(len(lst)):
+        result.append(lst[i])
+        if i < len(lst) - 1:
+            result.append(value)
+    return result
 
 
 ################################################################################
@@ -610,6 +722,7 @@ if __name__ == "__main__":
         "generate": ceb_generate,
         "evaluate": ceb_evaluate,
         "compare": ceb_compare_multiple,
+        "format_comparisons": ceb_concatenate_comparisons,
         "find_unfinished": ceb_find_unfinished,
         "delete": ceb_delete,
     })
