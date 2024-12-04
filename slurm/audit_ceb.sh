@@ -32,7 +32,7 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 #                                  Run Model                                   #
 ################################################################################
 # 1. Refusal to Answer
-# python -m src.misc.wildguard experiment_refusal_to_answer
+# python -m audit_ceb experiment_refusal_to_answer
 
 # 2. Stereotype Detection
-python -m src.misc.wildguard experiment_harmful_prompt_detection
+python -m audit_ceb experiment_harmful_prompt_detection

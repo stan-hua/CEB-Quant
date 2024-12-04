@@ -1,8 +1,8 @@
 """
 audit_benchmark.py
 
-Description: Contains use GPT-4o and WildGuard to audit CEB questions to assess
-             if questions are actually biased.
+Description: Use GPT-4o and WildGuard to audit if CEB questions are actually
+             biased.
 """
 
 # Standard libraries
