@@ -41,8 +41,7 @@ class HuggingFaceEvaluator:
 
         self.save_dir = save_dir
         # Create save directory if it doesn't exist
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
+        os.makedirs(self.save_dir, exist_ok=True)
 
     def evaluate(self, data, resume=False, progress_filename=PROGRESS_FILENAME):
         """
@@ -58,11 +57,7 @@ class HuggingFaceEvaluator:
         """
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            try:
-                data = json_utils.load_json(load_path)
-                logging.info("Resuming evaluation from saved progress.")
-            except FileNotFoundError:
-                logging.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path)
 
         assert isinstance(data, list), "Data must be a list."
         logging.info('Total data number: {}'.format(len(data)))

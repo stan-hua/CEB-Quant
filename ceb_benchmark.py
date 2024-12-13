@@ -1,9 +1,12 @@
 # Standard libraries
+import concurrent.futures
 import json
 import logging
 import os
+import re
 import sys
 import time
+import traceback
 from collections import defaultdict
 from glob import glob
 
@@ -15,11 +18,7 @@ from fire import Fire
 from tqdm import tqdm
 
 # Custom libraries
-from config import (
-    DIR_GENERATIONS, DIR_EVALUATIONS, DIR_METRICS, DIR_COMPARISONS,
-    BIAS_TO_TASK_TYPE_TO_DATASETS, DEFAULT_OPENAI_MODEL,
-    PERSPECTIVE_LOCK_FNAME, ALL_DATASETS
-)
+import config
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils
@@ -32,7 +31,7 @@ from src.utils import json_utils
 logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
-    format='%(asctime)s : %(levelname)s : %(message)s',
+    format="%(asctime)s : %(levelname)s : %(message)s",
 )
 
 
@@ -40,6 +39,9 @@ logging.basicConfig(
 #                                  Constants                                   #
 ################################################################################
 LOGGER = logging.getLogger(__name__)
+
+# Default evaluator
+DEFAULT_EVALUATOR = "chatgpt"
 
 
 ################################################################################
@@ -54,9 +56,13 @@ class CEBBenchmark:
     Universal interface for running and evaluating CEB benchmark
     """
 
-    def __init__(self, results_dir,
-                 openai_model=DEFAULT_OPENAI_MODEL,
-                 alpha=0.05):
+    def __init__(
+            self, results_dir,
+            openai_model=config.DEFAULT_OPENAI_MODEL,
+            alpha=0.05,
+            filter_harmful=False,
+            evaluator_choice=DEFAULT_EVALUATOR,
+        ):
         """
         Initialize CEBBenchmark class.
 
@@ -65,16 +71,17 @@ class CEBBenchmark:
         results_dir : str
             Path to directory containing inference results for 1 model
         openai_model : str, optional
-            OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
+            OpenAI model to use for evaluation, by default config.DEFAULT_OPENAI_MODEL
         alpha : float
             Alpha level for confidence interval
-        overwrite : bool, optional
-            If True, overwrite existing computed metrics. Does NOT overwrite
-            existing generations.
+        filter_harmful : bool, optional
+            If True, filter for harmful prompts based on ChatGPT
+        evaluator_choice : str, optional
+            Choice of evaluator: ("chatgpt", "prometheus").
         """
-        # If exists in `DIR_GENERATIONS`, then prepend directory
-        if not os.path.exists(results_dir) and os.path.exists(os.path.join(DIR_GENERATIONS, results_dir)):
-            results_dir = os.path.join(DIR_GENERATIONS, results_dir)
+        # If exists in `config.DIR_GENERATIONS`, then prepend directory
+        if not os.path.exists(results_dir) and os.path.exists(os.path.join(config.DIR_GENERATIONS, results_dir)):
+            results_dir = os.path.join(config.DIR_GENERATIONS, results_dir)
 
         assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
@@ -82,16 +89,17 @@ class CEBBenchmark:
         self.results_dir = results_dir
         self.openai_model = openai_model
         self.alpha = alpha
+        self.filter_harmful = filter_harmful
+        self.evaluator_choice = evaluator_choice
 
         # Get model name
         model_name = os.path.basename(results_dir)
 
         # Create directory to save evaluations
-        self.saved_eval_dir = os.path.join(DIR_EVALUATIONS, model_name)
-        os.makedirs(self.saved_eval_dir, exist_ok=True)
+        self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, model_name)
 
         # Create directory to save metrics
-        self.metrics_dir = os.path.join(DIR_METRICS, model_name)
+        self.metrics_dir = os.path.join(config.DIR_METRICS, model_name)
         os.makedirs(self.metrics_dir, exist_ok=True)
 
         # Create paths to store metrics at
@@ -124,7 +132,7 @@ class CEBBenchmark:
                 self.dset_toxicity_metrics = json.load(f)
 
 
-    def comprehensive_eval(self, bias_type="all", task_type="all", overwrite=False):
+    def comprehensive_eval(self, bias_type="all", task_type="all", filter_harmful=None, overwrite=False):
         """
         Perform a comprehensive evaluation of CEB benchmark.
 
@@ -145,6 +153,10 @@ class CEBBenchmark:
         """
         LOGGER.info(f"Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
         task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
+
+        # Overwrite, filter harmful if provided
+        if filter_harmful is not None:
+            self.filter_harmful = filter_harmful
 
         # Perform direct/indirect evaluation evaluation
         for task_type in task_types:
@@ -173,48 +185,55 @@ class CEBBenchmark:
         overwrite : bool, optional
             If True, overwrite existing computed metrics
         """
-        assert task_type in BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"]
-        dataset_names = BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"][task_type]
-        for dataset_name in dataset_names:
-            LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...")
+        assert task_type in config.BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"]
+        dataset_names = config.BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"][task_type]
 
-            # Get all JSONs in inference directory
-            json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+        # Get class attributes
+        class_attrs = {k:v for k,v in self.__dict__.items() if not callable(v)}
+        class_attrs["overwrite"] = overwrite
 
-            # Handle each JSON file separately
-            for json_path in json_paths:
-                fname = ".".join(os.path.basename(json_path).split(".")[:-1])
-                LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{fname}`...")
-                curr_save_dir = os.path.join(self.saved_eval_dir, dataset_name, fname)
+        # NOTE: If using Prometheus, can only be done serially
+        num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
+        num_workers = 1 if self.evaluator_choice == "prometheus" else num_workers
+        LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
+        # CASE 1: Serial evaluation
+        if num_workers <= 1:
+            for dataset_name in dataset_names:
+                # Get all JSONs in inference directory
+                json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+                for json_path in json_paths:
+                    ret = stereotype_process_json(class_attrs, dataset_name, json_path)
+                    social_axis = extract_social_axis(json_path)
+                    metrics = ret[dataset_name][social_axis]
+                    self.dset_stereotype_metrics[dataset_name][social_axis] = metrics
+        # CASE 2: Parallelize evaluation across datasets
+        else:
+            with concurrent.futures.ProcessPoolExecutor(num_workers) as executor:
+                futures = []
+                for dataset_name in dataset_names:
+                    # Get all JSONs in inference directory
+                    json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+                    futures.extend([
+                        executor.submit(stereotype_process_json, class_attrs, dataset_name, json_path)
+                        for json_path in json_paths
+                    ])
 
-                # Skip, if already evaluated
-                if not overwrite and fname in self.dset_stereotype_metrics.get(dataset_name, {}):
-                    continue
+                # Collect results
+                for future in concurrent.futures.as_completed(futures):
+                    ret = future.result()
+                    # Skip errored results
+                    if ret is None:
+                        continue
 
-                # Load inferred data
-                infer_data = json_utils.load_json(json_path)
+                    # Store metrics computed for a single dataset / JSON
+                    for dataset_name, axis_to_metrics in ret.items():
+                        for social_axis, metrics in axis_to_metrics.items():
+                            self.dset_stereotype_metrics[dataset_name][social_axis] = metrics
 
-                # Evaluate for specific stereotype
-                evaluator = StereotypeEval(
-                    model=self.openai_model,
-                    save_dir=curr_save_dir,
-                    alpha=self.alpha,
-                )
-                try:
-                    metrics = evaluator.eval_stereotype(dataset_name, infer_data)
-                except Exception as error_msg:
-                    LOGGER.info(f"Error occured while evaluating Stereotype Dataset: {dataset_name}\n\tError: {error_msg}")
-                    continue
+        # Store metrics for dataset
+        json_utils.save_json(dict(self.dset_stereotype_metrics), self.stereotype_metric_path)
 
-                # Store metrics for dataset / filename
-                if dataset_name not in self.dset_stereotype_metrics:
-                    self.dset_stereotype_metrics[dataset_name] = {}
-                self.dset_stereotype_metrics[dataset_name][fname] = metrics
-
-                # Store metrics for dataset
-                json_utils.save_json(dict(self.dset_stereotype_metrics), self.stereotype_metric_path)
-                LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{fname}`...DONE")
-            LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
+        LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...DONE")
 
 
     def toxicity_eval(self, task_type="direct", overwrite=False):
@@ -229,55 +248,61 @@ class CEBBenchmark:
             If True, overwrite existing computed metrics
         """
         # Warn users if Perspective API file lock exists
-        if os.path.exists(PERSPECTIVE_LOCK_FNAME):
+        if os.path.exists(config.PERSPECTIVE_LOCK_FNAME):
             LOGGER.warning(
-                f"Perspective API lock file exists! `{PERSPECTIVE_LOCK_FNAME}`"
+                f"Perspective API lock file exists! `{config.PERSPECTIVE_LOCK_FNAME}`"
                 "\nPlease delete if you're not running multiple of `ceb_benchmark.py` at once!"
                 " This may be a result from a previously cancelled run."
             )
 
-        assert task_type in BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"]
-        dataset_names = BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"][task_type]
-        for dataset_name in dataset_names:
-            LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...")
+        assert task_type in config.BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"]
+        dataset_names = config.BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"][task_type]
 
-            # Get all JSONs in inference directory
-            json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+        # Get class attributes
+        class_attrs = {k:v for k,v in self.__dict__.items() if not callable(v)}
+        class_attrs["overwrite"] = overwrite
 
-            # Handle each JSON file separately
-            for json_path in json_paths:
-                fname = ".".join(os.path.basename(json_path).split(".")[:-1])
-                LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{fname}`...")
-                curr_save_dir = os.path.join(self.saved_eval_dir, dataset_name, fname)
+        # NOTE: If using Prometheus, can only be done serially
+        num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
+        num_workers = 1 if self.evaluator_choice == "prometheus" else num_workers
+        LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
+        # CASE 1: Serial evaluation
+        if num_workers <= 1 or self.evaluator_choice == "prometheus":
+            for dataset_name in dataset_names:
+                # Get all JSONs in inference directory
+                json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+                for json_path in json_paths:
+                    ret = toxicity_process_json(class_attrs, dataset_name, json_path)
+                    social_axis = extract_social_axis(json_path)
+                    metrics = ret[dataset_name][social_axis]
+                    self.dset_toxicity_metrics[dataset_name][social_axis] = metrics
+        # CASE 2: Parallelize evaluation across datasets
+        else:
+            with concurrent.futures.ProcessPoolExecutor(num_workers) as executor:
+                futures = []
+                for dataset_name in dataset_names:
+                    # Get all JSONs in inference directory
+                    json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
+                    futures.extend([
+                        executor.submit(toxicity_process_json, class_attrs, dataset_name, json_path)
+                        for json_path in json_paths
+                    ])
 
-                # Skip, if already evaluated
-                if not overwrite and fname in self.dset_toxicity_metrics.get(dataset_name, {}):
-                    continue
+                # Collect results
+                for future in concurrent.futures.as_completed(futures):
+                    ret = future.result()
+                    # Skip errored results
+                    if ret is None:
+                        continue
 
-                # Load inferred data
-                infer_data = json_utils.load_json(json_path)
+                    # Store metrics computed for a single dataset / JSON
+                    for dataset_name, axis_to_metrics in ret.items():
+                        for social_axis, metrics in axis_to_metrics.items():
+                            self.dset_toxicity_metrics[dataset_name][social_axis] = metrics
 
-                # Evaluate for specific toxicity
-                evaluator = ToxicityEval(
-                    save_dir=curr_save_dir,
-                    alpha=self.alpha,
-                    model=self.openai_model,
-                )
-                try:
-                    metrics = evaluator.eval_toxicity(dataset_name, infer_data)
-                except Exception as error_msg:
-                    LOGGER.info(f"Error occured while evaluating Toxicity Dataset: {dataset_name}\n\tError: {error_msg}")
-                    continue
-
-                # Store metrics for dataset / filename
-                if dataset_name not in self.dset_toxicity_metrics:
-                    self.dset_toxicity_metrics[dataset_name] = {}
-                self.dset_toxicity_metrics[dataset_name][fname] = metrics
-
-                # Store metrics for dataset
-                json_utils.save_json(dict(self.dset_toxicity_metrics), self.toxicity_metric_path)
-                LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{fname}`...DONE")
-            LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}`...DONE")
+        # Store metrics
+        json_utils.save_json(dict(self.dset_toxicity_metrics), self.toxicity_metric_path)
+        LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...DONE")
 
 
     def save_metric_tables(self, bias_type="all", task_type="all", save=True):
@@ -312,7 +337,7 @@ class CEBBenchmark:
         valid_task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
 
         # Stratify by bias type / direct vs. indirect eval
-        for bias_type, task_dict in BIAS_TO_TASK_TYPE_TO_DATASETS.items():
+        for bias_type, task_dict in config.BIAS_TO_TASK_TYPE_TO_DATASETS.items():
             # Skip, if not valid bias type
             if bias_type not in valid_bias_types:
                 continue
@@ -419,7 +444,11 @@ def ceb_generate(
     llm_gen.infer_dataset()
 
 
-def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL, **kwargs):
+def ceb_evaluate(
+        results_dir,
+        openai_model=config.DEFAULT_OPENAI_MODEL,
+        evaluator_choice=DEFAULT_EVALUATOR,
+        **kwargs):
     """
     Evaluate LLM responses task for specified or all evaluation datasets.
 
@@ -428,10 +457,14 @@ def ceb_evaluate(results_dir, openai_model=DEFAULT_OPENAI_MODEL, **kwargs):
     results_dir : str
         Path to directory containing inference results for 1 model
     openai_model : str, optional
-        OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
+        OpenAI model to use for evaluation, by default config.DEFAULT_OPENAI_MODEL
+    evaluator_choice : str, optional
+        Evaluator to use, by default DEFAULT_EVALUATOR
+    **kwargs : Any
+        Keyword arguments to pass into `comprehensive_eval`
     """
     # Initialize Benchmark object
-    benchmark = CEBBenchmark(results_dir, openai_model=openai_model)
+    benchmark = CEBBenchmark(results_dir, openai_model=openai_model, evaluator_choice=evaluator_choice)
 
     # Perform comprehensive evaluation
     benchmark.comprehensive_eval(**kwargs)
@@ -444,10 +477,10 @@ def ceb_compare_multiple(
         *results_dirs,
         bias_type="all",
         task_type="all",
-        save_dir=DIR_COMPARISONS,
+        save_dir=config.DIR_COMPARISONS,
         pairwise=False,
         model_comparisons=-1,
-        openai_model=DEFAULT_OPENAI_MODEL
+        **kwargs,
     ):
     """
     Re-computes metrics with confidence intervals adjusted for multiple
@@ -480,8 +513,8 @@ def ceb_compare_multiple(
         Number of 1:1 comparisons to make with the provided models, excluding
         the number of datasets compared, that is suppllied. If
         `model_comparisons` >= 1, then `pairwise` argument is ignored
-    openai_model : str, optional
-        Name of OpenAI model to use for evaluation, by default DEFAULT_OPENAI_MODEL
+    **kwargs : Keyword arguments
+        Keyword arguments to pass into CEBBenchmark
     """
     LOGGER.info(
         "[CEB Benchmark] Performing multiple comparisons with the following directories:\n"
@@ -497,7 +530,7 @@ def ceb_compare_multiple(
             else (len(results_dirs)-1)
 
     # Determine number of actual comparisons (model comparisons x dataset comparisons)
-    total_comparisons = model_comparisons * len(ALL_DATASETS)
+    total_comparisons = model_comparisons * len(config.ALL_DATASETS)
 
     # Compute alpha score
     alpha = 0.05 / (total_comparisons)
@@ -509,8 +542,8 @@ def ceb_compare_multiple(
         # Initialize Benchmark object
         benchmark = CEBBenchmark(
             results_dir,
-            openai_model=openai_model,
             alpha=alpha,
+            **kwargs,
         )
 
         # Perform comprehensive evaluation
@@ -550,7 +583,7 @@ def ceb_compare_multiple(
         df_curr_metrics.to_csv(save_path, index=False)
 
 
-def ceb_concatenate_comparisons(*save_dirs, save_dir=DIR_COMPARISONS):
+def ceb_concatenate_comparisons(*save_dirs, save_dir=config.DIR_COMPARISONS):
     """
     Concatenate evaluation metrics from multiple directories into a single CSV file 
     per evaluation type.
@@ -567,7 +600,7 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=DIR_COMPARISONS):
     *save_dirs : *args
         List of directories containing metric CSV files to concatenate.
     save_dir : str, optional
-        Directory to save the concatenated CSV files, by default DIR_COMPARISONS.
+        Directory to save the concatenated CSV files, by default config.DIR_COMPARISONS.
     """
     accum_dict = {
         "stereotype_direct": [],
@@ -576,33 +609,67 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=DIR_COMPARISONS):
         "toxicity_indirect": [],
     }
     for curr_save_dir in save_dirs:
-        if not os.path.exists(curr_save_dir) and os.path.exists(os.path.join(DIR_COMPARISONS, curr_save_dir)):
-            curr_save_dir = os.path.join(DIR_COMPARISONS, curr_save_dir)
+        if not os.path.exists(curr_save_dir) and os.path.exists(os.path.join(save_dir, curr_save_dir)):
+            LOGGER.info(f"[CEB Concatenate Comparisons] Using updated directory: {os.path.join(save_dir, curr_save_dir)}")
+            curr_save_dir = os.path.join(save_dir, curr_save_dir)
         assert os.path.exists(curr_save_dir), f"Directory provided doesn't exist! \nInvalid: {curr_save_dir}"
         for eval_key in list(accum_dict.keys()):
-            accum_dict[eval_key].append(
-                pd.read_csv(os.path.join(curr_save_dir, f"metrics_{eval_key}.csv"))
-            )
+            df_curr = pd.read_csv(os.path.join(curr_save_dir, f"metrics_{eval_key}.csv"))
+
+            # Process certain columns
+            for col in df_curr.columns:
+                # If column ends with "%Positive", ensure it's rounded
+                if col.endswith("%Positive") and pd.api.types.is_float_dtype(df_curr[col]):
+                    df_curr[col] = df_curr[col].round()
+
+            # Color significant differences
+            df_curr = color_significant_differences(df_curr, curr_save_dir)
+            accum_dict[eval_key].append(df_curr)
 
     # Concatenate tables with space (row) in between
-    empty_row = pd.DataFrame({"Model": [""]})
     for eval_key, accum_tables in tqdm(accum_dict.items()):
+        # Get first table
+        df_accum_style = accum_tables[0]
+        # Create empty row with the same columns
+        empty_row = pd.DataFrame({col: [""] for col in df_accum_style.columns})
         # Insert empty row between questions
         accum_tables = insert_between_elements(accum_tables, empty_row.copy())
-        # Concatenate
-        df_accum = pd.concat(accum_tables, ignore_index=True)
-        # Remove deprecated columns
-        keep_cols = []
-        for col in df_accum.columns:
-            if col.startswith("CEB-Recognition") or col.startswith("CEB-Selection"):
-                if col.endswith("%Invalid"):
-                    continue
-            keep_cols.append(col)
-        df_accum = df_accum[keep_cols]
+
+        # Add borders to first table
+        df_accum_style = (df_accum_style
+            .hide(axis="index")
+            .set_properties(**{'text-align': 'center'})
+            .map(lambda x: 'border: 1px solid black;')
+            .map(lambda x: 'border-right: 3px solid black;', subset=pd.IndexSlice[:, ["Model"]])
+        )
+
+        # Concatenate iteratively
+        for table_idx, df_curr in enumerate(accum_tables[1:]):
+            # Convert to styled dataframe, if not already
+            if not isinstance(df_curr, pd.io.formats.style.Styler):
+                df_curr = df_curr.style
+
+            # Add borders and center text, if not an empty row
+            df_curr = (df_curr
+                .hide(axis="index")
+                .set_properties(**{'text-align': 'center'})
+                .map(lambda x: 'border: 1px solid black;')
+                .map(lambda x: 'border-right: 3px solid black;', subset=pd.IndexSlice[:, ["Model"]])
+            )
+            try:
+                df_accum_style.concat(df_curr)
+            except Exception as error_msg:
+                LOGGER.error(
+                    f"Error occured on `{eval_key}` - Table {table_idx} \n"
+                    f"Accum Columns: {df_accum_style.columns.tolist()}\n"
+                    f"All Columns: {df_curr.columns.tolist()}")
+                raise error_msg
+
         # Save to directory
         save_path = os.path.join(save_dir, f"accum_{eval_key}.csv")
         LOGGER.info(f"Saving to `{save_path}`")
-        df_accum.to_csv(save_path, index=False)
+        # df_accum.to_csv(save_path, index=False)
+        df_accum_style.to_html(save_path.replace(".csv", ".html"), index=False, border=1)
 
 
 def ceb_find_unfinished(pattern="*"):
@@ -617,11 +684,11 @@ def ceb_find_unfinished(pattern="*"):
     model_to_missing_results = defaultdict(list)
 
     # Iterate over model directories
-    for result_dir in tqdm(glob(os.path.join(DIR_GENERATIONS, pattern))):
+    for result_dir in tqdm(glob(os.path.join(config.DIR_GENERATIONS, pattern))):
         model_name = os.path.basename(result_dir)
 
         # Check each dataset
-        for dataset_name in ALL_DATASETS:
+        for dataset_name in config.ALL_DATASETS:
             json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
 
             # Early return if missing JSON files
@@ -654,6 +721,7 @@ def ceb_find_unfinished(pattern="*"):
 
 def ceb_delete(
         model_regex="*", dataset_regex="*", social_regex="*", file_regex="*",
+        evaluator_choice=DEFAULT_EVALUATOR,
         inference=False,
         evaluation=False,
     ):
@@ -675,6 +743,8 @@ def ceb_delete(
         Regex that matches social axis (e.g., race, religion, gender, age) or "all"
     file_regex : str
         Regex that matches a specific filename
+    evaluator_choice : str
+        Evaluator choice
     inference : bool
         If True, delete inference results (produced by LLMs)
     evaluation : bool
@@ -687,7 +757,7 @@ def ceb_delete(
         regex_suffix = f"{model_regex}/{dataset_regex}/{file_regex}"
         print("[CEB Delete] Deleting inference results matching following regex: ", regex_suffix)
         time.sleep(3)
-        for infer_file in tqdm(glob(DIR_GENERATIONS + "/" + regex_suffix)):
+        for infer_file in tqdm(glob(config.DIR_GENERATIONS + "/" + regex_suffix)):
             if os.path.isdir(infer_file):
                 shutil.rmtree(infer_file)
             else:
@@ -695,23 +765,453 @@ def ceb_delete(
 
     # 2. Remove all saved evaluations
     if evaluation:
-        regex_suffix = f"{model_regex}/{dataset_regex}/{social_regex}/{file_regex}"
+        regex_suffix = f"{evaluator_choice}/{model_regex}/{dataset_regex}/{social_regex}/{file_regex}"
         print("[CEB Delete] Deleting evaluation results matching following regex: ", regex_suffix)
         time.sleep(3)
-        for eval_file in tqdm(glob(DIR_EVALUATIONS + "/" + regex_suffix)):
+        for eval_file in tqdm(glob(config.DIR_EVALUATIONS + "/" + regex_suffix)):
             if os.path.isdir(eval_file):
                 shutil.rmtree(eval_file)
             else:
                 os.remove(eval_file)
 
 
+################################################################################
+#                   Dataset / Social Axis - Level Processing                   #
+################################################################################
+def stereotype_process_json(class_attrs, dataset_name, json_path):
+    """
+    Evaluate the following dataset for stereotypes across all prompts and
+    social axes.
+
+    Parameters
+    ----------
+    class_attrs : dict
+        Class attributes from `CEBBenchmark` object
+    dataset_name : str
+        Name of the dataset
+    json_path : str
+        Path to the JSON file containing the prompt information
+
+    Returns
+    -------
+    dset_to_axis_to_metrics : dict
+        A dictionary mapping from dataset name to social axis to stereotype
+        metrics
+    """
+    saved_eval_dir = class_attrs["saved_eval_dir"]
+    dset_stereotype_metrics = class_attrs["dset_stereotype_metrics"]
+    openai_model = class_attrs["openai_model"]
+    evaluator_choice = class_attrs["evaluator_choice"]
+    alpha = class_attrs["alpha"]
+    filter_harmful = class_attrs["filter_harmful"]
+    overwrite = class_attrs["overwrite"]
+
+    social_axis = extract_social_axis(json_path)
+    LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{social_axis}`...")
+    curr_save_dir = os.path.join(saved_eval_dir, dataset_name, social_axis)
+
+    # Skip, if already evaluated
+    if not overwrite and social_axis in dset_stereotype_metrics.get(dataset_name, {}):
+        return dset_stereotype_metrics[dataset_name][social_axis]
+
+    # Load inferred data
+    infer_data = json_utils.load_json(json_path)
+
+    # If specified, add `is_harmful` key to distinguish harmful prompts
+    if filter_harmful:
+        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
+        infer_data = add_is_harmful_key(
+            dataset_name, social_axis,
+            infer_data,
+            model_choice="chatgpt",
+        )
+
+    # Evaluate for specific stereotype
+    evaluator = StereotypeEval(
+        model=openai_model,
+        evaluator_choice=evaluator_choice,
+        save_dir=curr_save_dir,
+        alpha=alpha,
+        filter_harmful=filter_harmful,
+    )
+    try:
+        metrics = evaluator.eval_stereotype(dataset_name, infer_data)
+    except Exception as error_msg:
+        LOGGER.info(f"Error occurred while evaluating Stereotype Dataset: {dataset_name}\n\tError: {error_msg}")
+        LOGGER.error(traceback.format_exc())
+        return None
+
+    LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{social_axis}`...DONE")
+    # Return metrics
+    dset_to_axis_to_metrics = {dataset_name: {social_axis: metrics}}
+    return dset_to_axis_to_metrics
+
+
+def toxicity_process_json(class_attrs, dataset_name, json_path):
+    """
+    Evaluate the following dataset for toxicity across all prompts and
+    social axes.
+
+    Parameters
+    ----------
+    class_attrs : dict
+        Class attributes from `CEBBenchmark` object
+    dataset_name : str
+        Name of the dataset
+    json_path : str
+        Path to the JSON file containing the prompt information
+
+    Returns
+    -------
+    dset_to_axis_to_metrics : dict
+        A dictionary mapping from dataset name to social axis to toxicity
+        metrics
+    """
+    saved_eval_dir = class_attrs["saved_eval_dir"]
+    dset_toxicity_metrics = class_attrs["dset_toxicity_metrics"]
+    openai_model = class_attrs["openai_model"]
+    evaluator_choice = class_attrs["evaluator_choice"]
+    alpha = class_attrs["alpha"]
+    filter_harmful = class_attrs["filter_harmful"]
+    overwrite = class_attrs["overwrite"]
+
+    social_axis = extract_social_axis(json_path)
+    LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{social_axis}`...")
+    curr_save_dir = os.path.join(saved_eval_dir, dataset_name, social_axis)
+
+    # Skip, if already evaluated
+    if not overwrite and social_axis in dset_toxicity_metrics.get(dataset_name, {}):
+        return dset_toxicity_metrics[dataset_name][social_axis]
+
+    # Load inferred data
+    infer_data = json_utils.load_json(json_path)
+
+    # If specified, add `is_harmful` key to distinguish harmful prompts
+    if filter_harmful:
+        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
+        infer_data = add_is_harmful_key(
+            dataset_name, social_axis,
+            infer_data,
+            model_choice="chatgpt",
+        )
+
+    # Evaluate for specific toxicity
+    evaluator = ToxicityEval(
+        model=openai_model,
+        evaluator_choice=evaluator_choice,
+        save_dir=curr_save_dir,
+        alpha=alpha,
+        filter_harmful=filter_harmful,
+    )
+    try:
+        metrics = evaluator.eval_toxicity(dataset_name, infer_data)
+    except Exception as error_msg:
+        LOGGER.info(f"Error occurred while evaluating Toxicity Dataset: {dataset_name}\n\tError: {error_msg}")
+        LOGGER.error(traceback.format_exc())
+        return None
+
+    LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{social_axis}`...DONE")
+    # Return metrics
+    dset_to_axis_to_metrics = {dataset_name: {social_axis: metrics}}
+    return dset_to_axis_to_metrics
+
+
+################################################################################
+#                               Helper Functions                               #
+################################################################################
+def color_significant_differences(df_results, metric_comparisons_dir):
+    """
+    Colors significant differences in a DataFrame of results.
+
+    Parameters
+    ----------
+    df_results : pd.DataFrame
+        DataFrame of results from CEB benchmark evaluation
+    metric_comparisons_dir : str
+        Directory that contains results for a specific metric comparison.
+        Used to determine which anchor models to compare against.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with background color style strings for each cell.
+    """
+    dir_name = os.path.basename(metric_comparisons_dir)
+
+    # If metric comparison dir has no anchor models, then create warning and return
+    if dir_name not in config.ANCHOR_MODELS:
+        LOGGER.warning(
+            f"[CEB Benchmark] Metric comparison directory `{dir_name}` has no "
+            "anchor models defined! Consider adding in `config.py / ANCHOR_MODELS` "
+            "for automatic coloring! Skipping for now.."
+        )
+        return df_results
+
+    # Get anchor models
+    anchor_models = config.ANCHOR_MODELS[dir_name]
+
+    # Color significant differences
+    df_styled = df_results.style.apply(
+        highlight_significant, anchor_models=anchor_models,
+        axis=None)
+
+    return df_styled
+
+
+def parse_score(score):
+    """
+    Parse a string of form "mean [lower, upper]" into individual mean,
+    lower, and upper values.
+
+    Parameters
+    ----------
+    score : str
+        String of form "mean [lower, upper]"
+
+    Returns
+    -------
+    mean : float
+        Mean value
+    lower : float
+        Lower confidence interval
+    upper : float
+        Upper confidence interval
+
+    Raises
+    ------
+    ValueError
+        If mean, lower, and upper are all -1, suggests placeholder metric
+    """
+    mean, ci = score.split(" [")
+    ci = ci.rstrip("]").split(", ")
+    mean, lower, upper = float(mean), float(ci[0]), float(ci[1])
+    # Raise value error, if all values are -1, suggests placeholder
+    if mean == -1 and lower == -1 and upper == -1:
+        raise ValueError("Found placeholder metric!")
+    return mean, lower, upper
+
+
+def compare_scores(anchor, compare, better_direction="higher"):
+    """
+    Compare two scores to determine if their pairwise difference is significant
+    and return a corresponding background color based on the comparison.
+
+    Parameters
+    ----------
+    anchor : str
+        Score string of the anchor in the format "mean [lower, upper]".
+    compare : str
+        Score string of the comparator in the format "mean [lower, upper]".
+    better_direction : str, optional
+        Indicates the preferred direction of a better score ("higher" or "lower"),
+        by default "higher".
+
+    Returns
+    -------
+    str
+        Background color as a string. Possible values are:
+        - config.STYLE_WORSE if the anchor is better than the comparator
+          and better_direction is "higher", or vice versa for "lower".
+        - config.STYLE_BETTER if the comparator is better than the anchor
+          and better_direction is "higher", or vice versa for "lower".
+        - config.STYLE_EQUIVALENT if the pairwise difference is not significant.
+
+    Raises
+    ------
+    ValueError
+        If parsing of the score strings fails, indicating placeholder metrics.
+    """
+    # NOTE: If parsing fails, this suggests that either anchor or comparator had
+    #       no valid responses, so placeholder metric was placed
+    try:
+        anchor_mean, anchor_lower, anchor_upper = parse_score(anchor)
+        compare_mean, compare_lower, compare_upper = parse_score(compare)
+    except ValueError:
+        return ""
+
+    # Check if pairwise difference is significant
+    if (anchor_mean < compare_lower or anchor_mean > compare_upper) and (compare_mean < anchor_lower or compare_mean > anchor_upper):
+        if anchor_mean > compare_mean:
+            return config.STYLE_WORSE if better_direction == "higher" else config.STYLE_BETTER
+        else:
+            return config.STYLE_BETTER if better_direction == "higher" else config.STYLE_WORSE
+    return config.STYLE_EQUIVALENT
+
+
+def compare_rta_invalid(anchor, compare):
+    """
+    Compare two strings of form "RTA / Invalid" and return a corresponding background
+    color based on the comparison.
+
+    Parameters
+    ----------
+    anchor : str
+        String of form "RTA / Invalid" for the anchor model.
+    compare : str
+        String of form "RTA / Invalid" for the comparator model.
+
+    Returns
+    -------
+    str
+        Background color as a string. Possible values are:
+        - config.STYLE_WORSE if refusal to answer rate increased (worse).
+        - config.STYLE_BETTER if refusal to answer rate decreased (better).
+        - config.STYLE_EQUIVALENT if neither refusal to answer rate nor invalid
+          rate showed significant difference.
+        - config.STYLE_BETTER_AND_WORSE if both refusal to answer rate and invalid rate
+          showed significant difference in opposite directions.
+    """
+    anchor_rta, anchor_invalid = map(float, anchor.split(" / "))
+    compare_rta, compare_invalid = map(float, compare.split(" / "))
+
+    # Check difference
+    rta_diff = compare_rta - anchor_rta
+    invalid_diff = compare_invalid - anchor_invalid
+    rta_diff_significant = abs(rta_diff) >= 5
+    invalid_diff_significant = abs(invalid_diff) >= 5
+
+    # CASE 0: If neither are significant, then color orange
+    if not rta_diff_significant and not invalid_diff_significant:
+        return config.STYLE_EQUIVALENT
+
+    # SPECIAL CASE 1: If both are significant in different directions, then color as cyan
+    if (rta_diff_significant and invalid_diff_significant) and (rta_diff > 0 and invalid_diff < 0):
+        return config.STYLE_BETTER_AND_WORSE
+
+    # CASE 2: If RTA or Invalid is significant, then color
+    value_diff = rta_diff if rta_diff_significant else invalid_diff
+    # CASE 1: Refusal to answer rate increased (worse)
+    if value_diff > 0:
+        return config.STYLE_WORSE
+    # CASE 2: Refusal to answer rate decreased (better)
+    else:
+        return config.STYLE_BETTER
+
+
+# Function to apply the comparison
+def highlight_significant(df_results, anchor_models):
+    """
+    Highlights rows in a DataFrame that are significantly different from anchor models.
+
+    Parameters
+    ----------
+    df_results : pd.DataFrame
+        DataFrame with columns that are either scores, percentage positive, or refusal to answer.
+    anchor_models : list[str]
+        List of model names to use as anchor models.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with background color style strings for each cell.
+    """
+    styles = pd.DataFrame("", index=df_results.index, columns=df_results.columns)
+    for anchor in anchor_models:
+        anchor_idx = df_results.index[df_results["Model"] == anchor][0]
+        styles.loc[anchor_idx] = config.STYLE_EQUIVALENT
+        for idx in range(anchor_idx, len(df_results)):
+            if idx != anchor_idx and df_results.loc[idx, "Model"] in anchor_models:
+                break
+            for col in df_results.columns.tolist():
+                # Get value
+                comparison_val = df_results.loc[idx, col]
+
+                # CASE 1: Score column
+                simplified_col = os.path.basename(col).strip().lower()
+                if simplified_col in ["score", "dp_diff", "eo_diff"]:
+                    better_direction = "higher" if any(dset in col for dset in ["Recognition", "Selection"]) else "lower"
+                    styles.loc[idx, col] = compare_scores(
+                        df_results.loc[anchor_idx, col], comparison_val,
+                        better_direction=better_direction,
+                    )
+                # CASE 2: Percentage positive column
+                elif simplified_col == "%positive":
+                    styles.loc[idx, col] = config.STYLE_WORSE if comparison_val == 100 else config.STYLE_EQUIVALENT
+                # CASE 3: Refusal to Answer Column
+                elif simplified_col == "%rta - invalid":
+                    styles.loc[idx, col] = compare_rta_invalid(df_results.loc[anchor_idx, col], comparison_val)
+    return styles
+
+
 def insert_between_elements(lst, value):
+    """
+    Insert the given value between elements in the given list.
+
+    Parameters
+    ----------
+    lst : list
+        List of elements
+    value : any
+        Value to insert between elements
+
+    Returns
+    -------
+    list
+        List with value inserted between elements
+    """
     result = []
     for i in range(len(lst)):
         result.append(lst[i])
         if i < len(lst) - 1:
             result.append(value)
     return result
+
+
+def add_is_harmful_key(dataset_name, social_axis, data, model_choice="chatgpt"):
+    """
+    Add `is_harmful` key to each row to denote prompts that were detected to be
+    harmful.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of dataset
+    social_axis : str
+        Social axis (e.g., age)
+    data : list of dict
+        List of question/response dicts
+    model_choice : str, optional
+        Choice of model to detect prompt harmfulness. If ChatGPT/WildGuard, use
+        binary prompt harmfulness classifications. If GUS-Net, use binarized
+        token bias classifications. 
+    """
+    # Raise error for not implemented methods
+    if model_choice in ["gus_net"]:
+        raise NotImplementedError(f"Method `{model_choice}` is not yet implemented!")
+
+    # Get directory containing prompt harmfulness scores
+    harmful_path = os.path.join(
+        config.DIR_WILDGUARD_HARMFUL, model_choice,
+        dataset_name, social_axis, f"{model_choice}_eval.json"
+    )
+
+    # Load harmful predictions
+    harmful_predictions = json_utils.load_json(harmful_path)
+
+    # CASE 1: ChatGPT/Wildguard
+    prompt_whitelist = []
+    if model_choice in ["chatgpt", "wildguard"]:
+        eval_key = f"{model_choice}_bias_analysis"
+        # Extract if prompt was harmful
+        for row in harmful_predictions:
+            pattern = re.compile("Harmful request: (yes|no)", re.DOTALL)
+            match = pattern.search(row[eval_key])
+            assert match, "[add_is_harmful_key] Failed to extract prompt harmfulness from string!"
+            if match and match.group(1) == "yes":
+                prompt_whitelist.append(row["prompt"])
+
+    # Convert to set for faster querying
+    prompt_whitelist = set(prompt_whitelist)
+
+    # Add `is_harmful` key to distinguish data with biased prompts
+    for row in data:
+        row["is_harmful"] = row["prompt"] in prompt_whitelist
+
+    return data
+
+
+def extract_social_axis(json_path):
+    return ".".join(os.path.basename(json_path).split(".")[:-1])
 
 
 ################################################################################

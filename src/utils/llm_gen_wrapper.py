@@ -143,12 +143,23 @@ class LLMGeneration:
         if model_provider == "vllm":
             LOGGER.debug("Using VLLM model for generation. Load model from: %s", self.model_path)
             LOGGER.debug(f"Loading onto {self.llm_config['num_gpus']} GPUs...")
+
+            # Specify additional keyword arguments, if model is a mistral model
+            additional_llm_kwargs = {}
+            # HACK: Currently, MistralTokenizer does not support `apply_chat_template`
+            #       so we'll rely on the `vLLM/HuggingFace` package instead of `mistral-common`
+            # if "mistral" in self.model_path.lower():
+            #     additional_llm_kwargs["tokenizer_mode"] = "mistral"
+            #     additional_llm_kwargs["config_format"] = "mistral"
+            #     additional_llm_kwargs["load_format"] = "mistral"
+
             self.vllm = LLM(
                 model=self.model_path,
                 tensor_parallel_size=self.llm_config["num_gpus"],
                 dtype=self.llm_config["dtype"],
                 max_model_len=self.llm_config["max_model_len"],
                 guided_decoding_backend="lm-format-enforcer",
+                **additional_llm_kwargs,
             )
             return
 
@@ -195,7 +206,7 @@ class LLMGeneration:
 
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
-            prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
+            prompt = apply_chat_template_hf(self.model_path, prompt)
 
         # Tokenize the input prompt
         inputs = tokenizer(prompt, return_tensors="pt").to(self.llm_config["device"])
@@ -278,7 +289,7 @@ class LLMGeneration:
 
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
-            prompt = llm_gen_utils.prompt2conversation(self.model_path, prompt)
+            prompt = apply_chat_template_vllm(self.vllm, prompt)
 
         # Use vLLM to generate
         response = self.vllm.generate(prompt, **gen_kwargs)
@@ -317,8 +328,7 @@ class LLMGeneration:
         # CASE 2: Batched requests is possible
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
-            convert_func = llm_gen_utils.prompt2conversation
-            prompts = [convert_func(self.model_path, p) for p in prompts]
+            prompts = [apply_chat_template_vllm(self.vllm, p) for p in prompts]
 
         responses = self.vllm.generate(prompts, **gen_kwargs)
         return [res.outputs[0].text for res in responses]
@@ -633,8 +643,9 @@ class LLMGeneration:
                     self.infer_dataset_single(dataset)
                     successful = True
                 except Exception as e:
-                    LOGGER.error(f"Test function failed on attempt {num_retries + 1}: {e}")
-                    LOGGER.error(f"Retrying in {retry_interval} seconds...")
+                    LOGGER.error(f"[LLM Inference] Failed on attempt {num_retries + 1}! With the following error trace:")
+                    LOGGER.error(traceback.format_exc())
+                    LOGGER.error(f"[LLM Inference] Retrying in {retry_interval} seconds...")
                     time.sleep(retry_interval)
                     num_retries += 1
             if not successful:
@@ -708,3 +719,91 @@ def extract_model_name(model_path, model_provider="vllm", use_chat_template=Fals
         model_name += "-chat"
 
     return model_name
+
+
+def apply_chat_template_vllm(llm_engine, prompt):
+    """
+    Apply chat template to text using vLLM
+
+    Parameters
+    ----------
+    llm_engine : vllm.LLM
+        vLLM object
+    prompt : str
+        User prompt
+
+    Returns
+    -------
+    str
+        User prompt formatted with chat template
+    """
+    # Get tokenizer
+    tokenizer = llm_engine.get_tokenizer()
+
+    # Apply chat template
+    messages = [{'role': 'user', 'content': prompt}]
+    formatted_prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+
+    return formatted_prompt
+
+
+def apply_chat_template_hf(model_path, prompt):
+    """
+    Apply chat template to text using HuggingFace
+
+    Parameters
+    ----------
+    model_path : str
+        Model path, must contain a tokenizer
+    prompt : str
+        User prompt
+
+    Returns
+    -------
+    str
+        User prompt formatted with chat template
+    """
+    # Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+    # Apply chat template
+    messages = [{'role': 'user', 'content': prompt}]
+    formatted_prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    return formatted_prompt
+
+
+def apply_chat_template_fastchat(model_path, prompt):
+    """
+    Apply chat template to text using lm-sys/fastchat
+
+    Parameters
+    ----------
+    model_path : str
+        Model path, must contain a tokenizer
+    prompt : str
+        User prompt
+
+    Returns
+    -------
+    str
+        User prompt formatted with chat template
+    """
+    try:
+        from fastchat.model import get_conversation_template
+    except ImportError:
+        raise ImportError("Please `pip install fastchat`!")
+
+    # Get conversation template for model
+    conv = get_conversation_template(model_path)
+    conv.set_system_message("")
+    conv.append_message(conv.roles[0], prompt)
+    conv.append_message(conv.roles[1], None)
+    return conv.get_prompt()

@@ -7,7 +7,6 @@ import requests
 # Non-standard libraries
 import google.generativeai as genai
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-from fastchat.model import get_conversation_template
 from openai import OpenAI
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
@@ -72,7 +71,7 @@ def replicate_api(string, model, temperature):
     if model in ["llama3-70b","llama3-8b"]:
         input["prompt_template"] = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     else:
-        input["prompt"]=prompt2conversation(rev_model_mapping[model],string)
+        input["prompt"]=apply_chat_template_vllm(rev_model_mapping[model],string)
     os.environ["REPLICATE_API_TOKEN"] = config.replicate_api
     res = replicate.run(rev_model_mapping[model],
         input=input
@@ -168,22 +167,3 @@ def gen_online(model_name, prompt, temperature, replicate=False, deepinfra=False
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     return res
-
-
-# Convert prompt to conversation format for specific models
-def prompt2conversation(model_path, prompt):
-    conv = get_conversation_template(model_path)
-    conv.set_system_message('')
-    conv.append_message(conv.roles[0], prompt)
-    conv.append_message(conv.roles[1], None)
-    return conv.get_prompt()
-
-
-# Convert prompt to chat template format for specific models
-def prompt2conversation_hf(prompt, tokenizer):
-    # Load tokenizer
-    # tokenizer = AutoTokenizer.from_pretrained(model_path)
-    # TODO: Do we need an empty system prompt?
-    chat = [{'role': 'user', 'content': prompt}]
-
-    return tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)

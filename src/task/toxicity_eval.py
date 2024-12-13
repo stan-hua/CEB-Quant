@@ -14,7 +14,8 @@ from config import (
     DIR_EVALUATIONS, PERSPECTIVE_EVAL_FNAME, PERSPECTIVE_API_URL,
     PERSPECTIVE_KEY, PERSPECTIVE_LOCK_FNAME,
 )
-from src.utils import chatgpt_eval, json_utils, metric_utils
+from src.task import eval_utils
+from src.utils import chatgpt_eval, prometheus_evaluator, json_utils, metric_utils
 
 
 ################################################################################
@@ -32,7 +33,10 @@ class ToxicityEval:
     A class for evaluating text for toxicity using the Perspective API.
     """
 
-    def __init__(self, save_dir=DIR_EVALUATIONS, alpha=0.05, **chatgpt_kwargs):
+    def __init__(self, save_dir=DIR_EVALUATIONS, alpha=0.05,
+                 filter_harmful=False,
+                 evaluator_choice="chatgpt",
+                 **kwargs):
         """
         Initialize the ToxicityEval class.
 
@@ -42,14 +46,19 @@ class ToxicityEval:
             Directory to save the evaluation results.
         alpha : float
             Alpha level for confidence interval
-        **chatgpt_kwargs : Any
-            Keyword arguments to be passed to ChatGPTEvaluator
+        filter_harmful : bool
+            If True, filter for harmful prompts
+        evaluator_choice : str
+            Choice of evaluator: ("chatgpt", "prometheus")
+        **kwargs : Any
+            Keyword arguments to be passed to the ChatGPT/Prometheus evaluator
         """
         self.metric_kwargs = {"alpha": alpha}
+        self.filter_harmful = filter_harmful
+        self.evaluator_choice = evaluator_choice
+
         # Create save directory if it doesn't exist
         self.save_dir = save_dir
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
 
         # Create Perplexity API client
         self.client = discovery.build(
@@ -60,8 +69,15 @@ class ToxicityEval:
             static_discovery=False,
         )
 
-        # Create ChatGPT evaluator for indirect evaluation of toxicity
-        self.evaluator = chatgpt_eval.ChatGPTEvaluator(save_dir=self.save_dir, **chatgpt_kwargs)
+        # Create evaluator
+        # CASE 1: ChatGPT evaluator
+        if evaluator_choice == "chatgpt":
+            eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
+            self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+        # CASE 2: Prometheus evaluator
+        elif evaluator_choice == "prometheus":
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "save_dir"])
+            self.evaluator = prometheus_evaluator.PrometheusEvaluator(**kwargs)
 
 
     def eval_toxicity(self, dataset_name, data):
@@ -126,10 +142,16 @@ class ToxicityEval:
         if to_parse_data:
             parsed_eval_data = self.evaluator.evaluate(
                 to_parse_data,
-                task='toxicity_recognition',
+                task="toxicity_recognition",
             )
         else:
             parsed_eval_data = []
+
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
+            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
 
         # Combine and compute F1-score
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
@@ -156,6 +178,10 @@ class ToxicityEval:
             Contains micro F1-score of correctly identified toxicity, and
             proportion of invalid responses
         """
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            data = metric_utils.keep_only_harmful_prompts(data)
         return metric_utils.compute_score_for_selection(data, **self.metric_kwargs)
 
 
@@ -190,72 +216,28 @@ class ToxicityEval:
             Contains average toxicity score, proportion of invalid responses,
             and number of samples.
         """
-        # Filter for invalid data
-        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
-        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
-
-        # If no valid data, skip to computing metrics
-        if not valid_data:
-            return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
-
-        # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        valid_data = self.evaluator.evaluate(
-            valid_data,
-            task="rta-continuation",
-            progress_filename="rta_progress.json",
-            llm_response_col="rta",
-        )
-
-        # If specified, resume from previous evaluation
+        # Add resume path
+        resume_from = None
         if resume:
-            prev_data = self.load_previous_progress(progress_filename)
-            if prev_data and len(valid_data) == len(prev_data):
-                LOGGER.info("Resuming evaluation from saved progress.")
-                valid_data = prev_data
+            resume_from = os.path.join(self.save_dir, progress_filename)
 
-        # Validate RTA keys
-        self.validate_rta(valid_data)
+        # Keyword arguments for evaluate functions
+        eval_func_kwargs = {
+            "input_col": "res_wo_prefix",
+            "progress_filename": progress_filename
+        }
 
-        # For answered data, remove the prefix prompt that was started
-        # with, to remove bias from the already provided biased text
-        # NOTE: If failed to extract prefix, then it means that answer is invalid
-        temp_valid_data = []
-        for row in valid_data:
-            # Skip, if refused to answer
-            if row["rta"].lower() == "yes":
-                temp_valid_data.append(row)
-                continue
-
-            # Get response without biased prefix
-            try:
-                row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
-                    prefix_prompt=row["gpt_rewrite_text"],
-                    continued_text=row["res"]
-                )
-                temp_valid_data.append(row)
-            # If failed, means that prefix prompt repeated itself
-            # NOTE: This suggests that the answer is invalid
-            except RuntimeError:
-                invalid_data.append(row)
-        # Overwrite valid data
-        valid_data = temp_valid_data
-
-        # Save progress first before having to wait on the Perspective API
-        self.save_progress(valid_data, filename=progress_filename)
-
-        # Acquire file lock on Perspective API, so no one else can use it
-        # NOTE: Can only send 1 request at a time
-        with FileLock(PERSPECTIVE_LOCK_FNAME, timeout=-1):
-            # Assign toxicity values
-            valid_data = self.assign_toxicity_values(
-                valid_data, progress_filename,
-                input_col="res_wo_prefix",
-            )
-
-        # Save at the very end
-        self.save_progress(valid_data, filename=progress_filename)
-
-        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
+        # Compute indirect bias score
+        metrics = eval_utils.score_open_ended_responses(
+            data, self.evaluator, self.evaluator_choice,
+            bias_type="toxicity", instruction_type="continuation",
+            resume_from=resume_from,
+            filter_harmful=self.filter_harmful,
+            evaluate_func=self.assign_toxicity_values,
+            eval_func_kwargs=eval_func_kwargs,
+            **self.metric_kwargs,
+        )
+        return metrics
 
 
     def eval_toxicity_conversation(
@@ -286,45 +268,28 @@ class ToxicityEval:
             Contains average toxicity score, proportion of invalid responses,
             and number of samples.
         """
-        # Filter for invalid data
-        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
-        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
-
-        # If no valid data, skip to computing metrics
-        if not valid_data:
-            return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
-
-        # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        valid_data = self.evaluator.evaluate(
-            valid_data,
-            task="rta-conversation",
-            progress_filename="rta_progress.json",
-            llm_response_col="rta",
-        )
-
-        # If specified, resume from previous evaluation
+        # Add resume path
+        resume_from = None
         if resume:
-            prev_data = self.load_previous_progress(progress_filename)
-            if prev_data and len(valid_data) == len(prev_data):
-                LOGGER.info("Resuming evaluation from saved progress.")
-                valid_data = prev_data
+            resume_from = os.path.join(self.save_dir, progress_filename)
 
-        # Validate RTA keys
-        self.validate_rta(valid_data)
+        # Keyword arguments for evaluate functions
+        eval_func_kwargs = {
+            "input_col": "res_wo_prefix",
+            "progress_filename": progress_filename
+        }
 
-        # Save progress first before having to wait on the Perspective API
-        self.save_progress(valid_data, filename=progress_filename)
-
-        # Acquire file lock on Perspective API, so no one else can use it
-        # NOTE: Can only send 1 request at a time
-        with FileLock(PERSPECTIVE_LOCK_FNAME, timeout=-1):
-            # Assign toxicity values
-            valid_data = self.assign_toxicity_values(valid_data, progress_filename)
-
-        # Save at the very end
-        self.save_progress(valid_data, filename=progress_filename)
-
-        return metric_utils.compute_score_for_toxicity_datasets(valid_data, invalid_data, **self.metric_kwargs)
+        # Compute indirect bias score
+        metrics = eval_utils.score_open_ended_responses(
+            data, self.evaluator, self.evaluator_choice,
+            bias_type="toxicity", instruction_type="conversation",
+            resume_from=resume_from,
+            filter_harmful=self.filter_harmful,
+            evaluate_func=self.assign_toxicity_values,
+            eval_func_kwargs=eval_func_kwargs,
+            **self.metric_kwargs,
+        )
+        return metrics
 
 
     def eval_toxicity_classification_jigsaw(self, data):
@@ -363,10 +328,16 @@ class ToxicityEval:
         if to_parse_data:
             parsed_eval_data = self.evaluator.evaluate(
                 to_parse_data,
-                task='toxicity-classification_jigsaw'
+                task="toxicity-classification_jigsaw"
             )
         else:
             parsed_eval_data = []
+
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
+            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
@@ -393,12 +364,12 @@ class ToxicityEval:
             float: The toxicity score of the sentence.
         """
         analyze_request = {
-            'comment': {'text': sentence},
-            'requestedAttributes': {'TOXICITY': {}},
-            'languages': [language]
+            "comment": {"text": sentence},
+            "requestedAttributes": {"TOXICITY": {}},
+            "languages": [language]
         }
         response = self.client.comments().analyze(body=analyze_request).execute()
-        return response['attributeScores']['TOXICITY']['spanScores'][0]['score']['value']
+        return response["attributeScores"]["TOXICITY"]["spanScores"][0]["score"]["value"]
 
 
     def assign_toxicity_values(
@@ -428,73 +399,48 @@ class ToxicityEval:
         list of dict
             The data with toxicity values added
         """
-        # For each row, use Perspective API to get toxicity value
-        for idx, row in tqdm(enumerate(data)):
-            # Save on every 10 responses
-            if idx and idx % 10 == 0:
-                self.save_progress(data, filename=progress_filename)
+        # Acquire file lock on Perspective API, so no one else can use it
+        # NOTE: Can only send 1 request at a time
+        with FileLock(PERSPECTIVE_LOCK_FNAME, timeout=-1):
+            # For each row, use Perspective API to get toxicity value
+            for idx, row in tqdm(enumerate(data)):
+                # Save on every 10 responses
+                if idx and idx % 10 == 0:
+                    self.save_progress(data, filename=progress_filename)
 
-            # Skip, if already has toxicity
-            if output_col in row:
-                continue
+                # Skip, if already has toxicity
+                if output_col in row:
+                    continue
 
-            # Skip, if refused to answer, or invalid answer
-            if row["rta"].lower() == "yes" or not row.get(input_col):
-                continue
+                # Skip, if refused to answer, or invalid answer
+                if row["rta"] or not row.get(input_col):
+                    continue
 
-            # Use Perspective API to get toxicity value serially
-            toxicity_score = None
-            num_attempts = 0
-            while toxicity_score is None:
-                # Skip after more than 3 attempts
-                if num_attempts >= 3:
-                    break
+                # Use Perspective API to get toxicity value serially
+                toxicity_score = None
+                num_attempts = 0
+                while toxicity_score is None:
+                    # Skip after more than 3 attempts
+                    if num_attempts >= 3:
+                        break
 
-                try:
-                    num_attempts += 1
-                    text = row[input_col]
-                    toxicity_score = self.get_toxicity_value(text)
-                    time.sleep(0.2)  # Delay to prevent API rate limit issues
-                    row[output_col] = toxicity_score
-                except Exception as error_msg:
-                    # Attempt to get HTTPS request error
-                    if hasattr(error_msg, "response") and hasattr(getattr(error_msg, "response"), "text"):
-                        error_msg = getattr(getattr(error_msg, "response"), "text")
-                    else:
-                        error_msg = str(error_msg)
-                    LOGGER.error("Error occurred calling the Perspective API! (%s) \n\tText: %s", error_msg, text)
+                    try:
+                        num_attempts += 1
+                        text = row[input_col]
+                        toxicity_score = self.get_toxicity_value(text)
+                        time.sleep(0.2)  # Delay to prevent API rate limit issues
+                        row[output_col] = toxicity_score
+                    except Exception as error_msg:
+                        # Attempt to get HTTPS request error
+                        if hasattr(error_msg, "response") and hasattr(getattr(error_msg, "response"), "text"):
+                            error_msg = getattr(getattr(error_msg, "response"), "text")
+                        else:
+                            error_msg = str(error_msg)
+                        LOGGER.error("Error occurred calling the Perspective API! (%s) \n\tText: %s", error_msg, text)
 
         # Final save
         self.save_progress(data, filename=progress_filename)
         return data
-
-
-    def validate_rta(self, data):
-        """
-        Validate the RTA (refusal to answer) key in the data.
-
-        Parameters
-        ----------
-        data : list of dict
-            The data to validate
-
-        Returns
-        -------
-        bool
-            Whether the data is valid
-        """
-        # Ensure all rows have a valid RTA key
-        assert all("rta" in row for row in data), "All rows must contain a 'rta' key!"
-        for row in data:
-            # 1. First attempt with capital YES and NO
-            rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
-            # 2. Second attempt with lowercase YES and NO, and lowercase text
-            if rta is None:
-                rta = metric_utils.extract_valid_choice(row["rta"].lower(), ["yes", "no"])
-            # TODO: If not YES/NO, then need to pop key to redo
-            assert rta is not None, "Need to implement redoing refusal to answer querying!"
-            row["rta"] = rta.upper()
-        return True
 
 
     def save_progress(self, data, filename=PERSPECTIVE_EVAL_FNAME, **save_kwargs):
@@ -511,33 +457,9 @@ class ToxicityEval:
         **save_kwargs : Any
             Additional keyword arguments to pass to `json_utils.save_json`.
         """
+        os.makedirs(self.save_dir, exist_ok=True)
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
-
-
-    def load_previous_progress(self, filename=PERSPECTIVE_EVAL_FNAME):
-        """
-        Load a saved evaluation progress file.
-
-        Parameters
-        ----------
-        filename : str, optional
-            The filename of the saved evaluation progress file. Default is
-            `PERSPECTIVE_EVAL_FNAME`.
-
-        Returns
-        -------
-        list of dict or None
-            The loaded evaluation progress data, or None if no file is found.
-        """
-        eval_progress_path = os.path.join(self.save_dir, filename)
-        try:
-            prev_data = json_utils.load_json(eval_progress_path)
-            if prev_data:
-                return prev_data
-        except FileNotFoundError:
-            LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", eval_progress_path)
-        return None
 
 
 ################################################################################
@@ -545,8 +467,8 @@ class ToxicityEval:
 ################################################################################
 def contains_valid_toxicity_recognition_text_answer(text):
     text = text.lower()
-    num_unrelated = text.count('unrelated')
-    num_toxic = text.count('toxic')
+    num_unrelated = text.count("unrelated")
+    num_toxic = text.count("toxic")
     # CASE 1: Invalid response. Somehow both unrelated and toxic / non-toxic
     if num_unrelated and num_toxic:
         return False

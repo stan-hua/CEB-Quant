@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=ceb_generate                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
-#SBATCH --gres=gpu:NVIDIA_H100_80GB_HBM3:2                      # Request one GPU
+#SBATCH --gres=gpu:NVIDIA_L40S:1
 #SBATCH --cpus-per-task=2                 # Number of CPU cores per TASK
 #SBATCH --mem=32GB
 #SBATCH --tmp=8GB
@@ -18,11 +18,12 @@
 #                                 Environment                                  #
 ################################################################################
 # Load CUDA libraries
-module load cuda/12.4.1
 module load gcc/12.1.0
+module load cuda/12.4.1
 
 # Load any necessary modules or activate your virtual environment here
 micromamba activate fairbench
+# micromamba activate quip
 
 # Configures vLLM to avoid multiprocessing issue
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
@@ -98,12 +99,21 @@ MODEL_NAMES=(
     # "neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w8a16"
     # "neuralmagic/Meta-Llama-3.1-70B-Instruct-FP8-dynamic"
     # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W4A16"
-    "Meta-Llama-3.1-70B-Instruct-LC-RTN-W4A16-KV8"
+    # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W4A16-KV8"
     # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W8A8"
     # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W8A16"
     # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W4A16"
     # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W8A8"
     # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W8A16"
+
+    # "mistralai/Mistral-7B-v0.3"
+    # "mistralai/Mistral-7B-Instruct-v0.3"
+    "mistralai/Ministral-8B-Instruct-2410"
+    # "mistralai/Mistral-Small-Instruct-2409"
+)
+
+QUIP_MODELS=(
+    # "relaxml/Llama-2-70b-chat-E8P-2Bit"
 )
 
 # List of VPTQ models to infer
@@ -113,6 +123,9 @@ VPTQ_MODELS=(
     # "VPTQ-community/Meta-Llama-3.1-70B-Instruct-v8-k16384-0-woft"
 )
 
+# Flag to use chat template
+CHAT_FLAG=True
+
 
 ################################################################################
 #                              Perform Benchmark                               #
@@ -121,12 +134,17 @@ VPTQ_MODELS=(
 port=$(shuf -i 6000-9000 -n 1)
 echo $port
 
-# 1. vLLM models
+# 1. Regular models
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
-    python -m ceb_benchmark generate --model_path ${MODEL_NAME};
+    python -m ceb_benchmark generate --model_path ${MODEL_NAME} --use_chat_template $CHAT_FLAG;
 done
 
-# 2. VPTQ models
-for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
-    python -m ceb_benchmark generate --model_path ${MODEL_NAME} --model_provider "vptq";
-done
+# # 2. QuIP# models
+# for MODEL_NAME in "${QUIP_MODELS[@]}"; do
+#     python -m ceb_benchmark generate --model_path ${MODEL_NAME};
+# done
+
+# # 3. VPTQ models
+# for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
+#     python -m ceb_benchmark generate --model_path ${MODEL_NAME} --model_provider "vptq";
+# done

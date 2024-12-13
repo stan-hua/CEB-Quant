@@ -1,3 +1,10 @@
+"""
+chatgpt_eval.py
+
+Description: Uses ChatGPT as a judge to evaluate stereotype/toxicity in
+             LLM-generated text.
+"""
+
 # Standard libraries
 import concurrent.futures
 import logging
@@ -47,10 +54,8 @@ class ChatGPTEvaluator:
             within config.DIR_EVALUATIONS based on the model name.
         """
         self.model = model
-        self.save_dir = save_dir or os.path.join(config.DIR_EVALUATIONS, model)
+        self.save_dir = save_dir or os.path.join(config.DIR_EVALUATIONS, "chatgpt")
         self.max_worker = config.MAX_WORKER_AUTOEVAL
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
 
 
     def save_progress(self, data, filename='auto_eval.json', **save_kwargs):
@@ -61,6 +66,7 @@ class ChatGPTEvaluator:
             data: Data to be saved.
             filename (str): Name of the file for saving the data.
         """
+        os.makedirs(self.save_dir, exist_ok=True)
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
 
@@ -135,13 +141,7 @@ class ChatGPTEvaluator:
         # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            try:
-                prev_data = json_utils.load_json(load_path)
-                if prev_data and len(data) == len(prev_data):
-                    LOGGER.info("Resuming evaluation from saved progress.")
-                    data = prev_data
-            except FileNotFoundError:
-                LOGGER.warning("No saved progress file found at %s. Starting a new evaluation.", load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
@@ -194,8 +194,6 @@ class ChatGPTGenerator:
         self.model = model
         self.save_dir = save_dir or os.path.join(config.DIR_GENERATIONS, model)
         self.max_worker = config.MAX_WORKER_AUTOEVAL
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
 
 
     def save_progress(self, data, filename="infer_progress.json", **save_kwargs):
@@ -268,13 +266,7 @@ class ChatGPTGenerator:
         # If specified, resume from previous inference
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            try:
-                prev_data = json_utils.load_json(load_path)
-                if prev_data and len(data) == len(prev_data):
-                    LOGGER.info("Resuming inference from saved progress.")
-                    data = prev_data
-            except FileNotFoundError:
-                LOGGER.warning("No saved progress file found at %s. Starting a new inference.", load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"

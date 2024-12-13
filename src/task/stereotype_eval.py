@@ -1,5 +1,16 @@
+# Standard libraries
+import logging
+
 # Custom libraries
-from src.utils import chatgpt_eval, metric_utils
+from src.task import eval_utils
+from src.utils import chatgpt_eval, prometheus_evaluator, metric_utils
+
+
+################################################################################
+#                                    Setup                                     #
+################################################################################
+# Configure logger
+LOGGER = logging.getLogger(__name__)
 
 
 ################################################################################
@@ -14,7 +25,9 @@ class StereotypeEval:
     Used to compute metrics on one stereotype dataset at a time
     """
 
-    def __init__(self, alpha=0.05, **kwargs):
+    def __init__(self, alpha=0.05, filter_harmful=False,
+                 evaluator_choice="chatgpt",
+                 **kwargs):
         """
         Initializes the FairnessEval class.
 
@@ -22,11 +35,25 @@ class StereotypeEval:
         ----------
         alpha : float
             Alpha level for confidence interval
+        filter_harmful : bool
+            If True, filter for harmful prompts
+        evaluator_choice : str
+            Choice of evaluator: ("chatgpt", "prometheus")
         **kwargs : Any
-            Keyword arguments for ChatGPTEvaluator
+            Keyword arguments for the evaluator
         """
         self.metric_kwargs = {"alpha": alpha}
-        self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+        self.filter_harmful = filter_harmful
+        self.evaluator_choice = evaluator_choice
+
+        # CASE 1: ChatGPT evaluator
+        if evaluator_choice == "chatgpt":
+            eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
+            self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+        # CASE 2: Prometheus evaluator
+        elif evaluator_choice == "prometheus":
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "save_dir"])
+            self.evaluator = prometheus_evaluator.PrometheusEvaluator(**kwargs)
 
 
     def eval_stereotype(self, dataset_name, data):
@@ -97,6 +124,12 @@ class StereotypeEval:
         else:
             parsed_eval_data = []
 
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
+            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
+
         # Combine and compute F1-score
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
         metrics = metric_utils.compute_score_for_recognition(
@@ -122,6 +155,10 @@ class StereotypeEval:
             Contains micro F1-score of correctly selected stereotypes, and
             proportion of invalid responses
         """
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            data = metric_utils.keep_only_harmful_prompts(data)
         return metric_utils.compute_score_for_selection(data, **self.metric_kwargs)
 
 
@@ -144,75 +181,10 @@ class StereotypeEval:
             Contains average bias score for ones that did answer, refusal to
             answer rate, proportion of invalid responses, and number of samples
         """
-        # Filter for invalid data
-        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
-        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
-
-        # If no valid data, skip to computing metrics
-        if not valid_data:
-            return metric_utils.compute_indirect_bias_score(
-                [], [], invalid_data,
-                **self.metric_kwargs,
-            )
-
-        # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        # NOTE: Needs to be in a separate file because later file will be
-        #       filtered for only answered data
-        valid_data = self.evaluator.evaluate(
-            valid_data,
-            task="rta-continuation",
-            progress_filename="rta_progress.json",
-            llm_response_col="rta",
-        )
-
-        # Split LLM responses into answered vs. refused to answer
-        assert all("rta" in row for row in valid_data), "All rows must contain a 'rta' key!"
-        answered_data, refused_data = [], []
-        for row in valid_data:
-            # 1. First attempt with capital YES and NO
-            rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
-            # 2. Second attempt with lowercase YES and NO, and lowercase text
-            if rta is None:
-                rta = metric_utils.extract_valid_choice(row["rta"].lower(), ["yes", "no"])
-
-            # TODO: If not YES/NO, then need to pop key to redo
-            assert rta is not None, "Need to implement redoing refusal to answer querying!"
-
-            # Split into answered vs. refused questions
-            rta = rta.lower()
-            if rta == "yes":
-                refused_data.append(row)
-            else:
-                # Get response without biased prefix
-                try:
-                    row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
-                        prefix_prompt=row["gpt_rewrite_text"],
-                        continued_text=row["res"]
-                    )
-                    answered_data.append(row)
-                # If failed, means that prefix prompt repeated itself
-                # NOTE: This suggests that the answer is invalid
-                except RuntimeError:
-                    invalid_data.append(row)
-
-        # If no valid answered data, skip to computing metrics
-        if not answered_data:
-            return metric_utils.compute_indirect_bias_score(
-                [], refused_data, invalid_data,
-                **self.metric_kwargs,
-            )
-
-        # 2. Use judge LLM to estimate a bias score for ones that did answer
-        answered_data = self.evaluator.evaluate(
-            answered_data,
-            task="stereotype-continuation_and_conversation",
-            llm_input_col="res_wo_prefix",
-            llm_response_col="bias_score",
-        )
-
-        # Compute bias score
-        metrics = metric_utils.compute_indirect_bias_score(
-            answered_data, refused_data, invalid_data,
+        metrics = eval_utils.score_open_ended_responses(
+            data, self.evaluator, self.evaluator_choice,
+            bias_type="stereotype", instruction_type="continuation",
+            filter_harmful=self.filter_harmful,
             **self.metric_kwargs,
         )
         return metrics
@@ -234,64 +206,10 @@ class StereotypeEval:
             Contains average bias score for ones that did answer, refusal to
             answer rate, proportion of invalid responses, and number of samples
         """
-        # Filter for invalid data
-        valid_data = [row for row in data if metric_utils.is_text_truthy(row["res"])]
-        invalid_data = [row for row in data if not metric_utils.is_text_truthy(row["res"])]
-
-        # If no valid data, skip to computing metrics
-        if not valid_data:
-            return metric_utils.compute_indirect_bias_score(
-                [], [], invalid_data,
-                **self.metric_kwargs,
-            )
-
-        # 1. Use judge LLM to estimate refusal to answer (rta) rate
-        # NOTE: Needs to be in a separate file because later file will be
-        #       filtered for only answered data
-        valid_data = self.evaluator.evaluate(
-            valid_data,
-            task="rta-conversation",
-            progress_filename="rta_progress.json",
-            llm_response_col="rta",
-        )
-
-        # Split LLM responses into answered vs. refused to answer
-        assert all("rta" in row for row in valid_data), "All rows must contain a 'rta' key!"
-        answered_data, refused_data = [], []
-        for row in valid_data:
-            # 1. First attempt with capital YES and NO
-            rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
-            # 2. Second attempt with lowercase YES and NO, and lowercase text
-            if rta is None:
-                rta = metric_utils.extract_valid_choice(row["rta"].lower(), ["yes", "no"])
-
-            # TODO: If not YES/NO, then need to pop key to redo
-            assert rta is not None, "Need to implement redoing refusal to answer querying!"
-
-            # Split into answered vs. refused questions
-            rta = rta.lower()
-            if rta == "yes":
-                refused_data.append(row)
-            else:
-                answered_data.append(row)
-
-        # If no valid answered data, skip to computing metrics
-        if not answered_data:
-            return metric_utils.compute_indirect_bias_score(
-                [], refused_data, invalid_data,
-                **self.metric_kwargs,
-            )
-
-        # 2. Use judge LLM to estimate a bias score for ones that did answer
-        answered_data = self.evaluator.evaluate(
-            answered_data,
-            task="stereotype-continuation_and_conversation",
-            llm_response_col="bias_score",
-        )
-
-        # Compute bias score
-        metrics = metric_utils.compute_indirect_bias_score(
-            answered_data, refused_data, invalid_data,
+        metrics = eval_utils.score_open_ended_responses(
+            data, self.evaluator, self.evaluator_choice,
+            bias_type="stereotype", instruction_type="conversation",
+            filter_harmful=self.filter_harmful,
             **self.metric_kwargs,
         )
         return metrics
@@ -337,6 +255,12 @@ class StereotypeEval:
             )
         else:
             parsed_eval_data = []
+
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
+            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
@@ -386,6 +310,12 @@ class StereotypeEval:
             )
         else:
             parsed_eval_data = []
+
+        # Filter for harmful data
+        # NOTE: This is done after, so that we don't overwrite existing evaluations
+        if self.filter_harmful:
+            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
+            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
