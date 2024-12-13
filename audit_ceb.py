@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 # Custom libraries
 import config
-from src.utils.json_utils import load_json, save_json
+from src.utils.json_utils import load_json, save_json, update_with_existing_data
 from src.utils.metric_utils import extract_number_from_0_to_99, extract_valid_choice
 from src.utils.chatgpt_eval import ChatGPTGenerator
 
@@ -56,6 +56,14 @@ Answers:
 #                                   Classes                                    #
 ################################################################################
 class OpenAIHarmClassifier:
+    """
+    OpenAIHarmClassifier class.
+
+    Note
+    ----
+    Used to classify if a prompt/response are harmful, using ChatGPT
+    """
+
     def __init__(self, openai_model=config.DEFAULT_OPENAI_MODEL):
         self.model = ChatGPTGenerator(model=openai_model)
         self.model_name = "chatgpt"
@@ -68,7 +76,7 @@ class OpenAIHarmClassifier:
             orig_response_key: str = "response"
         ) -> list[dict]:
         """
-        Compute stereotype bias scores for a list of items using a model.
+        Compute bias scores for a list of items using a model.
 
         Parameters
         ----------
@@ -87,8 +95,7 @@ class OpenAIHarmClassifier:
         -------
         list of dict
             Updated `items` where each dict contains new keys
-            - {model_name}_stereotype_analysis: The output of the model.
-            - {model_name}_stereotype_bias_score: The extracted stereotype bias score from the model output.
+            - {model_name}_bias_analysis: The output of the model.
         """
         prompt_key = "question_bias_prompt"
         response_key = f"{self.model_name}_bias_analysis"
@@ -118,6 +125,101 @@ class OpenAIHarmClassifier:
             row.update(parse_wildguard_style_output(row[response_key], self.model_name))
 
         return eval_data
+
+
+# NOTE: Deprecated because it's over-sensitive
+class GUSHarmClassifier:
+    """
+    OpenAIHarmClassifier class.
+
+    Note
+    ----
+    Used to classify if a prompt/response are harmful, using ChatGPT
+    """
+
+    def __init__(self):
+        raise RuntimeError(
+            "GUSHarmClassifier is now deprecated, due to over-sensitive predictions"
+        )
+        # Lazy import since class isn't used
+        from fairly import TextAnalyzer     # pip install the-fairly-project
+        from wtpsplit import SaT
+
+        self.model_name = "gus_net"
+        self.gus_pipeline = TextAnalyzer(
+            bias="ternary",
+            classes=True,
+            top_k_classes=3,
+            ner="gus"
+        )
+        # NOTE: Model to split text into sentences
+        self.sentence_splitter = SaT("sat-3l-sm")
+
+
+    def classify(
+            self, data: list[dict[str, str]],
+            save_dir: str,
+            orig_prompt_key: str = "prompt",
+            orig_response_key: str = "response"
+        ) -> list[dict]:
+        """
+        Compute bias scores for a list of items using a model.
+
+        Parameters
+        ----------
+        data : list of dict
+            A list of dictionaries with
+                - prompt: User's input (or prompt)
+                - response: A hypothetical LLM response
+        save_dir : str
+            Directory to save results
+        orig_prompt_key : str (default: "prompt")
+            The key in each dict that contains the LLM prompt.
+        orig_response_key : str (default: "response")
+            The key in each dict that contains the LLM output response.
+
+        Returns
+        -------
+        list of dict
+            Updated `items` where each dict contains new keys
+            - {model_name}_bias_analysis: The output of the model.
+        """
+        response_key = f"{self.model_name}_bias_analysis"
+        progress_filename = f"{self.model_name}_eval.json"
+        save_path = os.path.join(save_dir, progress_filename)
+
+        # If previous analysis exists, then use that
+        if os.path.exists(save_path):
+            data = update_with_existing_data(data, prev_path=save_path)
+
+        # Analyze bias in prompt
+        for row in tqdm(data):
+            # Skip, if already done
+            if response_key in row:
+                continue
+
+            # Split the text into sentences
+            sentences = self.sentence_splitter.split(row["prompt"])
+
+            # Perform analysis on each sentence
+            accum_analysis = []
+            for sentence in sentences:
+                gus_analysis = self.gus_pipeline.analyze(sentence)["text"]
+                # gus_analysis.pop("text")
+                gus_analysis["score"] = round(gus_analysis["score"], 4)
+                for key, val in gus_analysis["aspects"].items():
+                    gus_analysis["aspects"][key] = round(val, 4)
+                if "Biased" in gus_analysis["label"]:
+                    accum_analysis.append(gus_analysis)
+            row[response_key + "_full"] = gus_analysis
+            simplified_response = "yes" if ("bias" in gus_analysis["label"].lower()) else "no"
+            row[response_key] = f"Harmful request: {simplified_response}"
+
+        # Save analysis
+        save_json(data, save_path)
+
+        return data
+
 
 
 class ExperimentHarmfulPromptDetection:
@@ -305,7 +407,7 @@ def experiment_refusal_to_answer(model_regex=DEFAULT_MODEL_REGEX):
 
     # For each model / dataset / filename, use WildGuard to assess if response
     # is a refusal to answer
-    json_paths = glob(os.path.join(config.DIR_EVALUATIONS, model_regex, "*", social_regex, fname_regex))
+    json_paths = glob(os.path.join(config.DIR_EVALUATIONS, "*", model_regex, "*", social_regex, fname_regex))
 
     # Filter for specific datasets
     json_paths = [json_path for json_path in json_paths if re.match(f".*/{dataset_regex}/.*", json_path)]
@@ -578,31 +680,6 @@ def ceb_simulate_option_selection(data, response_key="response"):
             accum_data.append(curr_row)
 
     return accum_data
-
-
-def parse_model_generation_to_output(output: str, model_choice="wildguard") -> dict:
-    """
-    Parse model generation output into a dictionary containing two keys:
-        - "X_stereotype_analysis": the raw output string
-        - "X_stereotype_bias_score": the stereotype bias score from 0 to 99
-
-    Parameters
-    ----------
-    output : str
-        The output string from the model
-    model_choice : str (default: "wildguard")
-        The name of the model to use in the output keys
-
-    Returns
-    -------
-    output_dict : dict
-        A dictionary with two keys containing the stereotype analysis and bias score
-    """
-    ret = {
-        f"{model_choice}_stereotype_analysis": output,
-        f"{model_choice}_stereotype_bias_score": extract_number_from_0_to_99(output),
-    }
-    return ret
 
 
 def parse_wildguard_style_output(output, model_choice="chatgpt") -> wildguard.SafetyClassifierOutput:
