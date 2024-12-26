@@ -60,7 +60,7 @@ class CEBBenchmark:
             self, results_dir,
             openai_model=config.DEFAULT_OPENAI_MODEL,
             alpha=0.05,
-            filter_harmful=False,
+            filter_kwargs=None,
             evaluator_choice=DEFAULT_EVALUATOR,
         ):
         """
@@ -74,8 +74,8 @@ class CEBBenchmark:
             OpenAI model to use for evaluation, by default config.DEFAULT_OPENAI_MODEL
         alpha : float
             Alpha level for confidence interval
-        filter_harmful : bool, optional
-            If True, filter for harmful prompts based on ChatGPT
+        filter_kwargs : bool, optional
+            Keyword arguments to filter prompts based on harmfulness, etc.
         evaluator_choice : str, optional
             Choice of evaluator: ("chatgpt", "prometheus").
         """
@@ -89,7 +89,7 @@ class CEBBenchmark:
         self.results_dir = results_dir
         self.openai_model = openai_model
         self.alpha = alpha
-        self.filter_harmful = filter_harmful
+        self.filter_kwargs = filter_kwargs
         self.evaluator_choice = evaluator_choice
 
         # Get model name
@@ -132,7 +132,7 @@ class CEBBenchmark:
                 self.dset_toxicity_metrics = json.load(f)
 
 
-    def comprehensive_eval(self, bias_type="all", task_type="all", filter_harmful=None, overwrite=False):
+    def comprehensive_eval(self, bias_type="all", task_type="all", filter_kwargs=None, overwrite=False):
         """
         Perform a comprehensive evaluation of CEB benchmark.
 
@@ -142,6 +142,8 @@ class CEBBenchmark:
             One of ("all", "stereotype", "toxicity"). Chooses bias types to evaluate
         task_type : str
             One of ("all", "direct", "indirect"). Chooses datasets to evaluate
+        filter_kwargs : dict, optional
+            Keyword arguments to filter prompts based on harmfulness, etc.
         overwrite : bool
             If True, overwrite existing computed metrics. Does NOT overwrite
             existing generations.
@@ -155,8 +157,8 @@ class CEBBenchmark:
         task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
 
         # Overwrite, filter harmful if provided
-        if filter_harmful is not None:
-            self.filter_harmful = filter_harmful
+        if filter_kwargs is not None:
+            self.filter_kwargs = filter_kwargs
 
         # Perform direct/indirect evaluation evaluation
         for task_type in task_types:
@@ -205,7 +207,10 @@ class CEBBenchmark:
                     ret = stereotype_process_json(class_attrs, dataset_name, json_path)
                     social_axis = extract_social_axis(json_path)
                     metrics = ret[dataset_name][social_axis]
-                    self.dset_stereotype_metrics[dataset_name][social_axis] = metrics
+                    json_utils.update_nested_dict(
+                        self.dset_stereotype_metrics, dataset_name, social_axis,
+                        value=metrics,
+                    )
         # CASE 2: Parallelize evaluation across datasets
         else:
             with concurrent.futures.ProcessPoolExecutor(num_workers) as executor:
@@ -228,7 +233,10 @@ class CEBBenchmark:
                     # Store metrics computed for a single dataset / JSON
                     for dataset_name, axis_to_metrics in ret.items():
                         for social_axis, metrics in axis_to_metrics.items():
-                            self.dset_stereotype_metrics[dataset_name][social_axis] = metrics
+                            json_utils.update_nested_dict(
+                                self.dset_stereotype_metrics, dataset_name, social_axis,
+                                value=metrics,
+                            )
 
         # Store metrics for dataset
         json_utils.save_json(dict(self.dset_stereotype_metrics), self.stereotype_metric_path)
@@ -275,7 +283,10 @@ class CEBBenchmark:
                     ret = toxicity_process_json(class_attrs, dataset_name, json_path)
                     social_axis = extract_social_axis(json_path)
                     metrics = ret[dataset_name][social_axis]
-                    self.dset_toxicity_metrics[dataset_name][social_axis] = metrics
+                    json_utils.update_nested_dict(
+                        self.dset_toxicity_metrics, dataset_name, social_axis,
+                        value=metrics,
+                    )
         # CASE 2: Parallelize evaluation across datasets
         else:
             with concurrent.futures.ProcessPoolExecutor(num_workers) as executor:
@@ -298,7 +309,10 @@ class CEBBenchmark:
                     # Store metrics computed for a single dataset / JSON
                     for dataset_name, axis_to_metrics in ret.items():
                         for social_axis, metrics in axis_to_metrics.items():
-                            self.dset_toxicity_metrics[dataset_name][social_axis] = metrics
+                            json_utils.update_nested_dict(
+                                self.dset_toxicity_metrics, dataset_name, social_axis,
+                                value=metrics,
+                            )
 
         # Store metrics
         json_utils.save_json(dict(self.dset_toxicity_metrics), self.toxicity_metric_path)
@@ -803,7 +817,7 @@ def stereotype_process_json(class_attrs, dataset_name, json_path):
     openai_model = class_attrs["openai_model"]
     evaluator_choice = class_attrs["evaluator_choice"]
     alpha = class_attrs["alpha"]
-    filter_harmful = class_attrs["filter_harmful"]
+    filter_kwargs = class_attrs["filter_kwargs"]
     overwrite = class_attrs["overwrite"]
 
     social_axis = extract_social_axis(json_path)
@@ -818,7 +832,7 @@ def stereotype_process_json(class_attrs, dataset_name, json_path):
     infer_data = json_utils.load_json(json_path)
 
     # If specified, add `is_harmful` key to distinguish harmful prompts
-    if filter_harmful:
+    if filter_kwargs:
         LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
         infer_data = add_is_harmful_key(
             dataset_name, social_axis,
@@ -832,7 +846,7 @@ def stereotype_process_json(class_attrs, dataset_name, json_path):
         evaluator_choice=evaluator_choice,
         save_dir=curr_save_dir,
         alpha=alpha,
-        filter_harmful=filter_harmful,
+        filter_kwargs=filter_kwargs,
     )
     try:
         metrics = evaluator.eval_stereotype(dataset_name, infer_data)
@@ -872,7 +886,7 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
     openai_model = class_attrs["openai_model"]
     evaluator_choice = class_attrs["evaluator_choice"]
     alpha = class_attrs["alpha"]
-    filter_harmful = class_attrs["filter_harmful"]
+    filter_kwargs = class_attrs["filter_kwargs"]
     overwrite = class_attrs["overwrite"]
 
     social_axis = extract_social_axis(json_path)
@@ -887,7 +901,7 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
     infer_data = json_utils.load_json(json_path)
 
     # If specified, add `is_harmful` key to distinguish harmful prompts
-    if filter_harmful:
+    if filter_kwargs:
         LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
         infer_data = add_is_harmful_key(
             dataset_name, social_axis,
@@ -901,7 +915,7 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
         evaluator_choice=evaluator_choice,
         save_dir=curr_save_dir,
         alpha=alpha,
-        filter_harmful=filter_harmful,
+        filter_kwargs=filter_kwargs,
     )
     try:
         metrics = evaluator.eval_toxicity(dataset_name, infer_data)

@@ -12,6 +12,7 @@ import os
 import threading
 
 # Non-standard libraries
+import torch
 from prometheus_eval.vllm import VLLM
 from prometheus_eval import PrometheusEval
 from prometheus_eval.prompts import ABSOLUTE_PROMPT_WO_REF, SCORE_RUBRIC_TEMPLATE
@@ -28,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 # Default Prometheus model for evaluation
 PROMETHEUS_MODEL = "prometheus-eval/prometheus-7b-v2.0"
+# PROMETHEUS_MODEL = "prometheus-eval/prometheus-bgb-8x7b-v2.0"
 
 # Default save name
 DEFAULT_SAVE_FNAME = "prometheus_autoeval.json"
@@ -39,6 +41,11 @@ SOCIAL_GROUP_FORMAT = {
     "race_ethnicity": "racial/ethnic",
     "religion": "religious",
 }
+
+# Specify the number of GPUs to use
+NUM_GPUS = 0
+if torch.cuda.is_available():
+    NUM_GPUS = torch.cuda.device_count()
 
 
 ################################################################################
@@ -71,8 +78,9 @@ class PrometheusEvaluator:
             The directory to save evaluation results. Defaults to a directory
             within config.DIR_EVALUATIONS based on the model name.
         """
+        assert save_dir, "Please pass a valid `save_dir` to save evaluation results!"
         model_name = os.path.basename(model_path)
-        self.save_dir = save_dir or os.path.join(config.DIR_EVALUATIONS, "prometheus")
+        self.save_dir = save_dir
 
         # Lazy load LLM, on first call
         self.model_path = model_path
@@ -85,7 +93,11 @@ class PrometheusEvaluator:
         Load Prometheus
         """
         if self.judge is None:
-            model = VLLM(model=self.model_path)
+            model = VLLM(
+                model=self.model_path,
+                tensor_parallel_size=NUM_GPUS,
+                gpu_memory_utilization=0.8,
+            )
             self.judge = PrometheusEval(model=model, absolute_grade_template=self.prompt)
 
 
@@ -138,8 +150,6 @@ class PrometheusEvaluator:
         list
             The evaluated data.
         """
-        self.load_prometheus()
-
         # Get rubric
         assert task in config.PROMETHEUS_EVAL_RUBRIC_DATA, f"Invalid task! Please ensure that task `{task}` is in `config.py` / PROMETHEUS_EVAL_RUBRIC_DATA..."
         rubric_data = config.PROMETHEUS_EVAL_RUBRIC_DATA[task]
@@ -173,9 +183,21 @@ class PrometheusEvaluator:
         assert data, "Data provided is empty!"
         assert task is not None, "Task must be specified for evaluation."
 
+        # Split into data that was previously evaluated versus not
+        unevaluated_data = [row for row in data if not row.get(llm_response_col)]
+        evaluated_data = [row for row in data if row.get(llm_response_col)]
+
+        # Early return, if all data has been evaluated
+        if not unevaluated_data:
+            LOGGER.debug("All data has already been evaluated!")
+            return data
+
+        # Ensure Prometheus is loaded here
+        self.load_prometheus()
+
         # Get initial instructions and their LLM responses
-        instructions = [row[prompt_key] for row in data]
-        responses = [row[llm_input_col] for row in data]
+        instructions = [row[prompt_key] for row in unevaluated_data]
+        responses = [row[llm_input_col] for row in unevaluated_data]
 
         # Perform batched LLM evaluation
         feedbacks, scores = self.judge.absolute_grade(
@@ -185,86 +207,10 @@ class PrometheusEvaluator:
         )
 
         # Store judge responses
-        for idx, row in enumerate(data):
+        for idx, row in enumerate(unevaluated_data):
             feedback = feedbacks[idx]
             score = scores[idx]
-            row["eval_res"] = f"Score: {score}\n\nFeedback: ```{feedback}```"
-
-        # Save progress
-        self.save_progress(data, filename=progress_filename)
-
-        return data
-
-        """
-        Perform inference on a dataset using the OpenAI API.
-
-        Parameters
-        ----------
-        data : list of dict
-            Each dict contains a prompt in the `llm_input_col` to perform
-            inference on.
-        resume : bool, optional
-            If True, then try to resume inference from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
-            Filename for saving or resuming progress.
-        llm_input_col : str, optional
-            Key to prompt to perform inference on
-        llm_response_col : str, optional
-            Key to store LLM's response.
-
-        Returns
-        -------
-        list
-            The evaluated data.
-        """
-        def save_progress_callback(future):
-            if future.exception() is not None:
-                LOGGER.error("An error occurred: %s", str(future.exception()))
-                self.save_progress(data, filename=progress_filename)
-
-        def process_row(prompt, row):
-            try:
-                if not row.get(llm_response_col):
-                    llm_response = openai_chat_completion(prompt, model=self.model)
-                    row[llm_response_col] = llm_response
-            except Exception as error_msg:
-                raise error_msg
-
-        # Early return, if no data provided
-        if not data:
-            return []
-
-        # Ensure all rows have a prompt
-        assert all(llm_input_col in row for row in data), "All rows must have a prompt specified!"
-
-        # Assume full prompt is specified in the llm input column
-        prompts = [data.get(llm_input_col) for data in data]
-
-        # If specified, resume from previous inference
-        if resume:
-            load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path)
-
-        # Perform input sanitization
-        assert isinstance(data, list), f"Data must be a list. data={data}"
-        assert data, "Data provided is empty!"
-
-        # Create thread lock
-        lock = threading.Lock()
-
-        # Perform LLM generation requests in parallel
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
-            futures = [executor.submit(process_row, prompt, row) for prompt, row in zip(prompts, data)]
-
-            # Add a callback to handle completion and errors
-            for idx, future in enumerate(concurrent.futures.as_completed(futures)):
-                future.add_done_callback(save_progress_callback)
-                if idx % 10 == 0:
-                    self.save_progress(data, filename=progress_filename, lock=lock)
-
-            # Wait for all futures to complete
-            concurrent.futures.wait(futures)
+            row[llm_response_col] = f"Score: {score}\n\nFeedback: ```{feedback}```"
 
         # Save progress
         self.save_progress(data, filename=progress_filename)

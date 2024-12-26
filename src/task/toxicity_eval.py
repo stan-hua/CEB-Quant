@@ -34,7 +34,7 @@ class ToxicityEval:
     """
 
     def __init__(self, save_dir=DIR_EVALUATIONS, alpha=0.05,
-                 filter_harmful=False,
+                 filter_kwargs=None,
                  evaluator_choice="chatgpt",
                  **kwargs):
         """
@@ -46,7 +46,7 @@ class ToxicityEval:
             Directory to save the evaluation results.
         alpha : float
             Alpha level for confidence interval
-        filter_harmful : bool
+        filter_kwargs : bool
             If True, filter for harmful prompts
         evaluator_choice : str
             Choice of evaluator: ("chatgpt", "prometheus")
@@ -54,7 +54,7 @@ class ToxicityEval:
             Keyword arguments to be passed to the ChatGPT/Prometheus evaluator
         """
         self.metric_kwargs = {"alpha": alpha}
-        self.filter_harmful = filter_harmful
+        self.filter_kwargs = filter_kwargs
         self.evaluator_choice = evaluator_choice
 
         # Create save directory if it doesn't exist
@@ -73,12 +73,11 @@ class ToxicityEval:
         # CASE 1: ChatGPT evaluator
         if evaluator_choice == "chatgpt":
             eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
-            self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+            self.evaluator = chatgpt_eval.ChatGPTEvaluator(save_dir=save_dir, **kwargs)
         # CASE 2: Prometheus evaluator
         elif evaluator_choice == "prometheus":
             eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "save_dir"])
-            self.evaluator = prometheus_evaluator.PrometheusEvaluator(**kwargs)
-
+            self.evaluator = prometheus_evaluator.PrometheusEvaluator(save_dir=save_dir, **kwargs)
 
     def eval_toxicity(self, dataset_name, data):
         """
@@ -149,9 +148,9 @@ class ToxicityEval:
 
         # Filter for harmful data
         # NOTE: This is done after, so that we don't overwrite existing evaluations
-        if self.filter_harmful:
-            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
-            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
+        if self.filter_kwargs:
+            direct_eval_data = eval_utils.filter_data_by_kwargs(direct_eval_data, self.filter_kwargs)
+            parsed_eval_data = eval_utils.filter_data_by_kwargs(parsed_eval_data, self.filter_kwargs)
 
         # Combine and compute F1-score
         all_rows = list(direct_eval_data) + list(parsed_eval_data)
@@ -180,8 +179,8 @@ class ToxicityEval:
         """
         # Filter for harmful data
         # NOTE: This is done after, so that we don't overwrite existing evaluations
-        if self.filter_harmful:
-            data = metric_utils.keep_only_harmful_prompts(data)
+        if self.filter_kwargs:
+            data = eval_utils.filter_data_by_kwargs(data, self.filter_kwargs)
         return metric_utils.compute_score_for_selection(data, **self.metric_kwargs)
 
 
@@ -232,7 +231,7 @@ class ToxicityEval:
             data, self.evaluator, self.evaluator_choice,
             bias_type="toxicity", instruction_type="continuation",
             resume_from=resume_from,
-            filter_harmful=self.filter_harmful,
+            filter_kwargs=self.filter_kwargs,
             evaluate_func=self.assign_toxicity_values,
             eval_func_kwargs=eval_func_kwargs,
             **self.metric_kwargs,
@@ -284,7 +283,7 @@ class ToxicityEval:
             data, self.evaluator, self.evaluator_choice,
             bias_type="toxicity", instruction_type="conversation",
             resume_from=resume_from,
-            filter_harmful=self.filter_harmful,
+            filter_kwargs=self.filter_kwargs,
             evaluate_func=self.assign_toxicity_values,
             eval_func_kwargs=eval_func_kwargs,
             **self.metric_kwargs,
@@ -335,9 +334,9 @@ class ToxicityEval:
 
         # Filter for harmful data
         # NOTE: This is done after, so that we don't overwrite existing evaluations
-        if self.filter_harmful:
-            direct_eval_data = metric_utils.keep_only_harmful_prompts(direct_eval_data)
-            parsed_eval_data = metric_utils.keep_only_harmful_prompts(parsed_eval_data)
+        if self.filter_kwargs:
+            direct_eval_data = eval_utils.filter_data_by_kwargs(direct_eval_data, self.filter_kwargs)
+            parsed_eval_data = eval_utils.filter_data_by_kwargs(parsed_eval_data, self.filter_kwargs)
 
         # Combine and compute fairness metrics
         all_rows = list(direct_eval_data) + list(parsed_eval_data)

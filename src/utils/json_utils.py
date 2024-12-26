@@ -93,3 +93,34 @@ def update_with_existing_data(new_data, prev_data=None, prev_path=None, rename_k
                     prev_row[new_key] = prev_row.pop(old_key)
         row.update(prev_row)
     return new_data
+
+
+def update_nested_dict(data, *keys, value=None):
+    """
+    Updates a nested dictionary, given a variable number of keys.
+
+    Parameters
+    ----------
+    data : dict
+        The dictionary to update
+    *keys : list of str
+        List of keys to traverse, in order
+    value : obj
+        The value to assign to the last key in `keys`
+
+    Returns
+    -------
+    dict
+        The updated dictionary
+    """
+    curr_dict = data
+    for idx, key in enumerate(keys):
+        # CASE 1: Last layer, assign value
+        if idx == len(keys) - 1:
+            curr_dict[key] = value
+            continue
+        # CASE 2: Intermediate layer, and key doesn't exist
+        if key not in curr_dict:
+            curr_dict[key] = {}
+        curr_dict = curr_dict[key]
+    return data

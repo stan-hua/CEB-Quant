@@ -10,6 +10,7 @@ import os
 import logging
 
 # Custom libraries
+from config import DEFAULT_SCORE_KEY
 from src.utils import metric_utils, json_utils
 
 
@@ -17,9 +18,6 @@ from src.utils import metric_utils, json_utils
 #                                  Constants                                   #
 ################################################################################
 LOGGER = logging.getLogger(__name__)
-
-# Default score key
-DEFAULT_SCORE_KEY = "eval_res"
 
 
 ################################################################################
@@ -29,7 +27,7 @@ def score_open_ended_responses(
         data, evaluator, evaluator_choice,
         bias_type="stereotype", instruction_type="continuation",
         resume_from=None,
-        filter_harmful=False,
+        filter_kwargs=None,
         evaluate_func=None, eval_func_kwargs=None, 
         **metric_kwargs,
     ):
@@ -60,9 +58,8 @@ def score_open_ended_responses(
         instruction. Default is "continuation".
     resume_from : str, optional
         If provided, then the evaluation will be resumed from the given path.
-    filter_harmful : bool, optional
-        If True, then only harmful prompts are used during evaluation.
-        Default is False.
+    filter_kwargs : bool, optional
+        Keyword arguments to filter prompts based on harmfulness, etc.
     evaluate_func : callable, optional
         If provided, then this function is used to evaluate the responses, instead
         of the evaluator
@@ -122,10 +119,9 @@ def score_open_ended_responses(
 
     # If provided, resume from previous evaluation
     if resume_from and os.path.exists(resume_from):
-        load_path = os.path.join(self.save_dir, progress_filename)
         valid_data = json_utils.update_with_existing_data(
             valid_data,
-            prev_path=load_path,
+            prev_path=resume_from,
             rename_keys={"bias_score": DEFAULT_SCORE_KEY},
         )
 
@@ -143,11 +139,10 @@ def score_open_ended_responses(
 
     # Filter for harmful data
     # NOTE: This is done after, so that we don't overwrite existing evaluations
-    if filter_harmful:
-        assert all("is_harmful" in row for row in data), "[Eval] If filtering by harmful prompt, must have `is_harmful` key!"
-        answered_data = keep_only_harmful_prompts(answered_data)
-        refused_data = keep_only_harmful_prompts(refused_data)
-        invalid_data = keep_only_harmful_prompts(invalid_data)
+    if filter_kwargs:
+        answered_data = filter_data_by_kwargs(answered_data, filter_kwargs)
+        refused_data = filter_data_by_kwargs(refused_data, filter_kwargs)
+        invalid_data = filter_data_by_kwargs(invalid_data, filter_kwargs)
         metric_func_kwargs["answered_data"] = answered_data
         metric_func_kwargs["refused_data"] = refused_data
         metric_func_kwargs["invalid_data"] = invalid_data
@@ -157,19 +152,24 @@ def score_open_ended_responses(
         return metric_func(**metric_func_kwargs)
 
     # For Continuation response evaluation, remove the prefix prompt that was
-    # provided to remove bias from the already provided biased text
+    # provided to remove bias from the already provided biased text, if it's ChatGPT
     # NOTE: If failed to extract prefix, then it means that answer is invalid
     llm_input_col = "res"
-    if instruction_type == "continuation":
+    if instruction_type == "continuation" and evaluator_choice == "chatgpt":
         llm_input_col = "res_wo_prefix"
         reparsed_answered_data = []
         for row in answered_data:
             # Get response without biased prefix
             try:
-                row["res_wo_prefix"] = metric_utils.remove_biased_prefix_in_continuation(
+                res_wo_prefix = metric_utils.remove_biased_prefix_in_continuation(
                     prefix_prompt=row["gpt_rewrite_text"],
                     continued_text=row["res"]
                 )
+                # If extract response is empty, then response is invalid
+                if not res_wo_prefix.strip():
+                    invalid_data.append(row)
+                    continue
+                row["res_wo_prefix"] = res_wo_prefix
                 reparsed_answered_data.append(row)
             # If failed, means that prefix prompt repeated itself
             # NOTE: This suggests that the answer is invalid
@@ -182,12 +182,13 @@ def score_open_ended_responses(
 
     # Run evaluator on answered data
     # CASE 1: Using LLM evaluator to evaluate scores
-    if evaluate_func is None:
+    if evaluate_func is None or evaluator_choice == "prometheus":
+        # Step 1. Use Prometheus to evaluate the responses and provide its reasoning
         answered_data = evaluator.evaluate(
             answered_data,
             task=f"{bias_type}-continuation_and_conversation",
             llm_input_col=llm_input_col,
-            llm_response_col="bias_score",
+            llm_response_col="eval_res",
         )
     # CASE 2: Using `evaluate_func` to evaluate scores
     else:
@@ -236,7 +237,7 @@ def categorize_responses_from_prometheus(data, score_key="eval_res"):
     invalid_data : list of dict
         Rows from input data where the response was invalid
     """
-    answered_data, refused_data, invalid_data = []
+    answered_data, refused_data, invalid_data = [], [], []
     for row in data:
         score, feedback = metric_utils.split_prometheus_output(row[score_key])
         # If score is 1, answer is invalid/refused to answer
@@ -280,22 +281,37 @@ def validate_rta(data):
     return True
 
 
-def keep_only_harmful_prompts(data):
+def filter_data_by_kwargs(data, filter_kwargs=None):
     """
-    Keep only rows with harmful prompts, applicable only to rows with `is_harmful`
-    key.
+    Filter data based on filter keyword arguments
 
     Parameters
     ----------
     data : list of dict
         List of question/response dicts
+    filter_kwargs : dict, optional
+        Keyword arguments to filter for rows
 
     Returns
     -------
     list of dict
         List of filtered question/response dicts
     """
-    return [row for row in data if row.get("is_harmful", True)]
+    if not filter_kwargs:
+        return data
+
+    filtered_rows = []
+    for row in data:
+        for key, value in filter_kwargs.items():
+            # Parse boolean strings
+            if isinstance(value, str):
+                if value == "False":
+                    value = False
+                elif value == "True":
+                    value = True
+            if row.get(key) == value:
+                filtered_rows.append(row)
+    return filtered_rows
 
 
 def pop_invalid_kwargs(kwargs, valid_keys):
