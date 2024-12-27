@@ -1,13 +1,6 @@
 slurm/logs/*
-llm_generations
-llm_evaluations
-metrics
-metrics_comparisons
-wildguard_experiments
+save_data
 
-*.pyc*
 *.pyc
 
 .envrc
-Meta-*
-Llama-*

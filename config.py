@@ -115,20 +115,22 @@ DIR_PROJECT = os.path.dirname(__file__)
 assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 
 # Path to CEB datasets directory
-DIR_CEB_DATA = os.path.join(DIR_PROJECT, "data")
+DIR_CEB_DATA = os.path.join(DIR_PROJECT, "ceb_dataset")
+# Path to directory to save things
+DIR_SAVE_DATA = os.path.join(DIR_PROJECT, "save_data")
 # Path to LLM generations (to evaluate)
-DIR_GENERATIONS = os.path.join(DIR_PROJECT, "llm_generations")
+DIR_GENERATIONS = os.path.join(DIR_SAVE_DATA, "llm_generations")
 # Path to saved GPT-4 evaluations
-DIR_EVALUATIONS = os.path.join(DIR_PROJECT, "llm_evaluations")
+DIR_EVALUATIONS = os.path.join(DIR_SAVE_DATA, "llm_evaluations")
 # Path to stored metrics
-DIR_METRICS = os.path.join(DIR_PROJECT, "metrics")
+DIR_METRICS = os.path.join(DIR_SAVE_DATA, "metrics")
 # Path to store metrics comparisons
-DIR_COMPARISONS = os.path.join(DIR_PROJECT, "metrics_comparisons")
+DIR_COMPARISONS = os.path.join(DIR_SAVE_DATA, "metrics_comparisons")
 # Path to store local models
-DIR_MODELS = os.path.join(DIR_PROJECT, "models")
+DIR_MODELS = os.path.join(DIR_SAVE_DATA, "models")
 
 # Path to store WildGuard experiment results
-DIR_WILDGUARD = os.path.join(DIR_PROJECT, "wildguard_experiments")
+DIR_WILDGUARD = os.path.join(DIR_SAVE_DATA, "wildguard_experiments")
 DIR_WILDGUARD_HARMFUL = os.path.join(DIR_WILDGUARD, "harmful_detection")
 DIR_WILDGUARD_RTA = os.path.join(DIR_WILDGUARD, "rta_comparison")
 DIR_WILDGUARD_RESULTS = os.path.join(DIR_WILDGUARD, "results")

@@ -735,7 +735,7 @@ def ceb_find_unfinished(pattern="*"):
 
 def ceb_delete(
         model_regex="*", dataset_regex="*", social_regex="*", file_regex="*",
-        evaluator_choice=DEFAULT_EVALUATOR,
+        evaluator_choice="*",
         inference=False,
         evaluation=False,
     ):
