@@ -124,20 +124,23 @@ class LLMGeneration:
                 self.model_path = os.path.join(DIR_MODELS, model_path)
 
         # Model related parameters to fill in
+        # NOTE: Lazy loaded for efficiency
+        self.is_model_loaded = False
         # 1. vLLM engine
         self.vllm = None
         # 2. HuggingFace model/tokenizer (loaded by FastChat or VPTQ)
         self.hf_model = None
         self.hf_tokenizer = None
 
-        # Load models
-        self.load_model_and_tokenizer()
 
+    def ensure_model_loaded(self):
+        """
+        Loads model (and tokenizer), if not already
+        """
+        # Simply return, if model is already loaded
+        if self.is_model_loaded:
+            return
 
-    def load_model_and_tokenizer(self):
-        """
-        Loads model and tokenizer
-        """
         model_provider = self.llm_config["model_provider"]
         # CASE 1: Using vLLM instance, if needed
         if model_provider == "vllm":
@@ -161,6 +164,7 @@ class LLMGeneration:
                 guided_decoding_backend="lm-format-enforcer",
                 **additional_llm_kwargs,
             )
+            self.is_model_loaded = True
             return
 
         # CASE 2: Loading HuggingFace model using FastChat
@@ -170,6 +174,7 @@ class LLMGeneration:
                 if k in ["device", "num_gpus", "dtype", "max_gpu_memory", "debug"]
             }
             self.hf_model, self.hf_tokenizer = load_model(self.model_path, **hf_kwargs)
+            self.is_model_loaded = True
             return
 
         # CASE 3: Loading VPTQ-compressed HuggingFace model
@@ -192,7 +197,10 @@ class LLMGeneration:
                 self.model_path,
                 trust_remote_code=True
             )
+            self.is_model_loaded = True
             return
+
+        raise NotImplementedError(f"[LLM Generation Wrapper] Model provider {model_provider} not currently supported!")
 
 
     ############################################################################
@@ -202,6 +210,7 @@ class LLMGeneration:
         """
         Generates a response using a HuggingFace model.
         """
+        self.ensure_model_loaded()
         model, tokenizer = self.hf_model, self.hf_tokenizer
 
         # Convert to chat format
@@ -284,6 +293,8 @@ class LLMGeneration:
         """
         Generates a response using a VLLM model.
         """
+        self.ensure_model_loaded()
+
         # Create vLLM arguments
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
 
@@ -312,6 +323,8 @@ class LLMGeneration:
         list of str
             The generated responses.
         """
+        self.ensure_model_loaded()
+
         # Create vLLM arguments
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
         # CASE 1: Unable to do batched requests on texts, default to single
@@ -561,6 +574,7 @@ class LLMGeneration:
         for row in saved_data:
             row["num_attempts"] = 0
 
+        # Perform inference in batches
         while not all(bool(row.get("res")) for row in saved_data):
             curr_idx = 0
             grouped_rows = []

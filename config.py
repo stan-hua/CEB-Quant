@@ -257,9 +257,20 @@ MODEL_INFO = {
         ########################################################################
         #                           LLaMA 3.2 Family                           #
         ########################################################################
+        # LLaMA 3.2 1B
+        "meta-llama/Llama-3.2-1B": "llama3.2-1b",
         "ISTA-DASLab/Llama-3.2-1B-AQLM-PV-2Bit-2x8": "hf-llama3.2-1b-aqlm-pv-2bit-2x8",
+
+        # LLaMA 3.2 1B Instruct
+        "meta-llama/Llama-3.2-1B-Instruct": "llama3.2-1b-instruct",
         "ISTA-DASLab/Llama-3.2-1B-Instruct-AQLM-PV-2Bit-2x8": "hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8",
+
+        # LLaMA 3.2 3B
+        "meta-llama/Llama-3.2-3B": "llama3.2-3b",
         "ISTA-DASLab/Llama-3.2-3B-AQLM-PV-2Bit-2x8": "hf-llama3.2-3b-aqlm-pv-2bit-2x8",
+
+        # LLaMA 3.2 3B Instruct
+        "meta-llama/Llama-3.2-3B-Instruct": "llama3.2-3b-instruct",
         "ISTA-DASLab/Llama-3.2-3B-Instruct-AQLM-PV-2Bit-2x8": "hf-llama3.2-3b-instruct-aqlm-pv-2bit-2x8",
 
         ########################################################################
