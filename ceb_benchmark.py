@@ -1,3 +1,26 @@
+"""
+ceb_benchmark.py
+
+Description: Contains high-level functions for the CEB benchmark to:
+    (i) Perform inference (text generation) using specified LLMs for each CEB dataset
+    (ii) Evaluate LLM generations (programmatically or using a judge LLM)
+    (iii) Compute metrics with bootstrapped confidence intervals and print to an
+          HTML page with the highlighted significant differences
+    (iv) Other utilities: delete certain results/evals, and find which models
+         don't have complete generations
+
+Note
+----
+`./save_data/llm_evaluations` contains all LLM-eval results. Under `llm_evaluations`,
+it is divided into `chatgpt` / `prometheus` for storing artifacts from evaluating
+open-ended generation responses. Importantly, we store Perplexity API toxicity
+scores under `chatgpt` for convenience.
+
+In other words, an `evaluator_choice` of `chatgpt` implies open-ended generation
+style datasets for toxicity specifically are evaluated with Perplexity API and
+stored under `./save_data/llm_evaluations/chatgpt/...`
+"""
+
 # Standard libraries
 import concurrent.futures
 import json
@@ -441,7 +464,7 @@ def ceb_generate(
         "model_provider": model_provider,
         "use_chat_template": use_chat_template,
         # Default arguments
-        "data_path": "data/",
+        "data_path": config.DIR_CEB_DATA,
         "repetition_penalty": 1.0,
         "max_new_tokens": 512,
         "debug": False,
@@ -455,7 +478,9 @@ def ceb_generate(
     llm_gen = LLMGeneration(**shared_kwargs)
 
     # Perform inference
+    LOGGER.info(f"[CEB Generate] Performing inference for {model_path}...")
     llm_gen.infer_dataset()
+    LOGGER.info(f"[CEB Generate] Performing inference for {model_path}...DONE")
 
 
 def ceb_evaluate(
@@ -787,6 +812,15 @@ def ceb_delete(
                 shutil.rmtree(eval_file)
             else:
                 os.remove(eval_file)
+
+
+# TODO: Compute the correlation in scores between ChatGPT and Prometheus-Eval
+def ceb_compute_prometheus_correlation():
+    # Construct regex to find all Prometheus eval files
+    path_components = [config.DIR_EVALUATIONS, "prometheus"] + ["*"] * 4
+    file_regex = os.path.join(*path_components)
+    pass
+
 
 
 ################################################################################

@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=ceb_generate                    # Job name
+#SBATCH --job-name=ceb_lm_eval                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --gres=gpu:1
 #SBATCH --nodelist=cn527                         # Number of nodes
@@ -26,49 +26,52 @@ module load cuda/12.4.1
 
 # Load any necessary modules or activate your virtual environment here
 micromamba activate fairbench
-# micromamba activate quip
 
 # Configures vLLM to avoid multiprocessing issue
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
 
 
 ################################################################################
-#                                 Choose Model                                 #
+#                                  Constants                                   #
 ################################################################################
+# Local directory containing locally saved models to run
+LOCAL_MODEL_DIR="save_data/models"
+
+# Local directory to save LM-eval results
+LM_EVAL_OUTPUT_DIR="save_data/lm-eval"
+
+# Number of GPUS to Load a Single Model (NOTE: Splits weights onto different GPUs)
+NUM_GPUS_SPLIT=1
+
+# Number of GPUs to Divide and Conquer  (NOTE: Only works if a model can run on 1 GPU)
+NUM_GPUS_DISTRIBUTE=1
+
 # HuggingFace ID
 HF_ID="stan-hua"
 
-# Model names to perform inference
+# Models to Evaluate
 MODEL_NAMES=(
-    # "meta-llama/Llama-2-7b-chat-hf"
-    # "TheBloke/Llama-2-7B-Chat-GPTQ"
-
-    # "meta-llama/Llama-2-70b-chat-hf"
     ############################################################################
     #                             LLaMA 3.1 8B                                 #
     ############################################################################
-    # "meta-llama/Llama-3.1-8B"
-    # "meta-llama/Llama-3.1-8B-Instruct"
-    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
-    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a8"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a16"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8-dynamic"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W8A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-2Bit-2x8-hf"
-    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf"
-
-    # "Xu-Ouyang/Llama-3.1-8B-int2-GPTQ-wikitext2"
-    # "Xu-Ouyang/Meta-Llama-3.1-8B-int3-GPTQ-wikitext2"
+    "meta-llama/Llama-3.1-8B"
+    "meta-llama/Llama-3.1-8B-Instruct"
+    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
+    "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
+    "Llama-3.1-8B-Instruct-LC-RTN-W4A16"
+    "Llama-3.1-8B-Instruct-LC-RTN-W8A8"
+    "Llama-3.1-8B-Instruct-LC-RTN-W8A16"
+    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16"
+    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a8"
+    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a16"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A8"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A16"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W4A16"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A8"
+    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A16"
+    "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-2Bit-2x8-hf"
+    "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf"
 
     ############################################################################
     #                            LLaMA 3.1 70B                                 #
@@ -96,16 +99,16 @@ MODEL_NAMES=(
     # "meta-llama/Llama-3.2-1B"
     # "ISTA-DASLab/Llama-3.2-1B-AQLM-PV-2Bit-2x8"
 
-    "meta-llama/Llama-3.2-1B-Instruct"
-    "Llama-3.2-1B-Instruct-LC-RTN-W4A16"
-    "Llama-3.2-1B-Instruct-LC-RTN-W8A8"
-    "Llama-3.2-1B-Instruct-LC-RTN-W8A16"
-    "Llama-3.2-1B-Instruct-LC-GPTQ-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    "ISTA-DASLab/Llama-3.2-1B-Instruct-AQLM-PV-2Bit-2x8"
+    # "meta-llama/Llama-3.2-1B-Instruct"
+    # "Llama-3.2-1B-Instruct-LC-RTN-W4A16"
+    # "Llama-3.2-1B-Instruct-LC-RTN-W8A8"
+    # "Llama-3.2-1B-Instruct-LC-RTN-W8A16"
+    # "Llama-3.2-1B-Instruct-LC-GPTQ-W4A16"
+    # "Llama-3.2-1B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
+    # "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W4A16"
+    # "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A8"
+    # "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A16"
+    # "ISTA-DASLab/Llama-3.2-1B-Instruct-AQLM-PV-2Bit-2x8"
 
     ############################################################################
     #                             LLaMA 3.2 3B                                 #
@@ -113,20 +116,20 @@ MODEL_NAMES=(
     # "meta-llama/Llama-3.2-3B"
     # "ISTA-DASLab/Llama-3.2-3B-AQLM-PV-2Bit-2x8"
 
-    "meta-llama/Llama-3.2-3B-Instruct"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A8"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-GPTQ-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    "ISTA-DASLab/Llama-3.2-3B-Instruct-AQLM-PV-2Bit-2x8"
+    # "meta-llama/Llama-3.2-3B-Instruct"
+    # "Meta-Llama-3.2-3B-Instruct-LC-RTN-W4A16"
+    # "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A8"
+    # "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A16"
+    # "Meta-Llama-3.2-3B-Instruct-LC-GPTQ-W4A16"
+    # "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
+    # "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W4A16"
+    # "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A8"
+    # "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A16"
+    # "ISTA-DASLab/Llama-3.2-3B-Instruct-AQLM-PV-2Bit-2x8"
 
     ############################################################################
     #                               Mistral                                    #
-    #############################################################################
+    ############################################################################
     # "mistralai/Mistral-7B-v0.3"
     # "mistralai/Mistral-7B-Instruct-v0.3"
 
@@ -135,22 +138,16 @@ MODEL_NAMES=(
     # "Ministral-8B-Instruct-2410-LC-RTN-W4A16"
     # "Ministral-8B-Instruct-2410-LC-RTN-W8A16"
     # "Ministral-8B-Instruct-2410-LC-RTN-W8A8"
-    "Ministral-8B-Instruct-2410-LC-GPTQ-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-GPTQ-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A8"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A16"
+    # "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A8"
+    # TODO: Add GPTQ models here
 
     # 3. Mistral Small 22B
-    # "mistralai/Mistral-Small-Instruct-2409"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W4A16"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W8A16"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W8A8"
-    "Mistral-Small-Instruct-2409-LC-GPTQ-W4A16"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-GPTQ-W4A16"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W4A16"
+    "mistralai/Mistral-Small-Instruct-2409"
+    "Mistral-Small-Instruct-2409-LC-RTN-W4A16"
+    "Mistral-Small-Instruct-2409-LC-RTN-W8A16"
+    "Mistral-Small-Instruct-2409-LC-RTN-W8A8"
     "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A8"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A16"
+    # TODO: Add GPTQ models here
 
     ############################################################################
     #                               Qwen2 7B                                   #
@@ -182,23 +179,6 @@ MODEL_NAMES=(
     # "Qwen2-72B-Instruct-LC-SmoothQuant-RTN-W8A8"
 )
 
-QUIP_MODELS=(
-    # "relaxml/Llama-2-70b-chat-E8P-2Bit"
-)
-
-# List of VPTQ models to infer
-VPTQ_MODELS=(
-    # "VPTQ-community/Meta-Llama-3.1-70B-Instruct-v8-k65536-65536-woft"
-    # "VPTQ-community/Meta-Llama-3.1-70B-Instruct-v16-k65536-65536-woft"
-    # "VPTQ-community/Meta-Llama-3.1-70B-Instruct-v8-k16384-0-woft"
-)
-
-# Flag to use chat template (include both to run w/ and w/o chat template)
-CHAT_FLAGS=(
-    "False"
-    # "True"
-)
-
 
 ################################################################################
 #                              Perform Benchmark                               #
@@ -207,19 +187,33 @@ CHAT_FLAGS=(
 port=$(shuf -i 6000-9000 -n 1)
 echo $port
 
-# 1. Regular models
+# Specify tasks
+TASKS="arc_challenge,mmlu_pro,hellaswag,bigbench,truthfulqa_mc1,truthfulqa_gen,piqa,lambada_openai"
+
+# Run LM-Eval for each model
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
-    for CHAT_FLAG in "${CHAT_FLAGS[@]}"; do
-        python -m ceb_benchmark generate --model_path ${MODEL_NAME} --use_chat_template $CHAT_FLAG;
-    done
+    # Create model path
+    # CASE 1: HuggingFace directory provided
+    if echo $MODEL_NAME | grep -q "/"; then
+        MODEL_PATH=$MODEL_NAME
+    # CASE 2: Local model
+    else
+        MODEL_PATH=$LOCAL_MODEL_DIR/$MODEL_NAME
+    fi
+
+    # Rename model to simpler nickname
+    MODEL_NICKNAME=`python -m bin.rename_model $MODEL_NAME`
+    echo "[LM-Eval] Evaluating Model: $MODEL_NICKNAME"
+
+    # Create model-specific LM-eval output directory
+    OUTPUT_DIR=$LM_EVAL_OUTPUT_DIR/$MODEL_NICKNAME
+
+    # Perform LM evaluation
+    VLLM_KWARGS="pretrained=$MODEL_PATH,tensor_parallel_size=$NUM_GPUS_SPLIT,dtype=auto,gpu_memory_utilization=0.8,data_parallel_size=$NUM_GPUS_DISTRIBUTE,max_model_len=4096,max_num_seqs=32"
+    lm_eval --model vllm \
+        --tasks $TASKS \
+        --model_args $VLLM_KWARGS \
+        --batch_size auto \
+        --output_path $OUTPUT_DIR \
+        --use_cache $OUTPUT_DIR
 done
-
-# # 2. QuIP# models
-# for MODEL_NAME in "${QUIP_MODELS[@]}"; do
-#     python -m ceb_benchmark generate --model_path ${MODEL_NAME};
-# done
-
-# # 3. VPTQ models
-# for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
-#     python -m ceb_benchmark generate --model_path ${MODEL_NAME} --model_provider "vptq";
-# done

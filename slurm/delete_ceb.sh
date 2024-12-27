@@ -25,7 +25,7 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 ################################################################################
 #                                 Delete Data                                  #
 ################################################################################
-python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "age.json" --inference --evaluation
-python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "gender.json" --inference --evaluation
-python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "race.json" --inference --evaluation
-python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "religion.json" --inference --evaluation
+python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "*.json" --evaluation
+python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "*.json" --evaluation
+python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "*.json" --evaluation
+python -m ceb_benchmark delete --dataset_regex "CEB-Continuation-T" --file_regex "*.json" --evaluation

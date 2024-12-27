@@ -264,6 +264,14 @@ MODEL_INFO = {
         # LLaMA 3.2 1B Instruct
         "meta-llama/Llama-3.2-1B-Instruct": "llama3.2-1b-instruct",
         "ISTA-DASLab/Llama-3.2-1B-Instruct-AQLM-PV-2Bit-2x8": "hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8",
+        "Llama-3.2-1B-Instruct-LC-RTN-W4A16": "llama3.2-1b-instruct-lc-rtn-w4a16",
+        "Llama-3.2-1B-Instruct-LC-RTN-W8A8": "llama3.2-1b-instruct-lc-rtn-w8a8",
+        "Llama-3.2-1B-Instruct-LC-RTN-W8A16": "llama3.2-1b-instruct-lc-rtn-w8a16",
+        "Llama-3.2-1B-Instruct-LC-GPTQ-W4A16": "llama3.2-1b-instruct-lc-gptq-w4a16",
+        "Llama-3.2-1B-Instruct-LC-SmoothQuant-GPTQ-W4A16": "llama3.2-1b-instruct-lc-smooth-gptq-w4a16",
+        "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W4A16": "llama3.2-1b-instruct-lc-smooth-rtn-w4a16",
+        "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A8": "llama3.2-1b-instruct-lc-smooth-rtn-w8a8",
+        "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A16": "llama3.2-1b-instruct-lc-smooth-rtn-w8a16",
 
         # LLaMA 3.2 3B
         "meta-llama/Llama-3.2-3B": "llama3.2-3b",
@@ -271,6 +279,14 @@ MODEL_INFO = {
 
         # LLaMA 3.2 3B Instruct
         "meta-llama/Llama-3.2-3B-Instruct": "llama3.2-3b-instruct",
+        "Meta-Llama-3.2-3B-Instruct-LC-RTN-W4A16": "llama3.2-3b-instruct-lc-rtn-w4a16",
+        "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A8": "llama3.2-3b-instruct-lc-rtn-w8a8",
+        "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A16": "llama3.2-3b-instruct-lc-rtn-w8a16",
+        "Meta-Llama-3.2-3B-Instruct-LC-GPTQ-W4A16": "llama3.2-3b-instruct-lc-gptq-w4a16",
+        "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-GPTQ-W4A16": "llama3.2-3b-instruct-lc-smooth-gptq-w4a16",
+        "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W4A16": "llama3.2-3b-instruct-lc-smooth-rtn-w4a16",
+        "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A8": "llama3.2-3b-instruct-lc-smooth-rtn-w8a8",
+        "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A16": "llama3.2-3b-instruct-lc-smooth-rtn-w8a16",
         "ISTA-DASLab/Llama-3.2-3B-Instruct-AQLM-PV-2Bit-2x8": "hf-llama3.2-3b-instruct-aqlm-pv-2bit-2x8",
 
         ########################################################################

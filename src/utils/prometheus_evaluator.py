@@ -6,10 +6,8 @@ Description: Uses Prometheus-Eval 2.0 as a judge to evaluate stereotype/toxicity
 """
 
 # Standard libraries
-import concurrent.futures
 import logging
 import os
-import threading
 
 # Non-standard libraries
 import torch

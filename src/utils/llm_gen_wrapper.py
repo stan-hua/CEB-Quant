@@ -624,6 +624,7 @@ class LLMGeneration:
         os.makedirs(result_dir, exist_ok=True)
 
         json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))
+        assert json_paths, f"[LLMGeneration] Could not find data files for CEB dataset `{dataset_name}`"
         for json_path in tqdm(json_paths):
             LOGGER.info("Processing file: %s", json_path)
             save_path = os.path.join(result_dir, os.path.basename(json_path))
@@ -642,7 +643,7 @@ class LLMGeneration:
             The time in seconds to wait before retrying.
         """
         if not os.path.exists(self.data_path):
-            LOGGER.debug(f"Dataset path {self.data_path} does not exist.")
+            LOGGER.error(f"Dataset path {self.data_path} does not exist.")
             return None
 
         # If all datasets specified, then run generate for all datasets
