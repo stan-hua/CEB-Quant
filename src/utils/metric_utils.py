@@ -709,6 +709,10 @@ def inverse_entropy_scaled_dp_diff(y_true, y_pred, **kwargs):
     The inverse entropy is used to account for cases when models collapse to
     predict only one class, as a result of quantization.
 
+    Currently, it assumes that the true distribution of labels is balanced. In
+    other words, it's better to have a model that predicts positive 50% of the
+    time.
+
     Parameters
     ----------
     y_true : array-like
@@ -747,6 +751,10 @@ def inverse_entropy_scaled_eo_diff(y_true, y_pred, **kwargs):
     ----
     The inverse entropy is used to account for cases when models collapse to
     predict only one class, as a result of quantization.
+
+    Currently, it assumes that the true distribution of labels is balanced. In
+    other words, it's better to have a model that predicts positive 50% of the
+    time.
 
     Parameters
     ----------
