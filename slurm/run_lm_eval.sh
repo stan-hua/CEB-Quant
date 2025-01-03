@@ -2,14 +2,15 @@
 #SBATCH --job-name=ceb_lm_eval                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=cn527                         # Number of nodes
+#SBATCH --nodelist=cn528                         # Number of nodes
 # --gres=gpu:NVIDIA_L40S:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
 #SBATCH --cpus-per-task=2                 # Number of CPU cores per TASK
 #SBATCH --mem=32GB
 #SBATCH --tmp=8GB
 #SBATCH -o slurm/logs/slurm-%j.out
-#SBATCH --time=10:00:00
+#SBATCH --time=12:00:00
+# --begin=now+4hours
 
 # If you want to do it in the terminal,
 # salloc --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_L40S:1 --cpus-per-task=2 --mem=16G --tmp 8GB
@@ -54,24 +55,24 @@ MODEL_NAMES=(
     ############################################################################
     #                             LLaMA 3.1 8B                                 #
     ############################################################################
-    "meta-llama/Llama-3.1-8B"
-    "meta-llama/Llama-3.1-8B-Instruct"
-    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
-    "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
-    "Llama-3.1-8B-Instruct-LC-RTN-W4A16"
-    "Llama-3.1-8B-Instruct-LC-RTN-W8A8"
-    "Llama-3.1-8B-Instruct-LC-RTN-W8A16"
-    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16"
-    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a8"
-    "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a16"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A8"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A16"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-2Bit-2x8-hf"
-    "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf"
+    # "meta-llama/Llama-3.1-8B"
+    # "meta-llama/Llama-3.1-8B-Instruct"
+    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
+    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
+    # "Llama-3.1-8B-Instruct-LC-RTN-W4A16"
+    # "Llama-3.1-8B-Instruct-LC-RTN-W8A8"
+    # "Llama-3.1-8B-Instruct-LC-RTN-W8A16"
+    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16"
+    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a8"
+    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a16"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A8"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A16"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W4A16"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A8"
+    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A16"
+    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-2Bit-2x8-hf"
+    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf"
 
     ############################################################################
     #                            LLaMA 3.1 70B                                 #
@@ -142,11 +143,11 @@ MODEL_NAMES=(
     # TODO: Add GPTQ models here
 
     # 3. Mistral Small 22B
-    "mistralai/Mistral-Small-Instruct-2409"
-    "Mistral-Small-Instruct-2409-LC-RTN-W4A16"
-    "Mistral-Small-Instruct-2409-LC-RTN-W8A16"
-    "Mistral-Small-Instruct-2409-LC-RTN-W8A8"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A8"
+    # "mistralai/Mistral-Small-Instruct-2409"
+    # "Mistral-Small-Instruct-2409-LC-RTN-W4A16"
+    # "Mistral-Small-Instruct-2409-LC-RTN-W8A16"
+    # "Mistral-Small-Instruct-2409-LC-RTN-W8A8"
+    # "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A8"
     # TODO: Add GPTQ models here
 
     ############################################################################
@@ -188,7 +189,11 @@ port=$(shuf -i 6000-9000 -n 1)
 echo $port
 
 # Specify tasks
-TASKS="arc_challenge,mmlu_pro,hellaswag,bigbench,truthfulqa_mc1,truthfulqa_gen,piqa,lambada_openai"
+TASKS="arc_challenge,mmlu_pro,hellaswag,piqa,lambada_openai,truthfulqa_mc1"
+# Removed tasks = bigbench_multiple_choice, truthfulqa_gen
+
+# List out valid tasks
+# lm-eval --tasks list
 
 # Run LM-Eval for each model
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
@@ -202,14 +207,14 @@ for MODEL_NAME in "${MODEL_NAMES[@]}"; do
     fi
 
     # Rename model to simpler nickname
-    MODEL_NICKNAME=`python -m bin.rename_model $MODEL_NAME`
+    MODEL_NICKNAME=`python -m ceb_benchmark rename_model $MODEL_NAME`
     echo "[LM-Eval] Evaluating Model: $MODEL_NICKNAME"
 
     # Create model-specific LM-eval output directory
     OUTPUT_DIR=$LM_EVAL_OUTPUT_DIR/$MODEL_NICKNAME
 
     # Perform LM evaluation
-    VLLM_KWARGS="pretrained=$MODEL_PATH,tensor_parallel_size=$NUM_GPUS_SPLIT,dtype=auto,gpu_memory_utilization=0.8,data_parallel_size=$NUM_GPUS_DISTRIBUTE,max_model_len=4096,max_num_seqs=32"
+    VLLM_KWARGS="pretrained='$MODEL_PATH',tensor_parallel_size=$NUM_GPUS_SPLIT,dtype=auto,gpu_memory_utilization=0.8,data_parallel_size=$NUM_GPUS_DISTRIBUTE,max_model_len=4096,max_num_seqs=32"
     lm_eval --model vllm \
         --tasks $TASKS \
         --model_args $VLLM_KWARGS \

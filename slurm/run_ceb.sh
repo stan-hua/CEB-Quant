@@ -2,7 +2,7 @@
 #SBATCH --job-name=ceb_generate                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --gres=gpu:1
-#SBATCH --nodelist=cn527                         # Number of nodes
+#SBATCH --nodelist=cn532                         # Number of nodes
 # --gres=gpu:NVIDIA_L40S:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
 #SBATCH --cpus-per-task=2                 # Number of CPU cores per TASK
@@ -31,6 +31,8 @@ micromamba activate fairbench
 # Configures vLLM to avoid multiprocessing issue
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
 
+# Configure PyTorch to avoid defragmentation
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 ################################################################################
 #                                 Choose Model                                 #
@@ -38,148 +40,103 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 # HuggingFace ID
 HF_ID="stan-hua"
 
-# Model names to perform inference
+# Models to generate for
 MODEL_NAMES=(
-    # "meta-llama/Llama-2-7b-chat-hf"
-    # "TheBloke/Llama-2-7B-Chat-GPTQ"
+    # # 2.0. LLaMA 3.2 1B model
+    # llama3.2-1b-instruct
+    # llama3.2-1b-instruct-lc-rtn-w4a16
+    # llama3.2-1b-instruct-lc-smooth-rtn-w4a16
+    # llama3.2-1b-instruct-lc-rtn-w8a8
+    # llama3.2-1b-instruct-lc-smooth-rtn-w8a8
+    # llama3.2-1b-instruct-lc-rtn-w8a16
+    # llama3.2-1b-instruct-lc-gptq-w4a16
+    # llama3.2-1b-instruct-lc-smooth-gptq-w4a16
+    # llama3.2-1b-instruct-awq-w4a16
+    # hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8
 
-    # "meta-llama/Llama-2-70b-chat-hf"
-    ############################################################################
-    #                             LLaMA 3.1 8B                                 #
-    ############################################################################
-    # "meta-llama/Llama-3.1-8B"
-    # "meta-llama/Llama-3.1-8B-Instruct"
-    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
-    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a8"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w8a16"
-    # "neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8-dynamic"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-RTN-W8A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-GPTQ-W8A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    # "Llama-3.1-8B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-2Bit-2x8-hf"
-    # "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf"
+    # # 2.1. LLaMA 3.2 3B model
+    # llama3.2-3b-instruct
+    # llama3.2-3b-instruct-lc-rtn-w4a16
+    # llama3.2-3b-instruct-lc-smooth-rtn-w4a16
+    # llama3.2-3b-instruct-lc-rtn-w8a8
+    # llama3.2-3b-instruct-lc-smooth-rtn-w8a8
+    # llama3.2-3b-instruct-lc-rtn-w8a16
+    # llama3.2-3b-instruct-lc-gptq-w4a16
+    # llama3.2-3b-instruct-lc-smooth-gptq-w4a16
+    # llama3.2-3b-instruct-awq-w4a16
+    # hf-llama3.2-3b-instruct-aqlm-pv-2bit-2x8
 
-    # "Xu-Ouyang/Llama-3.1-8B-int2-GPTQ-wikitext2"
-    # "Xu-Ouyang/Meta-Llama-3.1-8B-int3-GPTQ-wikitext2"
+    # # 2.2. LLaMA 3.1 8B model
+    # llama3.1-8b-instruct
+    # llama3.1-8b-instruct-lc-rtn-w4a16
+    # llama3.1-8b-instruct-lc-smooth-rtn-w4a16
+    # llama3.1-8b-instruct-lc-rtn-w8a8
+    # llama3.1-8b-instruct-lc-smooth-rtn-w8a8
+    # llama3.1-8b-instruct-lc-rtn-w8a16
+    # nm-llama3.1-8b-instruct-gptq-w4a16
+    # llama3.1-8b-instruct-lc-smooth-gptq-w4a16
+    # hf-llama3.1-8b-instruct-awq-4bit
+    # hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8
+    # hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16
 
-    ############################################################################
-    #                            LLaMA 3.1 70B                                 #
-    ############################################################################
-    # "meta-llama/Llama-3.1-70B"
-    # "meta-llama/Llama-3.1-70B-Instruct"
-    # "hugging-quants/Meta-Llama-3.1-70B-Instruct-GPTQ-INT4"
-    # "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4"
-    # "ISTA-DASLab/Meta-Llama-3.1-70B-Instruct-AQLM-PV-2Bit-1x16"
-    # "neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w4a16"
-    # "neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w8a8"
-    # "neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w8a16"
-    # "neuralmagic/Meta-Llama-3.1-70B-Instruct-FP8-dynamic"
-    # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W4A16"
-    # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W4A16-KV8"
-    # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W8A8"
-    # "Meta-Llama-3.1-70B-Instruct-LC-RTN-W8A16"
-    # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    # "Meta-Llama-3.1-70B-Instruct-LC-SmoothQuant-RTN-W8A16"
+    # # 2.3. LLaMA 3.1 70B model
+    # llama3.1-70b-instruct
+    # llama3.1-70b-instruct-lc-rtn-w4a16
+    # # llama3.1-70b-instruct-lc-rtn-w4a16kv8
+    # llama3.1-70b-instruct-lc-smooth-rtn-w4a16
+    # llama3.1-70b-instruct-lc-rtn-w8a8
+    # llama3.1-70b-instruct-lc-smooth-rtn-w8a8
+    # llama3.1-70b-instruct-lc-rtn-w8a16
+    # nm-llama3.1-70b-instruct-gptq-w4a16
+    # hf-llama3.1-70b-instruct-awq-int4
+    # # # hf-llama3.1-70b-instruct-vptq-2bit
+    # # # hf-llama3.1-70b-instruct-vptq-1.75bit
+    
+    # # 2.4 Ministral 8B
+    # ministral-8b-instruct
+    # ministral-8b-instruct-lc-rtn-w4a16
+    # ministral-8b-instruct-lc-smooth-rtn-w4a16
+    # ministral-8b-instruct-lc-rtn-w8a8
+    # ministral-8b-instruct-lc-smooth-rtn-w8a8
+    # ministral-8b-instruct-lc-rtn-w8a16
+    # ministral-8b-instruct-lc-gptq-w4a16
+    # ministral-8b-instruct-lc-smooth-gptq-w4a16
+    # ministral-8b-instruct-awq-w4a16
 
-    ############################################################################
-    #                             LLaMA 3.2 1B                                 #
-    ############################################################################
-    # "meta-llama/Llama-3.2-1B"
-    # "ISTA-DASLab/Llama-3.2-1B-AQLM-PV-2Bit-2x8"
+    # # 2.5 Mistral Small 22B
+    # mistral-small-22b-instruct
+    # mistral-small-22b-instruct-lc-rtn-w4a16
+    # mistral-small-22b-instruct-lc-smooth-rtn-w4a16
+    # mistral-small-22b-instruct-lc-rtn-w8a8
+    # mistral-small-22b-instruct-lc-smooth-rtn-w8a8
+    # mistral-small-22b-instruct-lc-rtn-w8a16
+    # mistral-small-22b-instruct-lc-gptq-w4a16
+    # mistral-small-22b-instruct-lc-smooth-gptq-w4a16
+    # mistral-small-22b-instruct-awq-w4a16
 
-    "meta-llama/Llama-3.2-1B-Instruct"
-    "Llama-3.2-1B-Instruct-LC-RTN-W4A16"
-    "Llama-3.2-1B-Instruct-LC-RTN-W8A8"
-    "Llama-3.2-1B-Instruct-LC-RTN-W8A16"
-    "Llama-3.2-1B-Instruct-LC-GPTQ-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    "ISTA-DASLab/Llama-3.2-1B-Instruct-AQLM-PV-2Bit-2x8"
+    # # 2.6. Qwen2 7B
+    # qwen2-7b
+    # qwen2-7b-instruct
+    # qwen2-7b-instruct-lc-rtn-w4a16
+    # qwen2-7b-instruct-lc-smooth-rtn-w4a16
+    # qwen2-7b-instruct-lc-rtn-w8a8
+    # qwen2-7b-instruct-lc-smooth-rtn-w8a8
+    # qwen2-7b-instruct-lc-rtn-w8a16
+    # hf-qwen2-7b-instruct-gptq-w4a16
+    # hf-qwen2-7b-instruct-awq-w4a16
 
-    ############################################################################
-    #                             LLaMA 3.2 3B                                 #
-    ############################################################################
-    # "meta-llama/Llama-3.2-3B"
-    # "ISTA-DASLab/Llama-3.2-3B-AQLM-PV-2Bit-2x8"
-
-    "meta-llama/Llama-3.2-3B-Instruct"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A8"
-    "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-GPTQ-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-GPTQ-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W4A16"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A8"
-    "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W8A16"
-    "ISTA-DASLab/Llama-3.2-3B-Instruct-AQLM-PV-2Bit-2x8"
-
-    ############################################################################
-    #                               Mistral                                    #
-    #############################################################################
-    # "mistralai/Mistral-7B-v0.3"
-    # "mistralai/Mistral-7B-Instruct-v0.3"
-
-    # 2. Ministral 8B
-    # "mistralai/Ministral-8B-Instruct-2410"
-    # "Ministral-8B-Instruct-2410-LC-RTN-W4A16"
-    # "Ministral-8B-Instruct-2410-LC-RTN-W8A16"
-    # "Ministral-8B-Instruct-2410-LC-RTN-W8A8"
-    "Ministral-8B-Instruct-2410-LC-GPTQ-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-GPTQ-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W4A16"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A8"
-    "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A16"
-
-    # 3. Mistral Small 22B
-    # "mistralai/Mistral-Small-Instruct-2409"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W4A16"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W8A16"
-    # "Mistral-Small-Instruct-2409-LC-RTN-W8A8"
-    "Mistral-Small-Instruct-2409-LC-GPTQ-W4A16"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-GPTQ-W4A16"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W4A16"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A8"
-    "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A16"
-
-    ############################################################################
-    #                               Qwen2 7B                                   #
-    ############################################################################
-    # 1. Qwen2 7B Instruct
-    # "Qwen/Qwen2-7B"
-    # "Qwen/Qwen2-7B-Instruct"
-    # "Qwen/Qwen2-7B-Instruct-GPTQ-Int4"
-    # "Qwen/Qwen2-7B-Instruct-GPTQ-Int8"
-    # "Qwen/Qwen2-7B-Instruct-AWQ"
-    # "Qwen2-7B-Instruct-LC-RTN-W4A16"
-    # "Qwen2-7B-Instruct-LC-RTN-W8A16"
-    # "Qwen2-7B-Instruct-LC-RTN-W8A8"
-    # "Qwen2-7B-Instruct-LC-SmoothQuant-RTN-W8A8"
-
-    ############################################################################
-    #                              Qwen2 72B                                   #
-    ############################################################################
-    # "Qwen/Qwen2-72B"
-    # "Qwen/Qwen2-72B-Instruct" 
-    # "Qwen/Qwen2-72B-Instruct-GPTQ-Int4"
-    # "Qwen/Qwen2-72B-Instruct-GPTQ-Int8"
-    # "Qwen/Qwen2-72B-Instruct-AWQ"
-    # "ISTA-DASLab/Qwen2-72B-Instruct-AQLM-PV-2bit-1x16"
-    # "ISTA-DASLab/Qwen2-72B-Instruct-AQLM-PV-1bit-1x16"
-    # "Qwen2-72B-Instruct-LC-RTN-W4A16"
-    # "Qwen2-72B-Instruct-LC-RTN-W8A16"
-    # "Qwen2-72B-Instruct-LC-RTN-W8A8"
-    # "Qwen2-72B-Instruct-LC-SmoothQuant-RTN-W8A8"
+    # 2.7. Qwen2 72B
+    qwen2-72b-instruct
+    qwen2-72b
+    # qwen2-72b-instruct-lc-rtn-w4a16
+    # qwen2-72b-instruct-lc-smooth-rtn-w4a16
+    # qwen2-72b-instruct-lc-rtn-w8a8
+    # qwen2-72b-instruct-lc-smooth-rtn-w8a8
+    # qwen2-72b-instruct-lc-rtn-w8a16
+    hf-qwen2-72b-instruct-gptq-w4a16
+    hf-qwen2-72b-instruct-awq-w4a16
+    hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16,
+    hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16,
 )
 
 QUIP_MODELS=(
@@ -210,16 +167,16 @@ echo $port
 # 1. Regular models
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
     for CHAT_FLAG in "${CHAT_FLAGS[@]}"; do
-        python -m ceb_benchmark generate --model_path ${MODEL_NAME} --use_chat_template $CHAT_FLAG;
+        python -m ceb_benchmark generate ${MODEL_NAME} --use_chat_template $CHAT_FLAG;
     done
 done
 
 # # 2. QuIP# models
 # for MODEL_NAME in "${QUIP_MODELS[@]}"; do
-#     python -m ceb_benchmark generate --model_path ${MODEL_NAME};
+#     python -m ceb_benchmark generate ${MODEL_NAME};
 # done
 
 # # 3. VPTQ models
 # for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
-#     python -m ceb_benchmark generate --model_path ${MODEL_NAME} --model_provider "vptq";
+#     python -m ceb_benchmark generate ${MODEL_NAME} --model_provider "vptq";
 # done

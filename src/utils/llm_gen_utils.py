@@ -12,15 +12,14 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
 import config
+from config import MODEL_INFO
 
 
 ################################################################################
 #                                  Constants                                   #
 ################################################################################
 # Load model information from configuration
-model_info = config.MODEL_INFO
-model_mapping = model_info['model_mapping']
-rev_model_mapping = {value: key for key, value in model_mapping.items()}
+MODEL_NAME_TO_PATH = {v: k for k, v in MODEL_INFO['model_path_to_name'].items()}
 
 
 ################################################################################
@@ -60,7 +59,7 @@ def deepinfra_api(string, model, temperature):
     api_token = config.deepinfra_api
     top_p = 0.9 if temperature > 1e-5 else 1
     client = OpenAI(api_key=api_token, api_base="https://api.deepinfra.com/v1/openai")
-    stream = client.chat.completions.create(model=rev_model_mapping[model],
+    stream = client.chat.completions.create(model=MODEL_NAME_TO_PATH[model],
                                             messages=[{"role": "user", "content": string}],
                                             max_tokens=5192, temperature=temperature, top_p=top_p)
     return stream.choices[0].message.content
@@ -71,9 +70,9 @@ def replicate_api(string, model, temperature):
     if model in ["llama3-70b","llama3-8b"]:
         input["prompt_template"] = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     else:
-        input["prompt"]=apply_chat_template_vllm(rev_model_mapping[model],string)
+        input["prompt"]=apply_chat_template_vllm(MODEL_NAME_TO_PATH[model],string)
     os.environ["REPLICATE_API_TOKEN"] = config.replicate_api
-    res = replicate.run(rev_model_mapping[model],
+    res = replicate.run(MODEL_NAME_TO_PATH[model],
         input=input
     )
     res = "".join(res)
@@ -145,20 +144,20 @@ def zhipu_api(string, model, temperature):
 
 @retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(5))
 def gen_online(model_name, prompt, temperature, replicate=False, deepinfra=False):
-    if model_name in model_info['wenxin_model']:
+    if model_name in MODEL_INFO['wenxin_model']:
         res = get_ernie_res(prompt, temperature=temperature)
-    elif model_name in model_info['google_model']:
+    elif model_name in MODEL_INFO['google_model']:
         if model_name == 'bison-001':
             res = palm_api(prompt, model=model_name, temperature=temperature)
         elif model_name == 'gemini-pro':
             res = gemini_api(prompt, temperature=temperature)
-    elif model_name in model_info['openai_model']:
+    elif model_name in MODEL_INFO['openai_model']:
         res = get_res_openai(prompt, model=model_name, temperature=temperature)
-    elif model_name in model_info['deepinfra_model']:
+    elif model_name in MODEL_INFO['deepinfra_model']:
         res = deepinfra_api(prompt, model=model_name, temperature=temperature)
-    elif model_name in model_info['claude_model']:
+    elif model_name in MODEL_INFO['claude_model']:
         res = claude_api(prompt, model=model_name, temperature=temperature)
-    elif model_name in model_info['zhipu_model']:
+    elif model_name in MODEL_INFO['zhipu_model']:
         res = zhipu_api(prompt, model=model_name, temperature=temperature)
     elif replicate:
         res = replicate_api(prompt, model_name, temperature)

@@ -35,8 +35,8 @@ class StereotypeEval:
         ----------
         alpha : float
             Alpha level for confidence interval
-        filter_kwargs : bool
-            If True, filter for harmful prompts
+        filter_kwargs : dict
+            Contains keyword arguments to filter prompts for
         evaluator_choice : str
             Choice of evaluator: ("chatgpt", "prometheus")
         **kwargs : Any

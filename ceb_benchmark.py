@@ -27,15 +27,17 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import time
 import traceback
 from collections import defaultdict
+from datetime import datetime
 from glob import glob
 
 # Non-standard libraries
+import numpy as np
 import pandas as pd
-import shutil
 import torch
 from fire import Fire
 from tqdm import tqdm
@@ -44,7 +46,7 @@ from tqdm import tqdm
 import config
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
-from src.utils import json_utils
+from src.utils import json_utils, metric_utils
 
 
 ################################################################################
@@ -85,6 +87,7 @@ class CEBBenchmark:
             alpha=0.05,
             filter_kwargs=None,
             evaluator_choice=DEFAULT_EVALUATOR,
+            save_metrics=True,
         ):
         """
         Initialize CEBBenchmark class.
@@ -97,10 +100,12 @@ class CEBBenchmark:
             OpenAI model to use for evaluation, by default config.DEFAULT_OPENAI_MODEL
         alpha : float
             Alpha level for confidence interval
-        filter_kwargs : bool, optional
+        filter_kwargs : dict, optional
             Keyword arguments to filter prompts based on harmfulness, etc.
         evaluator_choice : str, optional
             Choice of evaluator: ("chatgpt", "prometheus").
+        save_metrics : bool, optional
+            If True, save metrics to the metrics directory.
         """
         # If exists in `config.DIR_GENERATIONS`, then prepend directory
         if not os.path.exists(results_dir) and os.path.exists(os.path.join(config.DIR_GENERATIONS, results_dir)):
@@ -114,6 +119,7 @@ class CEBBenchmark:
         self.alpha = alpha
         self.filter_kwargs = filter_kwargs
         self.evaluator_choice = evaluator_choice
+        self.save_metrics = save_metrics
 
         # Get model name
         model_name = os.path.basename(results_dir)
@@ -176,12 +182,13 @@ class CEBBenchmark:
         This function runs both direct and indirect evaluations for both
         stereotype and toxicity tasks. 
         """
-        LOGGER.info(f"Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
+        LOGGER.info(f"[CEB Benchmark] Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
         task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
 
         # Overwrite, filter harmful if provided
         if filter_kwargs is not None:
             self.filter_kwargs = filter_kwargs
+            LOGGER.info(f"[CEB Benchmark] Filter arguments: {filter_kwargs}")
 
         # Perform direct/indirect evaluation evaluation
         for task_type in task_types:
@@ -196,7 +203,7 @@ class CEBBenchmark:
                 LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...")
                 self.toxicity_eval(task_type=task_type, overwrite=overwrite)
                 LOGGER.info(f"Starting CEB Evaluation / {task_type} / Toxicity...DONE")
-        LOGGER.info("Performing full CEB Evaluation...DONE")
+        LOGGER.info("[CEB Benchmark] Performing full CEB Evaluation...DONE")
 
 
     def stereotype_eval(self, task_type="direct", overwrite=False):
@@ -262,7 +269,8 @@ class CEBBenchmark:
                             )
 
         # Store metrics for dataset
-        json_utils.save_json(dict(self.dset_stereotype_metrics), self.stereotype_metric_path)
+        if self.save_metrics:
+            json_utils.save_json(dict(self.dset_stereotype_metrics), self.stereotype_metric_path)
 
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...DONE")
 
@@ -338,8 +346,60 @@ class CEBBenchmark:
                             )
 
         # Store metrics
-        json_utils.save_json(dict(self.dset_toxicity_metrics), self.toxicity_metric_path)
+        if self.save_metrics:
+            json_utils.save_json(dict(self.dset_toxicity_metrics), self.toxicity_metric_path)
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...DONE")
+
+
+    def flatten_metrics(self, higher_is_better=False):
+        """
+        Return stereotype and toxicity metrics flattened into one dictionary.
+
+        Parameters
+        ----------
+        higher_is_better : bool, optional
+            If True, store negative of metrics that are "lower is better", by
+            default False
+
+        Returns
+        -------
+        dict
+            Flattened dictionary of metrics, where the keys are "[Dataset] - [Social Axis] / score"
+        """
+        all_metrics = self.dset_stereotype_metrics + self.dset_toxicity_metrics
+        flattened_metrics = {}
+        for dataset_name, social_axis_to_metrics in all_metrics.items():
+            for social_axis, metrics_dict in social_axis_to_metrics.items():
+                task_type = dataset_name.split("-")[1]
+                score_key = f"{dataset_name} - {social_axis} / score"
+                # CASE 1: If score column exists
+                if "score" in metrics_dict:
+                    metric_val = metrics_dict["score"]
+                    # If specified, ensure the higher the metric the better
+                    if higher_is_better and task_type not in ["Selection", "Recognition"]:
+                        metric_val = -metric_val
+
+                    # Store value
+                    flattened_metrics[score_key] = metric_val
+                # CASE 2: Average of fairness metrics
+                elif "scaled_dp_diff" in metrics_dict:
+                    # Store average of both DP and EO difference
+                    dp_val = metrics_dict["scaled_dp_diff"]
+                    eo_val = metrics_dict["scaled_eo_diff"]
+
+                    # If either DP/EO diff is missing, store None
+                    if dp_val is None or eo_val is None:
+                        flattened_metrics[score_key] = None
+                    else:
+                        metric_val = (dp_val + eo_val) / 2
+                        # If specified, ensure the higher the metric the better
+                        if higher_is_better:
+                            metric_val = -metric_val
+                        flattened_metrics[score_key] = metric_val
+                # NOTE: The following may only occur, if neither metric is stored
+                else:
+                    raise RuntimeError(f"[Flatten CEB Metrics] Missing score key in metrics for {dataset_name} / {social_axis}")
+        return flattened_metrics
 
 
     def save_metric_tables(self, bias_type="all", task_type="all", save=True):
@@ -348,7 +408,7 @@ class CEBBenchmark:
 
         Saves a table for each bias type (stereotype/toxicity) and
         direct/indirect eval, with columns for each dataset and social group,
-        containing the score, dp_diff, and eo_diff, as well as the proportion of
+        containing the score, scaled_dp_diff, and scaled_eo_diff, as well as the proportion of
         invalid and refused-to-answer responses (if applicable).
 
         Table is saved as a CSV file in the `metrics_dir` directory, with the
@@ -399,7 +459,7 @@ class CEBBenchmark:
                     social_group_to_metric_dict = dataset_to_metric_dict[dataset]
                     for social_group, metric_dict in social_group_to_metric_dict.items():
                         # Add scores
-                        for score_col in ("score", "dp_diff", "eo_diff"):
+                        for score_col in ("score", "scaled_dp_diff", "scaled_eo_diff"):
                             if score_col not in metric_dict:
                                 continue
                             metric_val = f"{metric_dict[score_col]:.2f} {metric_dict[score_col+'_ci']}"
@@ -432,7 +492,7 @@ class CEBBenchmark:
 #                                  Functions                                   #
 ################################################################################
 def ceb_generate(
-        model_path,
+        model_path_or_name,
         dataset_name="all",
         model_provider="vllm",
         use_chat_template=False,
@@ -442,8 +502,8 @@ def ceb_generate(
 
     Parameters
     ----------
-    model_path : str
-        Path to the model.
+    model_path_or_name : str
+        Path to model, or model (nick)name in `config.py`
     dataset_name : str
         Name of the dataset. If not specififed or "all", generate for all
         datasets.
@@ -459,7 +519,7 @@ def ceb_generate(
     # Shared keyword arguments
     shared_kwargs = {
         # Provided arguments
-        "model_path": model_path,
+        "model_path_or_name": model_path_or_name,
         "dataset_name": dataset_name,
         "model_provider": model_provider,
         "use_chat_template": use_chat_template,
@@ -478,9 +538,9 @@ def ceb_generate(
     llm_gen = LLMGeneration(**shared_kwargs)
 
     # Perform inference
-    LOGGER.info(f"[CEB Generate] Performing inference for {model_path}...")
+    LOGGER.info(f"[CEB Generate] Performing inference for {model_path_or_name}...")
     llm_gen.infer_dataset()
-    LOGGER.info(f"[CEB Generate] Performing inference for {model_path}...DONE")
+    LOGGER.info(f"[CEB Generate] Performing inference for {model_path_or_name}...DONE")
 
 
 def ceb_evaluate(
@@ -711,51 +771,114 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=config.DIR_COMPARISONS):
         df_accum_style.to_html(save_path.replace(".csv", ".html"), index=False, border=1)
 
 
-def ceb_find_unfinished(pattern="*"):
+def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluation=False):
     """
     Find all models, matching pattern, who are unfinished with inference
 
     Parameters
     ----------
     pattern : str
-        Pattern to identify model result directories
+        If `generation`, pattern to identify model result directories.
+        If `evaluation`, pattern containing the evaluator choice and optionally
+        the model names
+    eval_models : list
+        If `evaluation`, list of model names to check if already evaluated
+    generation : bool
+        If True, check generations, based on pattern.
+    evaluation : bool
+        If True, check evaluation, based on model list.
     """
     model_to_missing_results = defaultdict(list)
 
-    # Iterate over model directories
-    for result_dir in tqdm(glob(os.path.join(config.DIR_GENERATIONS, pattern))):
-        model_name = os.path.basename(result_dir)
+    # 1. Generation
+    if generation:
+        LOGGER.info("[CEB Find Unfinished] Finding models with unfinished generations")
+        # Iterate over model directories
+        for result_dir in tqdm(glob(os.path.join(config.DIR_GENERATIONS, pattern))):
+            model_name = os.path.basename(result_dir)
 
-        # Check each dataset
-        for dataset_name in config.ALL_DATASETS:
-            json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
+            # Check each dataset
+            for dataset_name in config.ALL_DATASETS:
+                json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
 
-            # Early return if missing JSON files
-            if not json_paths:
-                model_to_missing_results[model_name].extend([
-                    f"{dataset_name}/{os.path.basename(json_path)}"
-                    for json_path in json_paths
-                ])
-                break
-
-            # Check if any of the `res` are missing
-            for json_path in json_paths:
-                # Load json
-                infer_data = json_utils.load_json(json_path)
-                # Check if any of the `res` are missing
-                if any(not row.get("res") for row in infer_data):
-                    model_to_missing_results[model_name].append(
+                # Early return if missing JSON files
+                if not json_paths:
+                    model_to_missing_results[model_name].extend([
                         f"{dataset_name}/{os.path.basename(json_path)}"
-                    )
-                    print("[CEB Benchmark] Missing results for:", model_name, dataset_name, os.path.basename(json_path))
-                    print(f"Res: " + "'".join(['"{}"'.format(row.get("res")) for row in infer_data if not row.get("res")]))
+                        for json_path in json_paths
+                    ])
+                    break
 
-    # Log all incomplete models
-    if model_to_missing_results:
-        LOGGER.error(
-            "[CEB Benchmark] The following models are incomplete:"
-            "\n" + json.dumps(model_to_missing_results, indent=4)
-        )
+                # Check if any of the `res` are missing
+                for json_path in json_paths:
+                    # Load json
+                    infer_data = json_utils.load_json(json_path)
+                    # Check if any of the `res` are missing
+                    if any(not row.get("res") for row in infer_data):
+                        model_to_missing_results[model_name].append(
+                            f"{dataset_name}/{os.path.basename(json_path)}"
+                        )
+                        LOGGER.info(f"[CEB Benchmark] Missing results for: {os.path.join(model_name, dataset_name, os.path.basename(json_path))}")
+                        LOGGER.info(f"Res: " + "'".join(['"{}"'.format(row.get("res")) for row in infer_data if not row.get("res")]))
+
+        # Log all incomplete models
+        if model_to_missing_results:
+            LOGGER.error(
+                "[CEB Find Unfinished - Generations] The following models are incomplete:"
+                "\n" + json.dumps(model_to_missing_results, indent=4)
+            )
+
+    # 2. Evaluation
+    if evaluation:
+        assert eval_models, "[CEB Find Unfinished - Evaluations] Please provide list of models via `eval_models`, if searching through evaluations!"
+        eval_models = list(set(eval_models))
+
+        LOGGER.info("[CEB Find Unfinished - Evaluations] Finding models with unfinished evaluations")
+        model_dirs = glob(os.path.join(config.DIR_GENERATIONS, pattern))
+        split_func = lambda path: path.split("chatgpt" + os.sep)[1] if "chatgpt" in path else path.split("prometheus" + os.sep)[1]
+        model_names = [os.path.dirname(split_func(path)) for path in model_dirs]
+
+        # Filter valid model directories
+        is_valid = [model_name in set(eval_models) for model_name in model_names]
+        valid_model_dirs = [
+            (model_dir, model_names[idx])
+            for idx, model_dir in enumerate(model_dirs)
+            if is_valid[idx]
+        ]
+
+        # Datasets and social axes to check
+        indirect_datasets = [f"CEB-{test}-{bias}" for test in ["Continuation", "Conversation"] for bias in ["S", "T"]]
+        social_axes = ["age", "gender", "race", "religion"]
+
+        # Get all missing directories
+        missing_evals = set(eval_models) - set(model_names)
+
+        # Check each model directory for those missing evals
+        unfinished_evals = []
+        for curr_model_dir, curr_model_name in valid_model_dirs:
+            unfinished = False
+            # Check if eval for each dataset is present
+            for dataset_name in indirect_datasets:
+                curr_dataset_dir = os.path.join(curr_model_dir, dataset_name)
+                if not os.path.exists(curr_dataset_dir) or unfinished:
+                    unfinished = True
+                    break
+                # Check if eval for each dataset / social axis is present
+                for social_axis in social_axes:
+                    curr_axis_dir = os.path.join(curr_dataset_dir, social_axis)
+                    if not os.path.exists(curr_axis_dir) and not os.path.listdir(curr_axis_dir):
+                        unfinished = True
+                        break
+            if unfinished:
+                unfinished_evals.append(curr_model_name)
+
+        # Add missing evaluations
+        unfinished_evals.extend(list(missing_evals))
+
+        # Print models with unfinished evals
+        unfinished_evals = sorted(unfinished_evals)
+        unfinished_evals_str = "\n\t".join(unfinished_evals)
+        LOGGER.error(f"[CEB Find Unfinished - Evaluations] The following models are missing evaluations: \n\t{unfinished_evals_str}")
 
 
 def ceb_delete(
@@ -814,12 +937,167 @@ def ceb_delete(
                 os.remove(eval_file)
 
 
-# TODO: Compute the correlation in scores between ChatGPT and Prometheus-Eval
-def ceb_compute_prometheus_correlation():
-    # Construct regex to find all Prometheus eval files
+def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
+    """
+    Compute Spearman correlation between Prometheus evaluation scores and
+    ChatGPT stereotype bias / Perplexity API toxicity scores.
+
+    Parameters
+    ----------
+    bin_chatgpt_scores : bool
+        If True, bin ChatGPT stereotype bias scores to [0, 33, 66, 99], as done
+        in Prometheus Eval
+    """
+    # Find all Prometheus eval files
     path_components = [config.DIR_EVALUATIONS, "prometheus"] + ["*"] * 4
     file_regex = os.path.join(*path_components)
-    pass
+    matching_paths = glob(file_regex)
+    baseline_dir = os.path.join(config.DIR_EVALUATIONS, "chatgpt")
+    valid_fname_regex = "*eval_progress.json"
+    accum_eval_scores = []
+    for curr_path in tqdm(matching_paths):
+        # Find path to JSON file containing baseline evaluation (using ChatGPT/Perplexity)
+        eval_subdir = os.path.dirname(curr_path.split("prometheus" + os.sep)[1])
+        baseline_paths = glob(os.path.join(baseline_dir, eval_subdir, valid_fname_regex))
+        # Continue, if no corresponding file path
+        if not baseline_paths:
+            continue
+        assert len(baseline_paths) == 1, f"More than 1 baseline eval file not expected! Files Found: {baseline_paths}"
+        # Load baseline evaluations
+        df_baseline_eval = pd.DataFrame(json_utils.load_json(baseline_paths[0]))
+        if "bias_score" in df_baseline_eval.columns:
+            extracted_scores = df_baseline_eval["bias_score"].map(
+                metric_utils.extract_number_from_0_to_99).fillna(-1).to_numpy()
+            # Round off values to nearest score bin
+            if bin_chatgpt_scores:
+                bins = np.array([-1, 0, 33, 66, 99])
+                indices = np.abs(extracted_scores[:, None] - bins).argmin(axis=1)
+                mapped_scores = bins[indices].astype(float)
+                mapped_scores[mapped_scores == -1] = np.nan
+                extracted_scores = mapped_scores
+            df_baseline_eval["base_eval_score"] = mapped_scores
+        else:
+            # Skip, if toxicity key not available
+            if "toxicity" not in df_baseline_eval.columns:
+                continue
+            df_baseline_eval["base_eval_score"] = df_baseline_eval["toxicity"]
+        # Load Prometheus evaluations
+        df_prometheus_eval = pd.DataFrame(json_utils.load_json(curr_path))
+        df_prometheus_eval["prometheus_eval_score"] = df_prometheus_eval["eval_res"].map(
+            metric_utils.extract_prometheus_bias_score)
+        # Join on prompt
+        df_eval = pd.merge(
+            df_baseline_eval, df_prometheus_eval,
+            how="right", on="prompt", suffixes=("__dup", ""),
+        )
+        # Remove duplicate columns
+        df_eval = df_eval[[col for col in df_eval.columns.tolist() if not col.endswith("__dup")]]
+        # Append dataset name and social axis
+        df_eval["social_axis"] = os.path.basename(eval_subdir)
+        df_eval["dataset_name"] = os.path.basename(os.path.dirname(eval_subdir))
+        df_eval["model_name"] = os.path.basename(os.path.dirname(os.path.dirname(eval_subdir)))
+        # Append eval scores
+        keep_cols = [
+            "model_name", "dataset_name", "social_axis", "axis", "bucket", "rta", "res",
+            "base_eval_score", "prometheus_eval_score"
+        ]
+        accum_eval_scores.append(df_eval[keep_cols])
+
+    # Accumulate all eval score
+    df_accum = pd.concat(accum_eval_scores, ignore_index=True)
+
+    # Drop rows with invalid Prometheus eval scores (i.e., Prometheus-Eval failed)
+    mask = df_accum["prometheus_eval_score"] != -1
+    df_accum = df_accum[mask]
+
+    # Check how well refusal to answer matches
+    df_accum["chatgpt_rta"] = df_accum["base_eval_score"].isna()
+    df_accum["prometheus_rta"] = df_accum["prometheus_eval_score"].isna()
+
+    # Count correspondence in refusal to answer
+    rta_cols = ["prometheus_rta", "chatgpt_rta"]
+    print(df_accum[rta_cols].value_counts(normalize=True))
+
+    # Compute correlation between scores
+    # NOTE: Only compute on rows where scores in both rows is not present
+    eval_cols = ["base_eval_score", "prometheus_eval_score"]
+    mask = ~df_accum[eval_cols].isna().any(axis=1)
+    overall_corr = df_accum.loc[mask, eval_cols].corr("spearman").iloc[1, 0]
+    print(f"[Prometheus x ChatGPT/Toxicity] Correlation: {overall_corr:.2f}")
+
+    # Compute correlation, stratified by dataset and social axis
+    group_cols = ["dataset_name", "social_axis"]
+    print("[Prometheus x ChatGPT/Toxicity] Correlation Stratified by Dataset / Social Axis:")
+    print(df_accum[mask].groupby(group_cols).apply(lambda df: round(df[eval_cols].corr("spearman").iloc[1, 0], 2)))
+
+    # Check the proportion of base eval scores for stereotyping
+    mask = df_accum["dataset_name"].str.endswith("-S")
+    print("[ChatGPT] Stereotyping Bias Eval Scores:")
+    print(df_accum[mask].groupby("social_axis").apply(lambda df: df["base_eval_score"].value_counts(normalize=True)))
+    print("[Prometheus] Stereotyping Bias Eval Scores:")
+    print(df_accum[mask].groupby("social_axis").apply(lambda df: df["prometheus_eval_score"].value_counts(normalize=True)))
+
+
+def ceb_compute_fairness_vs_lm_eval_correlation():
+    # 1. LM-Eval
+    # Get names of all models with LM-Eval
+    paths = glob(os.path.join(config.DIR_LM_EVAL, "*"))
+    lm_eval_models = [
+        os.path.basename(path)
+        for path in paths if not path.endswith(".db")
+    ]
+    benchmark_to_metric_cols = {
+        "arc_challenge": ["acc,none"],
+        "hellaswag": ["acc,none"],
+        "piqa": ["acc,none"],
+        "truthfulqa_mc1": ["acc,none"],
+        "lambada_openai": ["acc,none", "perplexity,none"],
+        "mmlu_pro": ["exact_match,custom-extract"],
+    }
+
+    # Get all the metrics associated with them
+    accum_lm_eval_metrics = []
+    for model_name in lm_eval_models:
+        json_paths = glob(os.path.join(config.DIR_LM_EVAL, model_name, "*", "*.json"))
+        # If multiple results files exist, take the latest
+        if len(json_paths) > 1:
+            latest_json_path, latest_time = None, None
+            for json_path in json_paths:
+                time_str = json_path.split("_")[1].split(".")[0]
+                curr_time = datetime.striptime(time_str, "%Y-%m-%dT%H-%M-%S")
+                if latest_time is None or curr_time > latest_time:
+                    latest_json_path = json_path
+            json_path = latest_json_path
+        else:
+            json_path = json_paths[0]
+        # Load metric file and extract metrics
+        # NOTE: Additionally, average over accuracies
+        metric_json = json_utils.load_json(json_path)["results"]
+        curr_model_metrics = {"model": model_name}
+        accum_accuracies = []
+        for benchmark, metric_cols in benchmark_to_metric_cols.items():
+            for metric_col in metric_cols:
+                assert metric_col in metric_json[benchmark], f"[LM-Eval] `{metric_col}` is missing from benchmark `{benchmark}` in the results file! \n\tModel: {model_name}"
+                metric_val = metric_json[benchmark][metric_col]
+                curr_model_metrics[f"{benchmark} / {metric_col.split(',')[0]}"] = metric_val
+                if "acc" in metric_col:
+                    accum_accuracies.append(metric_val)
+        curr_model_metrics["avg_acc"] = round(sum(accum_accuracies)/len(accum_accuracies), 4)
+        accum_lm_eval_metrics.append(curr_model_metrics)
+
+    # 2. Get all the fairness metrics for these models
+    accum_ceb_metrics = []
+    for model_name in lm_eval_models:
+        # Compute metrics for each dataset (with no confidence interval)
+        benchmark = CEBBenchmark(model_name, alpha=0, evaluator_choice="prometheus", save_metrics=False)
+        benchmark.comprehensive_eval(overwrite=True)
+        curr_ceb_metrics = benchmark.flatten_metrics(higher_is_better=True)
+        # Compute average score among datasets that don't use fairness gap metrics
+        filtered_scores = [v for k,v in curr_ceb_metrics.items() if k.split("-")[1] not in ["Adult", "Credit", "Jigsaw"]]
+        curr_ceb_metrics["avg_score"] = sum(filtered_scores) / len(filtered_scores)
+        curr_ceb_metrics["model"] = model_name
+        accum_ceb_metrics.append(curr_ceb_metrics)
+
 
 
 
@@ -867,7 +1145,7 @@ def stereotype_process_json(class_attrs, dataset_name, json_path):
 
     # If specified, add `is_harmful` key to distinguish harmful prompts
     if filter_kwargs:
-        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
+        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering data with: {filter_kwargs}")
         infer_data = add_is_harmful_key(
             dataset_name, social_axis,
             infer_data,
@@ -936,7 +1214,7 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
 
     # If specified, add `is_harmful` key to distinguish harmful prompts
     if filter_kwargs:
-        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering for harmful prompts...")
+        LOGGER.info(f"[CEB / `{dataset_name}` / `{social_axis}`] Filtering data with: {filter_kwargs}")
         infer_data = add_is_harmful_key(
             dataset_name, social_axis,
             infer_data,
@@ -1166,7 +1444,7 @@ def highlight_significant(df_results, anchor_models):
 
                 # CASE 1: Score column
                 simplified_col = os.path.basename(col).strip().lower()
-                if simplified_col in ["score", "dp_diff", "eo_diff"]:
+                if simplified_col in ["score", "scaled_dp_diff", "scaled_eo_diff"]:
                     better_direction = "higher" if any(dset in col for dset in ["Recognition", "Selection"]) else "lower"
                     styles.loc[idx, col] = compare_scores(
                         df_results.loc[anchor_idx, col], comparison_val,
@@ -1259,6 +1537,7 @@ def add_is_harmful_key(dataset_name, social_axis, data, model_choice="chatgpt"):
 
 
 def extract_social_axis(json_path):
+    # NOTE: Assumes path is in the LLM generation directory
     return ".".join(os.path.basename(json_path).split(".")[:-1])
 
 

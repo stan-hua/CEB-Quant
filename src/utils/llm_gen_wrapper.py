@@ -39,9 +39,6 @@ multiprocessing.set_start_method('spawn')
 # Number of threads to use in sending requests to LLM APIs
 NUM_WORKERS = 8
 
-# Maximum vLLM model input token length
-MAX_MODEL_LEN = 4096
-
 # Default configuration parameters
 DEFAULT_CONFIG = {
     "model_provider": "vllm",
@@ -56,6 +53,7 @@ DEFAULT_CONFIG = {
     "repetition_penalty": 1.0,
     "max_model_len": 4096,      # Maximum input size
     "max_new_tokens": 512,      # Maximum output size
+    "gpu_memory_utilization": 0.99,
 }
 
 
@@ -67,7 +65,7 @@ class LLMGeneration:
             self,
             data_path,
             dataset_name,
-            model_path,
+            model_path_or_name,
             **overwrite_config,
         ):
         """
@@ -79,7 +77,7 @@ class LLMGeneration:
             Path to the dataset.
         dataset_name : str
             Name of the dataset.
-        model_path : str
+        model_path_or_name : str
             Model name, or path to HuggingFace model
         **overwrite_config : Any
             Keyword arguments, which includes:
@@ -99,18 +97,19 @@ class LLMGeneration:
         if not (dataset_name == "all" or dataset_name in ALL_DATASETS):
             raise RuntimeError(f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_DATASETS}`")
 
-        self.model_name = ""
-        self.model_path = model_path        # model path. If using huggingface model, it should be the model path. Otherwise, it should be the model name.
-        self.data_path = data_path          # path to the dataset
-        self.dataset_name = dataset_name    # the dataset name, e.g., "winobias"
+        # Path to dataset
+        self.data_path = data_path
+        # Name of dataset
+        self.dataset_name = dataset_name
 
         # Store configuration
         self.llm_config = DEFAULT_CONFIG.copy()
         self.llm_config.update(**overwrite_config)
 
-        # Get the model name according to the model path
-        self.model_name = extract_model_name(
-            model_path,
+        # Get the model name according to the model path, or vice versa
+        # NOTE: If using huggingface model, it should be the model path. Otherwise, it should be the model name.
+        self.model_name, self.model_path = extract_model_path_or_name(
+            model_path_or_name,
             self.llm_config["model_provider"],
             self.llm_config["use_chat_template"]
         )
@@ -118,10 +117,10 @@ class LLMGeneration:
         # If local model, check if it's stored in the `models` directory
         # NOTE: If it is, then update the model path
         if self.llm_config["model_provider"] in ["vllm", "huggingface", "vptq"]:
-            if os.path.exists(model_path):
+            if os.path.exists(self.model_path):
                 pass
-            elif os.path.exists(os.path.join(DIR_MODELS, model_path)):
-                self.model_path = os.path.join(DIR_MODELS, model_path)
+            elif os.path.exists(os.path.join(DIR_MODELS, self.model_path)):
+                self.model_path = os.path.join(DIR_MODELS, self.model_path)
 
         # Model related parameters to fill in
         # NOTE: Lazy loaded for efficiency
@@ -161,6 +160,7 @@ class LLMGeneration:
                 tensor_parallel_size=self.llm_config["num_gpus"],
                 dtype=self.llm_config["dtype"],
                 max_model_len=self.llm_config["max_model_len"],
+                gpu_memory_utilization=self.llm_config["gpu_memory_utilization"],
                 guided_decoding_backend="lm-format-enforcer",
                 **additional_llm_kwargs,
             )
@@ -625,8 +625,8 @@ class LLMGeneration:
 
         json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))
         assert json_paths, f"[LLMGeneration] Could not find data files for CEB dataset `{dataset_name}`"
-        for json_path in tqdm(json_paths):
-            LOGGER.info("Processing file: %s", json_path)
+        for json_path in json_paths:
+            LOGGER.debug("Processing file: %s", json_path)
             save_path = os.path.join(result_dir, os.path.basename(json_path))
             self.process_file(json_path, save_path)
 
@@ -687,14 +687,14 @@ def is_provider_online(model_provider):
     return model_provider in ["deepinfra", "replicate", "other"]
 
 
-def extract_model_name(model_path, model_provider="vllm", use_chat_template=False):
+def extract_model_path_or_name(model_path_or_name, model_provider="vllm", use_chat_template=False):
     """
-    Extract model name from model path.
+    Return tuple of model (nick)name and model path, provided either
 
     Parameters
     ----------
-    model_path : str
-        Path to the model
+    model_path_or_name : str
+        Path to the model, or model (nick)name
     model_provider : str
         Model provider name
     use_chat_template : bool
@@ -702,25 +702,26 @@ def extract_model_name(model_path, model_provider="vllm", use_chat_template=Fals
 
     Returns
     -------
-    str
-        Model name
-
-    Raises
-    ------
-    RuntimeError
-        If the model path is not found in the model mapping
+    tuple of (str, str)
+        (i) Model (nick)name
+        (ii) Path to model
     """
-    # Get the model name according to the model path
-    model_name = None
-    model_mapping = MODEL_INFO["model_mapping"]
-    if model_path in model_mapping:
-        model_name = model_mapping[model_path]
-    elif model_path.split("/")[-1] in model_mapping:
-        model_name = model_mapping[model_path.split("/")[-1]]
+    # Get model name and path
+    model_path_to_name = MODEL_INFO["model_path_to_name"]
+    model_name_to_path = {v:k for k,v in model_path_to_name.items()}
+    if model_path_or_name in model_path_to_name:
+        model_path = model_path_or_name
+        model_name = model_path_to_name[model_path_or_name]
+    if model_path_or_name in model_name_to_path:
+        model_name = model_path_or_name
+        model_path = model_name_to_path[model_path_or_name]
+    elif model_path_or_name.split("/")[-1] in model_path_to_name:
+        model_path = model_path_or_name
+        model_name = model_path_to_name[model_path_or_name.split("/")[-1]]
     else:
         raise RuntimeError(
-            "Please ensure model path has mapping in `src/config/config.py`!"
-            f"\n\tModel Path: `{model_path}`")
+            "Please ensure model path has mapping in `config.py`!"
+            f"\n\tModel Path: `{model_path_or_name}`")
 
     # Ensure model name is valid, if online model is chosen
     if is_provider_online(model_provider):
@@ -733,7 +734,7 @@ def extract_model_name(model_path, model_provider="vllm", use_chat_template=Fals
     if use_chat_template:
         model_name += "-chat"
 
-    return model_name
+    return model_name, model_path
 
 
 def apply_chat_template_vllm(llm_engine, prompt):

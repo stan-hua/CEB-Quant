@@ -88,20 +88,85 @@ STYLE_BETTER_AND_WORSE = "background-color: #e1fcfc"
 
 # Define anchor models for certain metric comparisons
 ANCHOR_MODELS = {
-    "base_vs_instruct": ["llama3.1-8b", "llama3.1-70b", "mistral-v0.3-7b", "qwen2-7b", "qwen2-72b"],
-    "nonchat_vs_chat": [
-        "llama3.1-8b-instruct", "llama3.1-70b-instruct",
-        "mistral-v0.3-7b-instruct", "ministral-8b-instruct", "mistral-small-22b-instruct",
+    "base_vs_instruct": [
+        "llama3.2-1b",
+        "llama3.2-3b",
+        "llama3.1-8b",
+        "llama3.1-70b",
+        "mistral-v0.3-7b",
+        "qwen2-7b",
+        # TODO: Uncomment after generating
+        # "qwen2-72b",
     ],
-    "rtn_at_different_bits": ["llama3.1-8b-instruct", "llama3.1-70b-instruct"],
-    "w4a16_quantizers": ["llama3.1-8b-instruct", "llama3.1-70b-instruct"],
-    "sub_w4_quantizers": ["llama3.1-70b-instruct"],
+    "nonchat_vs_chat": [
+        "llama3.1-8b-instruct",
+        "llama3.1-70b-instruct",
+        "mistral-v0.3-7b-instruct",
+        "ministral-8b-instruct",
+        "mistral-small-22b-instruct",
+        "qwen2-7b-instruct",
+        # TODO: Uncomment after generating
+        # "qwen2-72b-instruct",
+
+        # Quantized Models
+        "hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8",
+        "hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16",
+        "hf-llama3.1-70b-instruct-aqlm-pv-2bit-1x16",
+    ],
+    "rtn_at_different_bits": [
+        "llama3.2-1b-instruct",
+        "llama3.2-3b-instruct",
+        "llama3.1-8b-instruct",
+        "llama3.1-70b-instruct",
+        "ministral-8b-instruct",
+        "mistral-small-22b-instruct",
+        "qwen2-7b-instruct",
+        # TODO: Uncomment after generating
+        # "qwen2-72b-instruct",
+    ],
+    "w4a16_quantizers": [
+        "llama3.2-1b-instruct",
+        "llama3.2-3b-instruct",
+        "llama3.1-8b-instruct",
+        "llama3.1-70b-instruct",
+        "ministral-8b-instruct",
+        "mistral-small-22b-instruct",
+        "qwen2-7b-instruct",
+        "qwen2-72b-instruct",
+    ],
+    "sub_w4_quantizers": [
+        "llama3.2-1b",
+        "llama3.2-1b-instruct",
+        "llama3.2-3b",
+        "llama3.1-8b-instruct",
+        "llama3.1-70b-instruct",
+        "qwen2-7b-instruct",
+
+    ],
     "outlier_smoothing": [
-        "llama3.1-8b-instruct-lc-rtn-w4a16", "llama3.1-8b-instruct-lc-rtn-w8a8",
-        "llama3.1-8b-instruct-lc-rtn-w8a16", "llama3.1-70b-instruct-lc-rtn-w4a16",
-        "llama3.1-70b-instruct-lc-rtn-w8a8", "llama3.1-70b-instruct-lc-rtn-w8a16",
-        "nm-llama3.1-8b-instruct-gptq-w4a16", "nm-llama3.1-8b-instruct-gptq-w8a8",
-        "nm-llama3.1-8b-instruct-gptq-w8a16",
+        "llama3.2-1b-instruct-lc-rtn-w4a16",
+        "llama3.2-1b-instruct-lc-rtn-w8a8",
+        "llama3.2-3b-instruct-lc-rtn-w4a16",
+        "llama3.2-3b-instruct-lc-rtn-w8a8",
+        "llama3.1-8b-instruct-lc-rtn-w4a16"
+        "llama3.1-8b-instruct-lc-rtn-w8a8",
+        "llama3.1-8b-instruct-lc-rtn-w8a16"
+        "llama3.1-70b-instruct-lc-rtn-w4a16",
+        "llama3.1-70b-instruct-lc-rtn-w8a8",
+        "ministral-8b-instruct-lc-rtn-w4a16",
+        "ministral-8b-instruct-lc-rtn-w8a8",
+        "mistral-small-22b-instruct-lc-rtn-w4a16",
+        "mistral-small-22b-instruct-lc-rtn-w8a8",
+        "qwen2-7b-instruct-lc-rtn-w4a16",
+        "qwen2-7b-instruct-lc-rtn-w8a8",
+
+        "llama3.2-1b-instruct-lc-gptq-w4a16",
+        "llama3.2-3b-instruct-lc-gptq-w4a16",
+        "nm-llama3.1-8b-instruct-gptq-w4a16",
+        "ministral-8b-instruct-lc-gptq-w4a16",
+        "mistral-small-22b-instruct-lc-gptq-w4a16",
+        # "nm-llama3.1-8b-instruct-gptq-w8a8",
+        # "nm-llama3.1-8b-instruct-gptq-w8a16",
     ],
     "kv_cache_quantizer": ["llama3.1-70b-instruct"],
 }
@@ -126,6 +191,8 @@ DIR_EVALUATIONS = os.path.join(DIR_SAVE_DATA, "llm_evaluations")
 DIR_METRICS = os.path.join(DIR_SAVE_DATA, "metrics")
 # Path to store metrics comparisons
 DIR_COMPARISONS = os.path.join(DIR_SAVE_DATA, "metrics_comparisons")
+# Path to store LM-eval metrics
+DIR_LM_EVAL = os.path.join(DIR_SAVE_DATA, "lm-eval")
 # Path to store local models
 DIR_MODELS = os.path.join(DIR_SAVE_DATA, "models")
 
@@ -176,7 +243,7 @@ MODEL_INFO = {
     "replicate_model":replicate_model,
 
     # Mapping of model name/path to shorthand
-    "model_mapping": {
+    "model_path_to_name": {
         ########################################################################
         #                               LLaMA 2                                #
         ########################################################################
@@ -267,6 +334,7 @@ MODEL_INFO = {
         "Llama-3.2-1B-Instruct-LC-RTN-W4A16": "llama3.2-1b-instruct-lc-rtn-w4a16",
         "Llama-3.2-1B-Instruct-LC-RTN-W8A8": "llama3.2-1b-instruct-lc-rtn-w8a8",
         "Llama-3.2-1B-Instruct-LC-RTN-W8A16": "llama3.2-1b-instruct-lc-rtn-w8a16",
+        "Llama-3.2-1B-Instruct-AWQ-W4A16": "llama3.2-1b-instruct-awq-w4a16",
         "Llama-3.2-1B-Instruct-LC-GPTQ-W4A16": "llama3.2-1b-instruct-lc-gptq-w4a16",
         "Llama-3.2-1B-Instruct-LC-SmoothQuant-GPTQ-W4A16": "llama3.2-1b-instruct-lc-smooth-gptq-w4a16",
         "Llama-3.2-1B-Instruct-LC-SmoothQuant-RTN-W4A16": "llama3.2-1b-instruct-lc-smooth-rtn-w4a16",
@@ -282,6 +350,7 @@ MODEL_INFO = {
         "Meta-Llama-3.2-3B-Instruct-LC-RTN-W4A16": "llama3.2-3b-instruct-lc-rtn-w4a16",
         "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A8": "llama3.2-3b-instruct-lc-rtn-w8a8",
         "Meta-Llama-3.2-3B-Instruct-LC-RTN-W8A16": "llama3.2-3b-instruct-lc-rtn-w8a16",
+        "Meta-Llama-3.2-3B-Instruct-AWQ-W4A16": "llama3.2-3b-instruct-awq-w4a16",
         "Meta-Llama-3.2-3B-Instruct-LC-GPTQ-W4A16": "llama3.2-3b-instruct-lc-gptq-w4a16",
         "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-GPTQ-W4A16": "llama3.2-3b-instruct-lc-smooth-gptq-w4a16",
         "Meta-Llama-3.2-3B-Instruct-LC-SmoothQuant-RTN-W4A16": "llama3.2-3b-instruct-lc-smooth-rtn-w4a16",
@@ -295,20 +364,31 @@ MODEL_INFO = {
         # Mistral 7B v0.3
         "mistralai/Mistral-7B-v0.3": "mistral-v0.3-7b",
         "mistralai/Mistral-7B-Instruct-v0.3": "mistral-v0.3-7b-instruct",
+        "Mistral-7B-Instruct-v0.3-AWQ-W4A16": "mistral-v0.3-7b-instruct-awq-w4a16",
 
         # Ministral 8B
         "mistralai/Ministral-8B-Instruct-2410": "ministral-8b-instruct",
         "Ministral-8B-Instruct-2410-LC-RTN-W4A16": "ministral-8b-instruct-lc-rtn-w4a16",
         "Ministral-8B-Instruct-2410-LC-RTN-W8A16": "ministral-8b-instruct-lc-rtn-w8a16",
         "Ministral-8B-Instruct-2410-LC-RTN-W8A8": "ministral-8b-instruct-lc-rtn-w8a8",
+        "Ministral-8B-Instruct-2410-AWQ-W4A16": "ministral-8b-instruct-awq-w4a16",
+        "Ministral-8B-Instruct-2410-LC-GPTQ-W4A16": "ministral-8b-instruct-lc-gptq-w4a16",
+        "Ministral-8B-Instruct-2410-LC-SmoothQuant-GPTQ-W4A16": "ministral-8b-instruct-lc-smooth-gptq-w4a16",
         "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A8": "ministral-8b-instruct-lc-smooth-rtn-w8a8",
+        "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W4A16": "ministral-8b-instruct-lc-smooth-rtn-w4a16",
+        "Ministral-8B-Instruct-2410-LC-SmoothQuant-RTN-W8A16": "ministral-8b-instruct-lc-smooth-rtn-w8a16",
 
         # Mistral Small 22B
         "mistralai/Mistral-Small-Instruct-2409": "mistral-small-22b-instruct",
         "Mistral-Small-Instruct-2409-LC-RTN-W4A16": "mistral-small-22b-instruct-lc-rtn-w4a16",
         "Mistral-Small-Instruct-2409-LC-RTN-W8A16": "mistral-small-22b-instruct-lc-rtn-w8a16",
         "Mistral-Small-Instruct-2409-LC-RTN-W8A8": "mistral-small-22b-instruct-lc-rtn-w8a8",
+        "Mistral-Small-Instruct-2409-AWQ-W4A16": "mistral-small-22b-instruct-awq-w4a16",
+        "Mistral-Small-Instruct-2409-LC-GPTQ-W4A16": "mistral-small-22b-instruct-lc-gptq-w4a16",
+        "Mistral-Small-Instruct-2409-LC-SmoothQuant-GPTQ-W4A16": "mistral-small-22b-instruct-lc-smooth-gptq-w4a16",
         "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A8": "mistral-small-22b-instruct-lc-smooth-rtn-w8a8",
+        "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W4A16": "mistral-small-22b-instruct-lc-smooth-rtn-w4a16",
+        "Mistral-Small-Instruct-2409-LC-SmoothQuant-RTN-W8A16": "mistral-small-22b-instruct-lc-smooth-rtn-w8a16",
 
         ########################################################################
         #                             Qwen Family                              #
@@ -323,6 +403,8 @@ MODEL_INFO = {
         "Qwen2-7B-Instruct-LC-RTN-W8A16": "qwen2-7b-instruct-lc-rtn-w8a16",
         "Qwen2-7B-Instruct-LC-RTN-W8A8": "qwen2-7b-instruct-lc-rtn-w8a8",
         "Qwen2-7B-Instruct-LC-SmoothQuant-RTN-W8A8": "qwen2-7b-instruct-lc-smooth-rtn-w8a8",
+        "Qwen2-7B-Instruct-LC-SmoothQuant-RTN-W4A16": "qwen2-7b-instruct-lc-smooth-rtn-w4a16",
+        "Qwen2-7B-Instruct-LC-SmoothQuant-RTN-W8A16": "qwen2-7b-instruct-lc-smooth-rtn-w8a16",
 
         # Qwen2 72B
         "Qwen/Qwen2-72B": "qwen2-72b",
@@ -336,7 +418,28 @@ MODEL_INFO = {
         "Qwen2-72B-Instruct-LC-RTN-W8A16": "qwen2-72b-instruct-lc-rtn-w8a16",
         "Qwen2-72B-Instruct-LC-RTN-W8A8": "qwen2-72b-instruct-lc-rtn-w8a8",
         "Qwen2-72B-Instruct-LC-SmoothQuant-RTN-W8A8": "qwen2-72b-instruct-lc-smooth-rtn-w8a8",
-    }
+    },
+
+    # Model Grouping
+    "model_group": [
+        "llama3.2-1b",
+        "llama3.2-1b-instruct",
+        "llama3.2-3b",
+        "llama3.2-3b-instruct",
+        "llama3.1-8b",
+        "llama3.1-8b-instruct",
+        "llama3.1-70b",
+        "llama3.1-70b-instruct",
+
+        "mistral-v0.3-7b",
+        "mistral-v0.3-7b-instruct",
+        "ministral-8b-instruct",
+        "mistral-small-22b-instruct"
+
+        "qwen2-7b",
+        "qwen2-7b-instruct",
+        "qwen2-72b-instruct",
+    ]
 }
 
 ################################################################################

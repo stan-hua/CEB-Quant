@@ -155,6 +155,8 @@ class PrometheusEvaluator:
         # Early return, if no data provided
         if not data:
             LOGGER.warning("No data provided for evaluation!")
+            # Save empty JSON list in the folder
+            self.save_progress([], filename=progress_filename)
             return []
 
         # Ensure that social axis and social group are present

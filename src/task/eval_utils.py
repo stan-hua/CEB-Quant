@@ -6,8 +6,9 @@ Description: Contains utility functions useful during stereotype/toxicity
 """
 
 # Standard libraries
-import os
+import ast
 import logging
+import os
 
 # Custom libraries
 from config import DEFAULT_SCORE_KEY
@@ -140,6 +141,7 @@ def score_open_ended_responses(
     # Filter for harmful data
     # NOTE: This is done after, so that we don't overwrite existing evaluations
     if filter_kwargs:
+        LOGGER.info(f"[CEB Benchmark] Filter arguments: {filter_kwargs}")
         answered_data = filter_data_by_kwargs(answered_data, filter_kwargs)
         refused_data = filter_data_by_kwargs(refused_data, filter_kwargs)
         invalid_data = filter_data_by_kwargs(invalid_data, filter_kwargs)
@@ -270,6 +272,12 @@ def validate_rta(data):
     # Ensure all rows have a valid RTA key
     assert all("rta" in row for row in data), "All rows must contain a 'rta' key!"
     for row in data:
+        # Skip, if already converted to boolean
+        if isinstance(row["rta"], bool):
+            continue
+
+        # Parse string to bool
+        assert isinstance(row["rta"], str)
         # 1. First attempt with capital YES and NO
         rta = metric_utils.extract_valid_choice(row["rta"], ["YES", "NO"])
         # 2. Second attempt with lowercase YES and NO, and lowercase text
@@ -300,6 +308,13 @@ def filter_data_by_kwargs(data, filter_kwargs=None):
     if not filter_kwargs:
         return data
 
+    # SPECIAL CASE: If `filter_kwargs` is a string, parse to a dict
+    if isinstance(filter_kwargs, str):
+        try:
+            filter_kwargs = ast.literal_eval(filter_kwargs)
+        except:
+            raise RuntimeError(f"`--filter_kwargs` provided ({filter_kwargs}) could not be parsed properly!")
+
     filtered_rows = []
     for row in data:
         for key, value in filter_kwargs.items():
@@ -309,6 +324,7 @@ def filter_data_by_kwargs(data, filter_kwargs=None):
                     value = False
                 elif value == "True":
                     value = True
+            # Filter using literal value
             if row.get(key) == value:
                 filtered_rows.append(row)
     return filtered_rows
@@ -319,4 +335,4 @@ def pop_invalid_kwargs(kwargs, valid_keys):
     for key in invalid_kwargs:
         kwargs.pop(key)
     if invalid_kwargs:
-        LOGGER.info(f"Removing unused keyword arguments: {invalid_kwargs}")
+        LOGGER.debug(f"Removing unused keyword arguments: {invalid_kwargs}")
