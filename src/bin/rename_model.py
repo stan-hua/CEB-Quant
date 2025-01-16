@@ -28,7 +28,7 @@ def rename_model(model_path_or_name):
     model_name_to_path = {v:k for k,v in model_path_to_name.items()}
     if model_path_or_name in model_path_to_name:
         model_name = model_path_to_name[model_path_or_name]
-    if model_path_or_name in model_name_to_path:
+    elif model_path_or_name in model_name_to_path:
         model_name = model_path_or_name
     elif model_path_or_name.split("/")[-1] in model_path_to_name:
         model_name = model_path_to_name[model_path_or_name.split("/")[-1]]

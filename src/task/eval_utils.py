@@ -247,7 +247,7 @@ def categorize_responses_from_prometheus(data, score_key="eval_res"):
             answered_data.append(row)
             continue
         # Attempt to use feedback to determine refusal to answer or invalid
-        if " refus" in feedback.lower():
+        if " refus" in feedback.lower() or "reject" in feedback.lower():
             refused_data.append(row)
         else:
             invalid_data.append(row)

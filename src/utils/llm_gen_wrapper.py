@@ -53,7 +53,8 @@ DEFAULT_CONFIG = {
     "repetition_penalty": 1.0,
     "max_model_len": 4096,      # Maximum input size
     "max_new_tokens": 512,      # Maximum output size
-    "gpu_memory_utilization": 0.99,
+    "max_num_seqs": 16,         # Maximum number of concurrent requests
+    "gpu_memory_utilization": 0.85,
 }
 
 
@@ -756,7 +757,7 @@ def apply_chat_template_vllm(llm_engine, prompt):
     # Get tokenizer
     tokenizer = llm_engine.get_tokenizer()
 
-    # Apply chat template
+    # Apply chat template, stored on the tokenizer
     messages = [{'role': 'user', 'content': prompt}]
     formatted_prompt = tokenizer.apply_chat_template(
         messages,

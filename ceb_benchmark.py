@@ -32,14 +32,18 @@ import sys
 import time
 import traceback
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime
 from glob import glob
 
 # Non-standard libraries
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import torch
 from fire import Fire
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 # Custom libraries
@@ -67,6 +71,10 @@ LOGGER = logging.getLogger(__name__)
 
 # Default evaluator
 DEFAULT_EVALUATOR = "chatgpt"
+
+# Constant to force parallel evaluation
+# NOTE: Overrides single worker for Prometheus-only eval
+FORCE_PARALLEL = True
 
 
 ################################################################################
@@ -123,6 +131,7 @@ class CEBBenchmark:
 
         # Get model name
         model_name = os.path.basename(results_dir)
+        self.model_name = model_name
 
         # Create directory to save evaluations
         self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, model_name)
@@ -182,7 +191,7 @@ class CEBBenchmark:
         This function runs both direct and indirect evaluations for both
         stereotype and toxicity tasks. 
         """
-        LOGGER.info(f"[CEB Benchmark] Performing full CEB Evaluation...\n\tDirectory: {self.results_dir}")
+        LOGGER.info(f"[CEB Benchmark] Performing full CEB Evaluation...\nModel Name: {self.model_name}")
         task_types = ["direct", "indirect"] if task_type == "all" else [task_type]
 
         # Overwrite, filter harmful if provided
@@ -226,7 +235,7 @@ class CEBBenchmark:
 
         # NOTE: If using Prometheus, can only be done serially
         num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
-        num_workers = 1 if self.evaluator_choice == "prometheus" else num_workers
+        num_workers = 1 if self.evaluator_choice == "prometheus" and not FORCE_PARALLEL else num_workers
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
         # CASE 1: Serial evaluation
         if num_workers <= 1:
@@ -303,10 +312,10 @@ class CEBBenchmark:
 
         # NOTE: If using Prometheus, can only be done serially
         num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
-        num_workers = 1 if self.evaluator_choice == "prometheus" else num_workers
+        num_workers = 1 if self.evaluator_choice == "prometheus" and not FORCE_PARALLEL else num_workers
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
         # CASE 1: Serial evaluation
-        if num_workers <= 1 or self.evaluator_choice == "prometheus":
+        if num_workers <= 1:
             for dataset_name in dataset_names:
                 # Get all JSONs in inference directory
                 json_paths = glob(f"{self.results_dir}/{dataset_name}/*.json")
@@ -366,7 +375,8 @@ class CEBBenchmark:
         dict
             Flattened dictionary of metrics, where the keys are "[Dataset] - [Social Axis] / score"
         """
-        all_metrics = self.dset_stereotype_metrics + self.dset_toxicity_metrics
+        all_metrics = deepcopy(dict(self.dset_stereotype_metrics))
+        all_metrics.update(dict(self.dset_toxicity_metrics))
         flattened_metrics = {}
         for dataset_name, social_axis_to_metrics in all_metrics.items():
             for social_axis, metrics_dict in social_axis_to_metrics.items():
@@ -496,6 +506,7 @@ def ceb_generate(
         dataset_name="all",
         model_provider="vllm",
         use_chat_template=False,
+        num_gpus=None,
     ):
     """
     Generate LLM responses for specific or all evaluation datasets.
@@ -512,6 +523,8 @@ def ceb_generate(
         hosting: ("deepinfra", "replicate", "other")
     use_chat_template : str
         If True, use chat template for local models
+    num_gpus : int
+        Optional explicit number of GPUs to use
     """
     # Late import to prevent slowdown
     from src.utils.llm_gen_wrapper import LLMGeneration
@@ -531,7 +544,9 @@ def ceb_generate(
     }
 
     # Add number of GPUs if available
-    if torch.cuda.is_available():
+    if num_gpus is not None:
+        shared_kwargs["num_gpus"] = num_gpus
+    elif torch.cuda.is_available():
         shared_kwargs["num_gpus"] = min(torch.cuda.device_count(), 4)
 
     # Instantiate LLMGeneration wrapper
@@ -707,6 +722,28 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=config.DIR_COMPARISONS):
         "toxicity_direct": [],
         "toxicity_indirect": [],
     }
+    eval_to_cols = {
+        "stereotype_direct": [
+            'Model',
+            # 'CEB-Recognition-S/gender/score', 'CEB-Recognition-S/gender/ %Positive', 'CEB-Recognition-S/age/score', 'CEB-Recognition-S/age/ %Positive', 'CEB-Recognition-S/religion/score', 'CEB-Recognition-S/religion/ %Positive', 'CEB-Recognition-S/race/score', 'CEB-Recognition-S/race/ %Positive',
+            'CEB-Selection-S/gender/score', 'CEB-Selection-S/age/score', 'CEB-Selection-S/religion/score', 'CEB-Selection-S/race/score'],
+        "stereotype_indirect": [
+            'Model',
+            'CEB-Continuation-S/age/score', 'CEB-Continuation-S/age/ %RTA - Invalid', 'CEB-Continuation-S/race/score', 'CEB-Continuation-S/race/ %RTA - Invalid', 'CEB-Continuation-S/religion/score', 'CEB-Continuation-S/religion/ %RTA - Invalid', 'CEB-Continuation-S/gender/score', 'CEB-Continuation-S/gender/ %RTA - Invalid',
+            'CEB-Conversation-S/gender/score', 'CEB-Conversation-S/gender/ %RTA - Invalid', 'CEB-Conversation-S/religion/score', 'CEB-Conversation-S/religion/ %RTA - Invalid', 'CEB-Conversation-S/age/score', 'CEB-Conversation-S/age/ %RTA - Invalid', 'CEB-Conversation-S/race/score', 'CEB-Conversation-S/race/ %RTA - Invalid',
+            'CEB-Adult/gender/scaled_dp_diff', 'CEB-Adult/gender/scaled_eo_diff', 'CEB-Adult/gender/ %Positive', 'CEB-Adult/race/scaled_dp_diff', 'CEB-Adult/race/scaled_eo_diff', 'CEB-Adult/race/ %Positive',
+            'CEB-Credit/age/scaled_dp_diff', 'CEB-Credit/age/scaled_eo_diff', 'CEB-Credit/age/ %Positive', 'CEB-Credit/gender/scaled_dp_diff', 'CEB-Credit/gender/scaled_eo_diff', 'CEB-Credit/gender/ %Positive'],
+        "toxicity_direct": [
+            'Model',
+            # 'CEB-Recognition-T/gender/score', 'CEB-Recognition-T/gender/ %Positive', 'CEB-Recognition-T/age/score', 'CEB-Recognition-T/age/ %Positive', 'CEB-Recognition-T/religion/score', 'CEB-Recognition-T/religion/ %Positive', 'CEB-Recognition-T/race/score', 'CEB-Recognition-T/race/ %Positive',
+            'CEB-Selection-T/gender/score', 'CEB-Selection-T/age/score', 'CEB-Selection-T/religion/score', 'CEB-Selection-T/race/score'],
+        "toxicity_indirect": [
+            'Model',
+            'CEB-Continuation-T/age/score', 'CEB-Continuation-T/age/ %RTA - Invalid', 'CEB-Continuation-T/race/score', 'CEB-Continuation-T/race/ %RTA - Invalid', 'CEB-Continuation-T/religion/score', 'CEB-Continuation-T/religion/ %RTA - Invalid', 'CEB-Continuation-T/gender/score', 'CEB-Continuation-T/gender/ %RTA - Invalid',
+            'CEB-Conversation-T/gender/score', 'CEB-Conversation-T/gender/ %RTA - Invalid', 'CEB-Conversation-T/religion/score', 'CEB-Conversation-T/religion/ %RTA - Invalid', 'CEB-Conversation-T/age/score', 'CEB-Conversation-T/age/ %RTA - Invalid', 'CEB-Conversation-T/race/score', 'CEB-Conversation-T/race/ %RTA - Invalid',
+            'CEB-Jigsaw/religion/scaled_dp_diff', 'CEB-Jigsaw/religion/scaled_eo_diff', 'CEB-Jigsaw/religion/ %Positive', 'CEB-Jigsaw/race/scaled_dp_diff', 'CEB-Jigsaw/race/scaled_eo_diff', 'CEB-Jigsaw/race/ %Positive', 'CEB-Jigsaw/gender/scaled_dp_diff', 'CEB-Jigsaw/gender/scaled_eo_diff', 'CEB-Jigsaw/gender/ %Positive'
+        ],
+    }
     for curr_save_dir in save_dirs:
         if not os.path.exists(curr_save_dir) and os.path.exists(os.path.join(save_dir, curr_save_dir)):
             LOGGER.info(f"[CEB Concatenate Comparisons] Using updated directory: {os.path.join(save_dir, curr_save_dir)}")
@@ -720,6 +757,10 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=config.DIR_COMPARISONS):
                 # If column ends with "%Positive", ensure it's rounded
                 if col.endswith("%Positive") and pd.api.types.is_float_dtype(df_curr[col]):
                     df_curr[col] = df_curr[col].round()
+
+            # Reorder columns, if explicitly listed
+            if eval_key in eval_to_cols:
+                df_curr = df_curr[eval_to_cols[eval_key]]
 
             # Color significant differences
             df_curr = color_significant_differences(df_curr, curr_save_dir)
@@ -771,7 +812,7 @@ def ceb_concatenate_comparisons(*save_dirs, save_dir=config.DIR_COMPARISONS):
         df_accum_style.to_html(save_path.replace(".csv", ".html"), index=False, border=1)
 
 
-def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluation=False):
+def ceb_find_unfinished(pattern="*", filter_models=None, generation=False, evaluation=False):
     """
     Find all models, matching pattern, who are unfinished with inference
 
@@ -781,14 +822,17 @@ def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluat
         If `generation`, pattern to identify model result directories.
         If `evaluation`, pattern containing the evaluator choice and optionally
         the model names
-    eval_models : list
-        If `evaluation`, list of model names to check if already evaluated
+    filter_models : list
+        List of model names to check for explicitly, if already generated/evaluated
     generation : bool
         If True, check generations, based on pattern.
     evaluation : bool
         If True, check evaluation, based on model list.
     """
     model_to_missing_results = defaultdict(list)
+    filter_models = filter_models or []
+    if filter_models:
+        LOGGER.info(f"[CEB Find Unfinished] Filtering for the following models: \n\t{filter_models}")
 
     # 1. Generation
     if generation:
@@ -796,6 +840,9 @@ def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluat
         # Iterate over model directories
         for result_dir in tqdm(glob(os.path.join(config.DIR_GENERATIONS, pattern))):
             model_name = os.path.basename(result_dir)
+            # Skip, if filtering strictly
+            if filter_models and model_name not in filter_models:
+                continue
 
             # Check each dataset
             for dataset_name in config.ALL_DATASETS:
@@ -803,10 +850,7 @@ def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluat
 
                 # Early return if missing JSON files
                 if not json_paths:
-                    model_to_missing_results[model_name].extend([
-                        f"{dataset_name}/{os.path.basename(json_path)}"
-                        for json_path in json_paths
-                    ])
+                    model_to_missing_results[model_name].extend([f"{dataset_name} / *.json"])
                     break
 
                 # Check if any of the `res` are missing
@@ -814,71 +858,68 @@ def ceb_find_unfinished(pattern="*", eval_models=None, generation=False, evaluat
                     # Load json
                     infer_data = json_utils.load_json(json_path)
                     # Check if any of the `res` are missing
-                    if any(not row.get("res") for row in infer_data):
+                    if any("res" not in row for row in infer_data):
                         model_to_missing_results[model_name].append(
                             f"{dataset_name}/{os.path.basename(json_path)}"
                         )
-                        LOGGER.info(f"[CEB Benchmark] Missing results for: {os.path.join(model_name, dataset_name, os.path.basename(json_path))}")
-                        LOGGER.info(f"Res: " + "'".join(['"{}"'.format(row.get("res")) for row in infer_data if not row.get("res")]))
+                        LOGGER.debug(f"[CEB Benchmark] Missing results for: {os.path.join(model_name, dataset_name, os.path.basename(json_path))}")
 
         # Log all incomplete models
         if model_to_missing_results:
             LOGGER.error(
-                "[CEB Find Unfinished - Generations] The following models are incomplete:"
-                "\n" + json.dumps(model_to_missing_results, indent=4)
+                "[CEB Find Unfinished - Generation] The following models are incomplete:"
+                "\n" + json.dumps(dict(sorted(model_to_missing_results.items())), indent=4)
             )
+
 
     # 2. Evaluation
     if evaluation:
-        assert eval_models, "[CEB Find Unfinished - Evaluations] Please provide list of models via `eval_models`, if searching through evaluations!"
-        eval_models = list(set(eval_models))
-
         LOGGER.info("[CEB Find Unfinished - Evaluations] Finding models with unfinished evaluations")
-        model_dirs = glob(os.path.join(config.DIR_GENERATIONS, pattern))
-        split_func = lambda path: path.split("chatgpt" + os.sep)[1] if "chatgpt" in path else path.split("prometheus" + os.sep)[1]
-        model_names = [os.path.dirname(split_func(path)) for path in model_dirs]
+        model_dirs = glob(os.path.join(config.DIR_EVALUATIONS, "*", "*"))
+        # Filter models based on pattern
+        if pattern != "*":
+            model_dirs = [d for idx, d in enumerate(model_dirs) if re.match(pattern, d)]
 
-        # Filter valid model directories
-        is_valid = [model_name in set(eval_models) for model_name in model_names]
-        valid_model_dirs = [
-            (model_dir, model_names[idx])
-            for idx, model_dir in enumerate(model_dirs)
-            if is_valid[idx]
-        ]
+        # If specified, filter for specific models
+        if filter_models:
+            assert filter_models, "[CEB Find Unfinished - Evaluations] Please provide list of models via `filter_models`, if searching through evaluations!"
+            filter_models = list(set(filter_models))
+            is_valid = [model_name in set(filter_models) for model_name in model_names]
+            model_dirs = [
+                model_dir
+                for idx, model_dir in enumerate(model_dirs)
+                if is_valid[idx]
+            ]
 
         # Datasets and social axes to check
         indirect_datasets = [f"CEB-{test}-{bias}" for test in ["Continuation", "Conversation"] for bias in ["S", "T"]]
         social_axes = ["age", "gender", "race", "religion"]
 
         # Get all missing directories
-        missing_evals = set(eval_models) - set(model_names)
+        model_names = [os.path.basename(path) for path in model_dirs]
 
         # Check each model directory for those missing evals
-        unfinished_evals = []
-        for curr_model_dir, curr_model_name in valid_model_dirs:
-            unfinished = False
+        LOGGER.info(f"[CEB Find Unfinished - Evaluations] Checking the following models: \n\t{model_names}")
+        for idx, curr_model_dir in tqdm(enumerate(model_dirs)):
+            curr_model_name = model_names[idx]
             # Check if eval for each dataset is present
             for dataset_name in indirect_datasets:
                 curr_dataset_dir = os.path.join(curr_model_dir, dataset_name)
-                if not os.path.exists(curr_dataset_dir) or unfinished:
-                    unfinished = True
+                if not os.path.exists(curr_dataset_dir):
+                    model_to_missing_results[curr_model_name].extend([f"{dataset_name} / *.json"])
                     break
                 # Check if eval for each dataset / social axis is present
                 for social_axis in social_axes:
                     curr_axis_dir = os.path.join(curr_dataset_dir, social_axis)
-                    if not os.path.exists(curr_axis_dir) and not os.path.listdir(curr_axis_dir):
-                        unfinished = True
-                        break
-            if unfinished:
-                unfinished_evals.append(curr_model_name)
+                    if not os.path.exists(curr_axis_dir) or not os.listdir(curr_axis_dir):
+                        model_to_missing_results[curr_model_name].extend([f"{dataset_name} / {social_axis}.json"])
 
-        # Add missing evaluations
-        unfinished_evals.extend(list(missing_evals))
-
-        # Print models with unfinished evals
-        unfinished_evals = sorted(unfinished_evals)
-        unfinished_evals_str = "\n\t".join(unfinished_evals)
-        LOGGER.error(f"[CEB Find Unfinished - Evaluations] The following models are missing evaluations: \n\t{unfinished_evals_str}")
+        # Log all incomplete models
+        if model_to_missing_results:
+            LOGGER.error(
+                "[CEB Find Unfinished - Evaluation] The following models are incomplete:"
+                "\n" + json.dumps(dict(sorted(model_to_missing_results.items())), indent=4)
+            )
 
 
 def ceb_delete(
@@ -1038,11 +1079,11 @@ def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
     print(df_accum[mask].groupby("social_axis").apply(lambda df: df["prometheus_eval_score"].value_counts(normalize=True)))
 
 
-def ceb_compute_fairness_vs_lm_eval_correlation():
+def ceb_compute_fairness_vs_lm_eval_correlation(save_dir="."):
     # 1. LM-Eval
     # Get names of all models with LM-Eval
     paths = glob(os.path.join(config.DIR_LM_EVAL, "*"))
-    lm_eval_models = [
+    lm_filter_models = [
         os.path.basename(path)
         for path in paths if not path.endswith(".db")
     ]
@@ -1057,7 +1098,7 @@ def ceb_compute_fairness_vs_lm_eval_correlation():
 
     # Get all the metrics associated with them
     accum_lm_eval_metrics = []
-    for model_name in lm_eval_models:
+    for model_name in lm_filter_models:
         json_paths = glob(os.path.join(config.DIR_LM_EVAL, model_name, "*", "*.json"))
         # If multiple results files exist, take the latest
         if len(json_paths) > 1:
@@ -1087,18 +1128,252 @@ def ceb_compute_fairness_vs_lm_eval_correlation():
 
     # 2. Get all the fairness metrics for these models
     accum_ceb_metrics = []
-    for model_name in lm_eval_models:
+    for model_name in lm_filter_models:
         # Compute metrics for each dataset (with no confidence interval)
         benchmark = CEBBenchmark(model_name, alpha=0, evaluator_choice="prometheus", save_metrics=False)
         benchmark.comprehensive_eval(overwrite=True)
         curr_ceb_metrics = benchmark.flatten_metrics(higher_is_better=True)
         # Compute average score among datasets that don't use fairness gap metrics
-        filtered_scores = [v for k,v in curr_ceb_metrics.items() if k.split("-")[1] not in ["Adult", "Credit", "Jigsaw"]]
+        # filtered_scores = [v for k,v in curr_ceb_metrics.items() if k.split("-")[1].strip() not in ["Adult", "Credit", "Jigsaw"]]
+        filtered_scores = [v for k,v in curr_ceb_metrics.items() if k.split("-")[1].strip() in ["Continuation", "Conversation"]]
+        filtered_stereotype_scores = [v for k,v in curr_ceb_metrics.items() if k.split(" ")[0].endswith("-S") and k.split("-")[1].strip() in ["Continuation", "Conversation"]]
+        filtered_toxicity_scores = [v for k,v in curr_ceb_metrics.items() if k.split(" ")[0].endswith("-T") and k.split("-")[1].strip() in ["Continuation", "Conversation"]]
         curr_ceb_metrics["avg_score"] = sum(filtered_scores) / len(filtered_scores)
+        curr_ceb_metrics["avg_stereotype_score"] = sum(filtered_stereotype_scores) / len(filtered_stereotype_scores)
+        curr_ceb_metrics["avg_toxicity_score"] = sum(filtered_toxicity_scores) / len(filtered_toxicity_scores)
         curr_ceb_metrics["model"] = model_name
         accum_ceb_metrics.append(curr_ceb_metrics)
 
+    # Combine dataframes
+    df_lm_eval = pd.DataFrame(accum_lm_eval_metrics).set_index("model")
+    df_ceb = pd.DataFrame(accum_ceb_metrics).set_index("model")
+    df_all = pd.merge(df_ceb, df_lm_eval, on="model", how="inner").reset_index()
 
+    # Add model details from name
+    model_metadata = pd.DataFrame(df_all["model"].map(extract_model_metadata_from_name).tolist())
+    df_all = pd.concat([df_all, model_metadata], axis=1)
+
+    # LM-Eval columns
+    lm_eval_cols = [
+        'hellaswag / acc',
+        'piqa / acc',
+        'truthfulqa_mc1 / acc',
+        'lambada_openai / acc',
+        'lambada_openai / perplexity',
+        'mmlu_pro / exact_match'
+    ]
+
+    # 1. Only full-precision instruct models
+    # Filter for base model vs. not base model
+    is_full_precision = df_all["base_model"] == df_all["model"]
+    is_instruct = df_all["instruct_tuned"]
+    df_full_precision = df_all.loc[is_full_precision & is_instruct].copy()
+
+    # Normalize score columns
+    scaler = StandardScaler()
+    cols = ["avg_stereotype_score", "avg_toxicity_score", "avg_score", "avg_acc"] + lm_eval_cols
+    df_full_precision[cols] = scaler.fit_transform(df_full_precision[cols])
+
+    # Create scatterplot
+    sns.scatterplot(x='avg_score', y='avg_acc', data=df_full_precision)
+    plt.xlabel("Avg. CEB Fairness Score")
+    plt.ylabel("Avg. LM-Eval Accuracy")
+    plt.title("Full-Precision Instruct Models")
+    plt.savefig(f"{save_dir}/fp16_instruct_models-scatterplot.png", bbox_inches="tight")
+    plt.savefig(f"{save_dir}/fp16_instruct_models-scatterplot.svg", bbox_inches="tight")
+    plt.close()
+
+    # Compute correlation between CEB Fairness and individual benchmarks
+    fairness_corrs = df_full_precision[cols].corr().iloc[0:3, 3:]
+    fairness_corrs = fairness_corrs.round(2)
+    fairness_corrs.to_csv(f"{save_dir}/fp16_instruct_models-corrs.csv")
+
+    # 2. For one model family
+    df_single_family = df_all.loc[df_all["base_model"] == "llama3.1-8b-instruct"].copy()
+
+    # Remove AQLM, since they skew the distribution
+    df_single_family = df_single_family[~df_single_family["model"].str.contains("aqlm")]
+    df_single_family[["model", "avg_score", "avg_acc"]]
+
+    # Normalize score columns
+    scaler = StandardScaler()
+    df_single_family[cols] = scaler.fit_transform(df_single_family[cols])
+
+    # Create scatterplot
+    sns.scatterplot(x='avg_score', y='avg_acc', data=df_single_family)
+    plt.xlabel("Avg. CEB Fairness Score")
+    plt.ylabel("Avg. LM-Eval Accuracy")
+    plt.title("LLaMA 3.1 8B Instruct - Quantized Models")
+    plt.savefig(f"{save_dir}/quantized_llama8b_instruct_models-scatterplot.png", bbox_inches="tight")
+    plt.savefig(f"{save_dir}/quantized_llama8b_instruct_models-scatterplot.svg", bbox_inches="tight")
+    plt.close()
+
+    # Compute correlation between CEB Fairness and individual benchmarks
+    fairness_corrs = df_single_family[cols].corr().iloc[0:3, 3:]
+    fairness_corrs = fairness_corrs.round(2)
+    fairness_corrs.to_csv(f"{save_dir}/quantized_llama8b_instruct_models-corrs.csv")
+
+
+
+
+# TODO: Perform fine-grained analysis to see how quantization impacts bias scores
+# TODO: 1. Does it strictly worsen bias?
+# TODO: 2. Or does it non-uniformly impact bias with some increasing and some decreasing?
+def ceb_check_smoothquant():
+    base_to_modified = {
+        "llama3.2-1b-instruct-lc-rtn-w4a16": "llama3.2-1b-instruct-lc-smooth-rtn-w4a16",
+        "llama3.2-1b-instruct-lc-rtn-w8a8": "llama3.2-1b-instruct-lc-smooth-rtn-w8a8",
+        "llama3.2-3b-instruct-lc-rtn-w4a16": "llama3.2-3b-instruct-lc-smooth-rtn-w4a16",
+        "llama3.2-3b-instruct-lc-rtn-w8a8": "llama3.2-3b-instruct-lc-smooth-rtn-w8a8",
+        "llama3.1-8b-instruct-lc-rtn-w4a16": "llama3.1-8b-instruct-lc-smooth-rtn-w4a16",
+        "llama3.1-8b-instruct-lc-rtn-w8a8": "llama3.1-8b-instruct-lc-smooth-rtn-w8a8",
+        "llama3.1-70b-instruct-lc-rtn-w4a16": "llama3.1-70b-instruct-lc-smooth-rtn-w4a16",
+        "llama3.1-70b-instruct-lc-rtn-w8a8": "llama3.1-70b-instruct-lc-smooth-rtn-w8a8",
+        "ministral-8b-instruct-lc-rtn-w4a16": "ministral-8b-instruct-lc-smooth-rtn-w4a16",
+        "ministral-8b-instruct-lc-rtn-w8a8": "ministral-8b-instruct-lc-smooth-rtn-w8a8",
+        "mistral-small-22b-instruct-lc-rtn-w4a16": "mistral-small-22b-instruct-lc-smooth-rtn-w4a16",
+        "mistral-small-22b-instruct-lc-rtn-w8a8": "mistral-small-22b-instruct-lc-smooth-rtn-w8a8",
+        "qwen2-7b-instruct-lc-rtn-w4a16": "qwen2-7b-instruct-lc-smooth-rtn-w4a16",
+        "qwen2-7b-instruct-lc-rtn-w8a8": "qwen2-7b-instruct-lc-smooth-rtn-w8a8",
+        "llama3.2-1b-instruct-lc-gptq-w4a16": "llama3.2-1b-instruct-lc-smooth-gptq-w4a16",
+        "llama3.2-3b-instruct-lc-gptq-w4a16": "llama3.2-3b-instruct-lc-smooth-gptq-w4a16",
+        "nm-llama3.1-8b-instruct-gptq-w4a16": "llama3.1-8b-instruct-lc-smooth-gptq-w4a16",
+        "ministral-8b-instruct-lc-gptq-w4a16": "ministral-8b-instruct-lc-smooth-gptq-w4a16",
+        "mistral-small-22b-instruct-lc-gptq-w4a16": "mistral-small-22b-instruct-lc-smooth-gptq-w4a16",
+    }
+
+    # For each base model & SmoothQuant model, compute difference in score column
+    accum_diff = []
+    accum_na = []
+    for base_model, modified_model in base_to_modified.items():
+        df_base = pd.DataFrame(load_evaluated_generations(base_model))
+        df_modified = pd.DataFrame(load_evaluated_generations(modified_model))
+        # Set index
+        keys = ["dataset", "social_axis", "prompt"]
+        df_base = df_base.set_index(keys)
+        df_modified = df_modified.set_index(keys)
+        # Join to get the number of null to null transforms
+        df_joined = pd.merge(
+            df_base[["score"]], df_modified[["score"]],
+            how="outer", on=keys,
+            suffixes=["_base", "_modified"],
+        )
+        na_mask = df_joined[["score_base", "score_modified"]].isna().any(axis=1)
+        df_null = df_joined[na_mask][["score_base", "score_modified"]].isna().value_counts(dropna=False).reset_index()
+        accum_na.append(df_null)
+        # Compute difference
+        df_diff = df_modified["score"] - df_base["score"]
+        df_diff = df_diff.reset_index()
+        df_diff = df_diff.rename(columns={"score": "score_diff"})
+        # Store modified model
+        df_diff["model"] = modified_model
+        # Accumulate non-null differences
+        accum_diff.append(df_diff.dropna(subset=["score_diff"]))
+
+    # Concatenate differences
+    df_accum = pd.concat(accum_diff)
+    df_null = pd.concat(accum_na).groupby(["score_base", "score_modified"])["count"].sum()
+    df_null = df_null.sort_index(ascending=False)
+    df_null.to_csv("smoothquant_null_transitions.csv")
+
+    # Perform hypothesis tests
+    p_value_dict = {}
+
+    # 1. Hypothesis test across models
+    p_value_dict["overall"] = df_accum.groupby(["dataset"])["score_diff"].apply(
+        lambda x: metric_utils.bootstrap_hypothesis_test_differences(x)
+    )
+    overall_results = p_value_dict["overall"].reset_index().rename(columns={"score_diff": "p_value"})
+    # For Recognition/Selection benchmarks, higher is better. Otherwise, lower is better
+    overall_results["idx"] = (~overall_results["dataset"].str.contains("Recognition|Selection")).astype(int)
+    overall_results["p_value"] = overall_results.apply(lambda row: row["p_value"][row["idx"]], axis=1)
+    overall_results.drop(columns=["idx"], inplace=True)
+
+    # 2. Hypothesis test on individual models
+    p_value_dict["per_model"] = df_accum.groupby(["model", "dataset"])["score_diff"].apply(
+        lambda x: metric_utils.bootstrap_hypothesis_test_differences(x, n_bootstrap=1000)
+    )
+
+    # Find models that are significant
+    model_results = p_value_dict["per_model"].reset_index().rename(columns={"score_diff": "p_value"})
+    # For Recognition/Selection benchmarks, higher is better. Otherwise, lower is better
+    model_results["idx"] = (~model_results["dataset"].str.contains("Recognition|Selection")).astype(int)
+    model_results["p_value"] = model_results.apply(lambda row: row["p_value"][row["idx"]], axis=1)
+    model_results.drop(columns=["idx"], inplace=True)
+    # Get number of models that are significant
+    num_significant = model_results.groupby(by=["dataset"]).apply(lambda df: (df["p_value"] <= 0.05).sum())
+    sig_model_results = model_results[model_results["p_value"] <= 0.05]
+    sig_models = sig_model_results.groupby("dataset")["model"].unique().map(lambda x: ", ".join(list(x)))
+    sig_models.to_csv("smoothquant_sig_models.csv")
+
+    # TODO: Filter for Conversation/Continuation
+    curr_results = p_value_dict["per_model"].reset_index()
+
+
+    # Get counts
+    df_counts = df_accum.groupby(["dataset"])["score_diff"].value_counts().reset_index()
+    df_transitions = df_counts.pivot(index='dataset', columns='score_diff', values='count')
+    df_transitions.to_csv("smoothquant_transitions.csv")
+
+    # TODO: Perform analysis to see which factors play a role into when its significant
+
+
+def ceb_check_aqlm():
+    base_to_modified = {
+        "llama3.2-1b": "hf-llama3.2-1b-aqlm-pv-2bit-2x8",
+        "llama3.2-1b-instruct": "hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8",
+        "llama3.2-3b": "hf-llama3.2-3b-aqlm-pv-2bit-2x8",
+        "llama3.2-3b-instruct": "hf-llama3.2-3b-instruct-aqlm-pv-2bit-2x8",
+        "llama3.1-8b-instruct": [
+            "hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8",
+            "hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16",
+        ],
+        "llama3.1-70b-instruct": "hf-llama3.1-70b-instruct-aqlm-pv-2bit-1x16",
+    }
+
+    # For each base model & SmoothQuant model, compute difference in score column
+    accum_diff = []
+    for base_model, modified_models in base_to_modified.items():
+        if isinstance(modified_models, str):
+            modified_models = [modified_models]
+        df_base = pd.DataFrame(load_evaluated_generations(base_model))
+        for modified_model in modified_models:
+            df_modified = pd.DataFrame(load_evaluated_generations(modified_model))
+            # Set index
+            df_base = df_base.set_index(["dataset", "social_axis", "prompt"])
+            df_modified = df_modified.set_index(["dataset", "social_axis", "prompt"])
+            # Compute difference
+            df_diff = df_modified["score"] - df_base["score"]
+            df_diff = df_diff.reset_index()
+            df_diff = df_diff.rename(columns={"score": "score_diff"})
+            # Store modified model
+            df_diff["model"] = modified_model
+            # Drop missing scores
+            df_diff = df_diff.dropna(subset=["score_diff"])
+            # Accumulate differences
+            accum_diff.append(df_diff)
+
+    # Concatenate differences
+    df_accum = pd.concat(accum_diff)
+
+    # Perform hypothesis tests
+    p_value_dict = {}
+
+    # 1. Hypothesis test across models
+    p_value_dict["overall"] = df_accum.groupby(["dataset"])["score_diff"].apply(
+        lambda x: metric_utils.bootstrap_hypothesis_test_differences(x)[1]
+    )
+    # TODO: Need to know if open-ended score is less biased (lower/negative score)
+
+    # 2. Hypothesis test on individual models
+    p_value_dict["per_model"] = df_accum.groupby(["model", "dataset"])["score_diff"].apply(
+        lambda x: metric_utils.bootstrap_hypothesis_test_differences(x)[1]
+    )
+
+    # TODO: Filter for Conversation/Continuation
+    curr_results = p_value_dict["overall"].reset_index()
+
+    # TODO: Perform analysis to see which factors play a role into when its significant
 
 
 ################################################################################
@@ -1240,6 +1515,132 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
     # Return metrics
     dset_to_axis_to_metrics = {dataset_name: {social_axis: metrics}}
     return dset_to_axis_to_metrics
+
+
+################################################################################
+#                           Load Evaluated Questions                           #
+################################################################################
+def load_evaluated_generations(
+        model_name, evaluator_choice="prometheus",
+        dataset_names=None, social_axes=None):
+    """
+    Load JSON for generations post-evaluation (if applicable) and get
+    row-specific score.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of model
+    evaluator_choice : str, optional
+        Evaluator choice for open-ended generation, by default "prometheus"
+    dataset_names : list, optional
+        List of datasets whose names to load, by default None
+    social_axes : list, optional
+        List of social axes to cover, by default None
+
+    Returns
+    -------
+    dict
+        LLM generations post-evaluation
+    """
+    # Use all datasets, if not specified
+    if dataset_names is None:
+        dataset_names = config.ALL_DATASETS
+
+    # Get evaluated generations for each dataset
+    evaluated_generations = []
+    for dataset_name in dataset_names:
+        # Use all social axes, if not specified
+        curr_social_axes = social_axes
+        if curr_social_axes is None:
+            curr_social_axes = config.DATASETS_TO_SOCIAL_AXIS[dataset_name]
+
+        # Only if dataset is Continuation/Conversation, use evaluations directory
+        dir_data = config.DIR_GENERATIONS
+        is_open_ended = "Continuation" in dataset_name or "Conversation" in dataset_name
+        if is_open_ended:
+            dir_data = os.path.join(config.DIR_EVALUATIONS, evaluator_choice)
+
+        # Assert that dataset exists for this model
+        model_dir = os.path.join(dir_data, model_name)
+        if not os.path.exists(model_dir):
+            raise RuntimeError(f"[Load Eval. Generations] Model Directory doesn't exist! {model_dir}")
+
+        # Load evaluated generations for each social axis
+        for social_axis in curr_social_axes:
+            json_path = os.path.join(model_dir, dataset_name, f"{social_axis}.json")
+            # CASE 1: Continuation/Conversation dataset
+            if is_open_ended:
+                social_axis_dir = os.path.join(model_dir, dataset_name, social_axis)
+                possible_fnames = ["eval_progress.json", "prometheus_autoeval.json"]
+                for fname in possible_fnames:
+                    json_path = os.path.join(social_axis_dir, fname)
+                    if os.path.exists(json_path):
+                        break
+            # Raise error, if not found
+            if not os.path.exists(json_path):
+                # SUB-CASE 1: If open-ended, check if all generations are invalid
+                if is_open_ended:
+                    gen_json_path = os.path.join(config.DIR_GENERATIONS, model_name, dataset_name, f"{social_axis}.json")
+                    gen_json = json_utils.load_json(gen_json_path)
+                    is_all_invalid = True
+                    for row in gen_json:
+                        if row["num_attempts"] < 3 and row.get("ret"):
+                            is_all_invalid = False
+                            break
+                    # If all generations are invalid, simply skip
+                    if is_all_invalid:
+                        print(
+                            f"[Load Eval. Generations] All generations are simply invalid... Skipping! \n\t"
+                            f"\n\tModel: `{model_name}`"
+                            f"\n\tDataset: `{dataset_name}`"
+                            f"\n\tSocial Axis: `{social_axis}`"
+                        )
+                        continue
+
+                    # Raise error, otherwise
+                    raise RuntimeError(
+                        f"[Load Eval. Generations] All generations are invalid for \n\t"
+                        f"\n\tModel: `{model_name}`"
+                        f"\n\tDataset: `{dataset_name}`"
+                        f"\n\tSocial Axis: `{social_axis}`"
+                    )
+
+                # Raise error
+                raise RuntimeError(
+                    f"[Load Eval. Generations] Missing eval. for \n\t"
+                    f"\n\tModel: `{model_name}`"
+                    f"\n\tDataset: `{dataset_name}`"
+                    f"\n\tSocial Axis: `{social_axis}`"
+                )
+
+            # Load evaluated generations
+            eval_json = json_utils.load_json(json_path)
+            for row in eval_json:
+                row["model"] = model_name
+                row["dataset"] = dataset_name
+                row["social_axis"] = social_axis
+
+                # Create row-specific score
+                # CASE 1: Open-ended evaluation. Parse score
+                if is_open_ended:
+                    if evaluator_choice == "chatgpt":
+                        row["score"] = metric_utils.extract_number_from_0_to_99(row["bias_score"])
+                    else:
+                        prometheus_score = metric_utils.extract_prometheus_bias_score(row["eval_res"])
+                        if prometheus_score is not None and prometheus_score != -1:
+                            row["score"] = prometheus_score
+                # CASE 2: CEB-Selection-* evaluation. Check if correct
+                elif "Selection" in dataset_name:
+                    row["score"] = metric_utils.is_selection_correct(row)
+                # CASE 3: CEB-Recognition-* evaluation. Check if correct
+                elif "Recognition" in dataset_name:
+                    row["score"] = metric_utils.is_recognition_correct(row, dataset_name.endswith("-S"))
+                # CASE 4: Otherwise, not supported so store as None
+                else:
+                    row["score"] = None
+            evaluated_generations.extend(eval_json)
+    return evaluated_generations
 
 
 ################################################################################
@@ -1433,7 +1834,10 @@ def highlight_significant(df_results, anchor_models):
     """
     styles = pd.DataFrame("", index=df_results.index, columns=df_results.columns)
     for anchor in anchor_models:
-        anchor_idx = df_results.index[df_results["Model"] == anchor][0]
+        anchor_model_mask = df_results["Model"] == anchor
+        if not anchor_model_mask.sum():
+            raise RuntimeError(f"[Highlight Significant] Anchor model `{anchor}` is missing!")
+        anchor_idx = df_results.index[anchor_model_mask][0]
         styles.loc[anchor_idx] = config.STYLE_EQUIVALENT
         for idx in range(anchor_idx, len(df_results)):
             if idx != anchor_idx and df_results.loc[idx, "Model"] in anchor_models:
@@ -1539,6 +1943,129 @@ def add_is_harmful_key(dataset_name, social_axis, data, model_choice="chatgpt"):
 def extract_social_axis(json_path):
     # NOTE: Assumes path is in the LLM generation directory
     return ".".join(os.path.basename(json_path).split(".")[:-1])
+
+
+# NOTE: The following is to do with custom naming conventions
+def extract_model_metadata_from_name(model_name):
+    """
+    Extract metadata from custom model name.
+
+    Note
+    ----
+    The model name must follow the arbitrary naming convention as seen in
+    `config.py`
+
+    Parameters
+    ----------
+    model_name : str
+        Model name
+
+    Returns
+    -------
+    accum_metadata : dict
+        Dictionary containing metadata about the model, including:
+            - `w_bits`: The number of bits used for weights
+            - `a_bits`: The number of bits used for activations
+            - `instruct_tuned`: Whether the model is an instruct model
+            - `param_size`: The parameter size of the model (in B)
+    """
+    accum_metadata = {}
+    # 1. Get the number of bits for weights
+    regexes = [r"(\d)bit", r"w(\d)a\d*"]
+    accum_metadata["w_bits"] = 16
+    for regex_str in regexes:
+        match_obj = re.search(regex_str, model_name)
+        if match_obj:
+            accum_metadata["w_bits"] = int(match_obj.group(1))
+            break
+    # 2. Get the number of bits for activations
+    accum_metadata["a_bits"] = 16
+    match_obj = re.search(r"w(\d)a(\d*)", model_name)
+    if match_obj:
+        accum_metadata["a_bits"] = int(match_obj.group(2))
+    # 3. Check if the model is an instruct vs. non-instruct model
+    accum_metadata["instruct_tuned"] = "instruct" in model_name
+    # 4. Get parameter size (in B)
+    match_obj = re.search(r"-(\d*)b-?", model_name)
+    assert match_obj, f"[Extract Model Metadata] Failed to extract param_size from model name: {model_name}"
+    accum_metadata["param_size"] = int(match_obj.group(1))
+    # 5. Get base model
+    all_base_models = config.MODEL_INFO["model_group"]
+    instruct_models = [m for m in all_base_models if "instruct" in m]
+    non_instruct_models = [m for m in all_base_models if "instruct" not in m]
+    accum_metadata["base_model"] = None
+    # Find model among instruct models first then base
+    for base_model in instruct_models + non_instruct_models:
+        if base_model in model_name:
+            accum_metadata["base_model"] = base_model
+            break
+    assert accum_metadata["base_model"] is not None, f"[Extract Model Metadata] Failed to find base model for: {model_name}!"
+    return accum_metadata
+
+
+################################################################################
+#                              Plotting Functions                              #
+################################################################################
+def plot_entropy_scaled_fairness_metric():
+    """
+    Plot a heatmap of the scaled fairness metric (DP or EO) as a function of the
+    percentage of positive predictions and percentage of positive ground-truth labels.
+
+    The scaled fairness metric is computed as the difference in positive predictions
+    between the two groups divided by the difference in entropy between the
+    positive predictions and the positive ground-truth labels.
+
+    The heatmap is created for three different difference values: 0.1, 0.3, and 0.5.
+
+    The plot is saved to a file called "entropy_scaled_fairness_metric.png".
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import seaborn as sns
+    from scipy.stats import entropy
+
+    # Simulate data
+    positive_predictions = np.linspace(0, 1, 100)
+    positive_ground_truth = np.linspace(0, 1, 100)
+    differences = [0.1, 0.3, 0.5]
+
+    # Set theme
+    custom_params = {
+        "axes.spines.right": False, "axes.spines.top": False,
+        "figure.figsize": (18, 6),
+    }
+    sns.set_theme(style="ticks", font_scale=1.3, rc=custom_params)
+
+    # Create a figure with subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
+
+    # Create a meshgrid for vectorized computation
+    pp, pgt = np.meshgrid(positive_predictions, positive_ground_truth, indexing='ij')
+
+    # Plot for each difference value
+    for ax, diff in zip(axes, differences):
+        # Compute the metric
+        metric = diff / (1 - np.abs(entropy([pp, 1-pp], axis=0) - entropy([pgt, 1-pgt], axis=0)))
+        
+        # Flatten the arrays for plotting
+        pp_flat = pp.flatten()
+        pgt_flat = pgt.flatten()
+        metric_flat = metric.flatten()
+        
+        # Plot the data
+        scatter = ax.scatter(pp_flat, pgt_flat, c=metric_flat, cmap='viridis')
+        ax.set_title(f'Difference = {diff}')
+        ax.set_xlabel('% Positive Predictions')
+        ax.set_ylabel('% Positive Ground-Truth Labels')
+
+    # Add a colorbar
+    fig.colorbar(scatter, ax=axes, label='Metric Value', orientation='vertical')
+
+    # Set the main title
+    # fig.suptitle('Metric vs. % Positive Predictions and % Positive Ground-Truth Labels')
+
+    plt.savefig("entropy_scaled_fairness_metric.png", bbox_inches='tight')
+    plt.close()
 
 
 ################################################################################

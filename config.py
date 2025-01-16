@@ -80,6 +80,18 @@ BIAS_TO_TASK_TYPE_TO_DATASETS = {
     }
 }
 
+# Datasets to Social Axis
+DATASETS_TO_SOCIAL_AXIS = {
+    "CEB-Adult": ["gender", "race"],
+    "CEB-Credit": ["age", "gender"],
+    "CEB-Jigsaw": ["gender", "race", "religion"],
+    **{
+        f"CEB-{task_type}-{bias_type}": ["gender", "age", "religion", "race"]
+        for task_type in ["Recognition", "Selection", "Continuation", "Conversation"]
+        for bias_type in ["S", "T"]
+    }
+}
+
 # Styles for highlighting significant differences
 STYLE_EQUIVALENT = "background-color: #fad49d"
 STYLE_BETTER = "background-color: #89c489"
@@ -99,6 +111,8 @@ ANCHOR_MODELS = {
         # "qwen2-72b",
     ],
     "nonchat_vs_chat": [
+        "llama3.2-1b-instruct",
+        "llama3.2-3b-instruct",
         "llama3.1-8b-instruct",
         "llama3.1-70b-instruct",
         "mistral-v0.3-7b-instruct",
@@ -132,25 +146,26 @@ ANCHOR_MODELS = {
         "ministral-8b-instruct",
         "mistral-small-22b-instruct",
         "qwen2-7b-instruct",
-        "qwen2-72b-instruct",
+        # "qwen2-72b-instruct",
     ],
     "sub_w4_quantizers": [
         "llama3.2-1b",
         "llama3.2-1b-instruct",
         "llama3.2-3b",
+        "llama3.2-3b-instruct",
         "llama3.1-8b-instruct",
         "llama3.1-70b-instruct",
-        "qwen2-7b-instruct",
-
+        # "qwen2-72b-instruct",
     ],
     "outlier_smoothing": [
         "llama3.2-1b-instruct-lc-rtn-w4a16",
         "llama3.2-1b-instruct-lc-rtn-w8a8",
         "llama3.2-3b-instruct-lc-rtn-w4a16",
         "llama3.2-3b-instruct-lc-rtn-w8a8",
-        "llama3.1-8b-instruct-lc-rtn-w4a16"
+        "llama3.1-8b-instruct-lc-rtn-w4a16",
         "llama3.1-8b-instruct-lc-rtn-w8a8",
-        "llama3.1-8b-instruct-lc-rtn-w8a16"
+        # TODO: Consider uncommenting
+        # "llama3.1-8b-instruct-lc-rtn-w8a16",
         "llama3.1-70b-instruct-lc-rtn-w4a16",
         "llama3.1-70b-instruct-lc-rtn-w8a8",
         "ministral-8b-instruct-lc-rtn-w4a16",
@@ -422,22 +437,22 @@ MODEL_INFO = {
 
     # Model Grouping
     "model_group": [
-        "llama3.2-1b",
         "llama3.2-1b-instruct",
-        "llama3.2-3b",
+        "llama3.2-1b",
         "llama3.2-3b-instruct",
-        "llama3.1-8b",
+        "llama3.2-3b",
         "llama3.1-8b-instruct",
-        "llama3.1-70b",
+        "llama3.1-8b",
         "llama3.1-70b-instruct",
+        "llama3.1-70b",
 
-        "mistral-v0.3-7b",
         "mistral-v0.3-7b-instruct",
+        "mistral-v0.3-7b",
         "ministral-8b-instruct",
-        "mistral-small-22b-instruct"
+        "mistral-small-22b-instruct",
 
-        "qwen2-7b",
         "qwen2-7b-instruct",
+        "qwen2-7b",
         "qwen2-72b-instruct",
     ]
 }
