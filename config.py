@@ -433,6 +433,68 @@ MODEL_INFO = {
         "Qwen2-72B-Instruct-LC-RTN-W8A16": "qwen2-72b-instruct-lc-rtn-w8a16",
         "Qwen2-72B-Instruct-LC-RTN-W8A8": "qwen2-72b-instruct-lc-rtn-w8a8",
         "Qwen2-72B-Instruct-LC-SmoothQuant-RTN-W8A8": "qwen2-72b-instruct-lc-smooth-rtn-w8a8",
+
+        # Qwen2.5 0.5B
+        "Qwen/Qwen2.5-0.5B-Instruct": "qwen2.5-0.5b-instruct",
+        "Qwen/Qwen2.5-0.5B-Instruct-AWQ": "qwen2.5-0.5b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int4": "qwen2.5-0.5b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int8": "qwen2.5-0.5b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 1.5B
+        "Qwen/Qwen2.5-1.5B-Instruct": "qwen2.5-1.5b-instruct",
+        "Qwen/Qwen2.5-1.5B-Instruct-AWQ": "qwen2.5-1.5b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-1.5B-Instruct-GPTQ-Int4": "qwen2.5-1.5b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-1.5B-Instruct-GPTQ-Int8": "qwen2.5-1.5b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 3B
+        "Qwen/Qwen2.5-3B-Instruct": "qwen2.5-3b-instruct",
+        "Qwen/Qwen2.5-3B-Instruct-AWQ": "qwen2.5-3b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-3B-Instruct-GPTQ-Int4": "qwen2.5-3b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-3B-Instruct-GPTQ-Int8": "qwen2.5-3b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 7B
+        "Qwen/Qwen2.5-7B-Instruct": "qwen2.5-7b-instruct",
+        "Qwen/Qwen2.5-7B-Instruct-AWQ": "qwen2.5-7b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int4": "qwen2.5-7b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8": "qwen2.5-7b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 14B
+        "Qwen/Qwen2.5-14B-Instruct": "qwen2.5-14b-instruct",
+        "Qwen/Qwen2.5-14B-Instruct-AWQ": "qwen2.5-14b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4": "qwen2.5-14b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8": "qwen2.5-14b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 32B
+        "Qwen/Qwen2.5-32B-Instruct": "qwen2.5-32b-instruct",
+        "Qwen/Qwen2.5-32B-Instruct-AWQ": "qwen2.5-32b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4": "qwen2.5-32b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-32B-Instruct-GPTQ-Int8": "qwen2.5-32b-instruct-gptq-w8a16",
+
+        # Qwen 2.5 72B
+        "Qwen/Qwen2.5-72B-Instruct": "qwen2.5-72b-instruct",
+        "Qwen/Qwen2.5-72B-Instruct-AWQ": "qwen2.5-72b-instruct-awq-w4a16",
+        "Qwen/Qwen2.5-72B-Instruct-GPTQ-Int4": "qwen2.5-72b-instruct-gptq-w4a16",
+        "Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8": "qwen2.5-72b-instruct-gptq-w8a16",
+
+        ########################################################################
+        #                              Phi Family                              #
+        ########################################################################
+        # Phi-3 Mini 3.8B
+        "microsoft/Phi-3-mini-4k-instruct": "phi3-3.8b-instruct",
+        # Phi-3 Small (7B)
+        "microsoft/Phi-3-small-8k-instruct": "phi3-7b-instruct",
+        # Phi-3 Medium (14B)
+        "microsoft/Phi-3-medium-4k-instruct": "phi3-14b-instruct",
+
+        ########################################################################
+        #                             Gemma Family                             #
+        ########################################################################
+        # Gemma 2 2B
+        "google/gemma-2-2b-it": "gemma2-2b-instruct",
+        # Gemma 2 9B
+        "google/gemma-2-9b-it": "gemma2-9b-instruct",
+        # Gemma 2 27B
+        "google/gemma-2-27b-it": "gemma2-27b-instruct",
     },
 
     # Model Grouping

@@ -1085,7 +1085,7 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir="."):
     paths = glob(os.path.join(config.DIR_LM_EVAL, "*"))
     lm_filter_models = [
         os.path.basename(path)
-        for path in paths if not path.endswith(".db")
+        for path in paths if os.path.isdir(path)
     ]
     benchmark_to_metric_cols = {
         "arc_challenge": ["acc,none"],
@@ -1168,12 +1168,10 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir="."):
     is_full_precision = df_all["base_model"] == df_all["model"]
     is_instruct = df_all["instruct_tuned"]
     df_full_precision = df_all.loc[is_full_precision & is_instruct].copy()
-
     # Normalize score columns
     scaler = StandardScaler()
     cols = ["avg_stereotype_score", "avg_toxicity_score", "avg_score", "avg_acc"] + lm_eval_cols
     df_full_precision[cols] = scaler.fit_transform(df_full_precision[cols])
-
     # Create scatterplot
     sns.scatterplot(x='avg_score', y='avg_acc', data=df_full_precision)
     plt.xlabel("Avg. CEB Fairness Score")
@@ -1182,23 +1180,19 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir="."):
     plt.savefig(f"{save_dir}/fp16_instruct_models-scatterplot.png", bbox_inches="tight")
     plt.savefig(f"{save_dir}/fp16_instruct_models-scatterplot.svg", bbox_inches="tight")
     plt.close()
-
     # Compute correlation between CEB Fairness and individual benchmarks
     fairness_corrs = df_full_precision[cols].corr().iloc[0:3, 3:]
     fairness_corrs = fairness_corrs.round(2)
     fairness_corrs.to_csv(f"{save_dir}/fp16_instruct_models-corrs.csv")
 
-    # 2. For one model family
+    # 2. Plot single family
     df_single_family = df_all.loc[df_all["base_model"] == "llama3.1-8b-instruct"].copy()
-
     # Remove AQLM, since they skew the distribution
     df_single_family = df_single_family[~df_single_family["model"].str.contains("aqlm")]
     df_single_family[["model", "avg_score", "avg_acc"]]
-
     # Normalize score columns
     scaler = StandardScaler()
     df_single_family[cols] = scaler.fit_transform(df_single_family[cols])
-
     # Create scatterplot
     sns.scatterplot(x='avg_score', y='avg_acc', data=df_single_family)
     plt.xlabel("Avg. CEB Fairness Score")
@@ -1207,18 +1201,34 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir="."):
     plt.savefig(f"{save_dir}/quantized_llama8b_instruct_models-scatterplot.png", bbox_inches="tight")
     plt.savefig(f"{save_dir}/quantized_llama8b_instruct_models-scatterplot.svg", bbox_inches="tight")
     plt.close()
-
     # Compute correlation between CEB Fairness and individual benchmarks
     fairness_corrs = df_single_family[cols].corr().iloc[0:3, 3:]
     fairness_corrs = fairness_corrs.round(2)
     fairness_corrs.to_csv(f"{save_dir}/quantized_llama8b_instruct_models-corrs.csv")
 
+    # 3. Plot base and quantized models
+    df_together = df_all.copy()
+    # Remove AQLM, since they skew the distribution
+    # df_together = df_together[~df_together["model"].str.contains("aqlm")]
+    # df_together[["model", "avg_score", "avg_acc"]]
+    # Normalize score columns
+    scaler = StandardScaler()
+    df_together[cols] = scaler.fit_transform(df_together[cols])
+    # Create scatterplot
+    sns.scatterplot(x='avg_score', y='avg_acc', data=df_together[df_together["base_model"] == df_together["model"]], color="blue")
+    sns.scatterplot(x='avg_score', y='avg_acc', data=df_together[df_together["base_model"] != df_together["model"]], color="orange")
+    plt.xlabel("Avg. CEB Fairness Score")
+    plt.ylabel("Avg. LM-Eval Accuracy")
+    plt.title("Full-Precision and Quantized Models")
+    plt.savefig(f"{save_dir}/all_models-scatterplot.png", bbox_inches="tight")
+    plt.savefig(f"{save_dir}/all_models-scatterplot.svg", bbox_inches="tight")
+    plt.close()
+    # Compute correlation between CEB Fairness and individual benchmarks
+    fairness_corrs = df_together[cols].corr().iloc[0:3, 3:]
+    fairness_corrs = fairness_corrs.round(2)
+    fairness_corrs.to_csv(f"{save_dir}/all_models-corrs.csv")
 
 
-
-# TODO: Perform fine-grained analysis to see how quantization impacts bias scores
-# TODO: 1. Does it strictly worsen bias?
-# TODO: 2. Or does it non-uniformly impact bias with some increasing and some decreasing?
 def ceb_check_smoothquant():
     base_to_modified = {
         "llama3.2-1b-instruct-lc-rtn-w4a16": "llama3.2-1b-instruct-lc-smooth-rtn-w4a16",
@@ -1301,14 +1311,12 @@ def ceb_check_smoothquant():
     model_results["p_value"] = model_results.apply(lambda row: row["p_value"][row["idx"]], axis=1)
     model_results.drop(columns=["idx"], inplace=True)
     # Get number of models that are significant
-    num_significant = model_results.groupby(by=["dataset"]).apply(lambda df: (df["p_value"] <= 0.05).sum())
     sig_model_results = model_results[model_results["p_value"] <= 0.05]
     sig_models = sig_model_results.groupby("dataset")["model"].unique().map(lambda x: ", ".join(list(x)))
     sig_models.to_csv("smoothquant_sig_models.csv")
 
     # TODO: Filter for Conversation/Continuation
     curr_results = p_value_dict["per_model"].reset_index()
-
 
     # Get counts
     df_counts = df_accum.groupby(["dataset"])["score_diff"].value_counts().reset_index()
@@ -1374,6 +1382,8 @@ def ceb_check_aqlm():
     curr_results = p_value_dict["overall"].reset_index()
 
     # TODO: Perform analysis to see which factors play a role into when its significant
+
+
 
 
 ################################################################################

@@ -1,12 +1,12 @@
 #!/bin/bash -l
 #SBATCH --job-name=ceb_eval                    # Job name
-#SBATCH --gres=gpu:1
-#SBATCH --nodelist=cn527                         # Number of nodes
+# --gres=gpu:1
+# --nodelist=cn528                         # Number of nodes
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --cpus-per-task=8                 # Number of CPU cores per TASK
 #SBATCH --mem=16GB
 #SBATCH -o slurm/logs/slurm-%j.out
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 
 # If you want to do it in the terminal,
 # --begin=now+2hours
@@ -118,11 +118,11 @@ Q2_RESULTS_DIRS=(
     "qwen2-7b-instruct-lc-rtn-w4a16"
     "qwen2-7b-instruct-lc-rtn-w8a16"
     "qwen2-7b-instruct-lc-rtn-w8a8"
-    # 2.7. Qwen2 72B
-    # "qwen2-72b-instruct"
-    # "qwen2-72b-instruct-lc-rtn-w4a16"
-    # "qwen2-72b-instruct-lc-rtn-w8a16"
-    # "qwen2-72b-instruct-lc-rtn-w8a8"
+    # # 2.7. Qwen2 72B
+    # # "qwen2-72b-instruct"
+    # # "qwen2-72b-instruct-lc-rtn-w4a16"
+    # # "qwen2-72b-instruct-lc-rtn-w8a16"
+    # # "qwen2-72b-instruct-lc-rtn-w8a8"
 )
 
 # 3. Comparison of RTN vs. GPTQ vs. AWQ W4A16
@@ -203,10 +203,10 @@ Q4_RESULTS_DIRS=(
     hf-llama3.1-70b-instruct-aqlm-pv-2bit-1x16
 
     # 4.6. Qwen2 72B
-    "qwen2-72b-instruct"
-    "hf-qwen2-72b-instruct-gptq-w4a16"
-    "hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16",
-    "hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16",
+    # "qwen2-72b-instruct"
+    # "hf-qwen2-72b-instruct-gptq-w4a16"
+    # "hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16",
+    # "hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16",
 
     # # TODO: Consider adding QuIP#
     # # hf-llama3.1-70b-instruct-vptq-2bit
@@ -271,6 +271,7 @@ Q5_RESULTS_DIRS=(
     # Qwen2 7B model (RTN W8A8)
     "qwen2-7b-instruct-lc-rtn-w8a8"
     "qwen2-7b-instruct-lc-smooth-rtn-w8a8"
+
     # # Qwen2 72B model (RTN W8A8)
     # TODO: Uncomment after generating
     # "qwen2-72b-instruct-lc-rtn-w8a8"
@@ -326,10 +327,10 @@ TASK_TYPE="all"
 DIR_COMPARISONS="save_data/metrics_comparisons/$EVALUATOR"
 
 # Flag to filter out harmful prompts
-# FILTER_KWARGS=""
+FILTER_KWARGS=""
 # TODO: Uncomment below when filter harmful questions
-FILTER_KWARGS="{is_harmful:True}"
-DIR_COMPARISONS="$DIR_COMPARISONS/harmful"
+# FILTER_KWARGS="{is_harmful:True}"
+# DIR_COMPARISONS="$DIR_COMPARISONS/harmful"
 # TODO: Uncomment below when filter not harmful questions
 # FILTER_KWARGS="{is_harmful:False}"
 # DIR_COMPARISONS="$DIR_COMPARISONS/not_harmful"
@@ -338,7 +339,8 @@ DIR_COMPARISONS="$DIR_COMPARISONS/harmful"
 #                                  Evaluation                                  #
 ################################################################################
 # Print models missing evaluations
-# python -m ceb_benchmark find_unfinished --evaluation --pattern $EVALUATOR --eval_models $RESULTS_DIRS
+# python -m ceb_benchmark find_unfinished --generation --pattern "*" --filter_models "${Q0_RESULTS_DIRS[@]}"
+# python -m ceb_benchmark find_unfinished --evaluation --pattern $EVALUATOR --filter_models "${Q0_RESULTS_DIRS[@]}"
 
 # Evaluate model generations
 # for RESULT_DIR in "${RESULTS_DIRS[@]}"; do
@@ -347,17 +349,18 @@ DIR_COMPARISONS="$DIR_COMPARISONS/harmful"
 
 # Format list of result directories in format expected by Fire
 # TODO: Model comparisons after adding Qwen 72B = [7, 12, 24]
-python -m ceb_benchmark compare ${Q0_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/base_vs_instruct" --model_comparisons 6 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-python -m ceb_benchmark compare ${Q1_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/nonchat_vs_chat" --model_comparisons 11 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-python -m ceb_benchmark compare ${Q2_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/rtn_at_different_bits" --model_comparisons 21 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-python -m ceb_benchmark compare ${Q3_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/w4a16_quantizers" --model_comparisons 21 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-python -m ceb_benchmark compare ${Q4_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/sub_w4_quantizers" --model_comparisons 14 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-python -m ceb_benchmark compare ${Q5_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/outlier_smoothing" --model_comparisons 19 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
-# python -m ceb_benchmark compare ${Q6_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/kv_cache_quantizer" --model_comparisons 2 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q0_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/base_vs_instruct" --model_comparisons 6 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q1_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/nonchat_vs_chat" --model_comparisons 11 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q2_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/rtn_at_different_bits" --model_comparisons 21 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q3_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/w4a16_quantizers" --model_comparisons 21 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q4_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/sub_w4_quantizers" --model_comparisons 14 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# python -m ceb_benchmark compare ${Q5_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/outlier_smoothing" --model_comparisons 19 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
+# # python -m ceb_benchmark compare ${Q6_RESULTS_DIRS[@]} --save_dir "$DIR_COMPARISONS/kv_cache_quantizer" --model_comparisons 2 --evaluator_choice ${EVALUATOR} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --filter_kwargs=$FILTER_KWARGS
 
 # Accumulate all results
 COMPARISONS=(
     "base_vs_instruct" "nonchat_vs_chat" "rtn_at_different_bits" "w4a16_quantizers"
-    "sub_w4_quantizers" "outlier_smoothing" "kv_cache_quantizer"
+    "sub_w4_quantizers" "outlier_smoothing"
+    # "kv_cache_quantizer"
 )
 python -m ceb_benchmark format_comparisons ${COMPARISONS[@]} --save_dir $DIR_COMPARISONS
