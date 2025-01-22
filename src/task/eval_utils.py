@@ -164,7 +164,7 @@ def score_open_ended_responses(
             # Get response without biased prefix
             try:
                 res_wo_prefix = metric_utils.remove_biased_prefix_in_continuation(
-                    prefix_prompt=row["gpt_rewrite_text"],
+                    prefix_prompt=row["sub_text"],
                     continued_text=row["res"]
                 )
                 # If extract response is empty, then response is invalid
