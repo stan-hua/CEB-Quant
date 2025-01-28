@@ -25,6 +25,9 @@ from src.utils import json_utils
 ################################################################################
 LOGGER = logging.getLogger(__name__)
 
+# Set vLLM multi-processing to spawn to fix the issue: https://github.com/vllm-project/vllm/issues/6152
+os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+
 # Default Prometheus model for evaluation
 PROMETHEUS_MODEL = "prometheus-eval/prometheus-7b-v2.0"
 # PROMETHEUS_MODEL = "prometheus-eval/prometheus-bgb-8x7b-v2.0"
@@ -35,7 +38,9 @@ DEFAULT_SAVE_FNAME = "prometheus_autoeval.json"
 # Mapping of social group to name in template `{social_group} group`
 SOCIAL_GROUP_FORMAT = {
     "age": "age",
+    "gender": "gender/sex",
     "gender_and_sex": "gender/sex",
+    "race": "racial/ethnic",
     "race_ethnicity": "racial/ethnic",
     "religion": "religious",
 }
@@ -44,6 +49,9 @@ SOCIAL_GROUP_FORMAT = {
 NUM_GPUS = 0
 if torch.cuda.is_available():
     NUM_GPUS = torch.cuda.device_count()
+
+# Get default prometheus prompt version
+PROMETHEUS_PROMPT_VER = os.environ.get("PROMETHEUS_PROMPT_VER", 2)
 
 
 ################################################################################
@@ -59,8 +67,13 @@ class PrometheusEvaluator:
     Used to evaluate LLM responses via Prometheus 2.0
     """
 
-    def __init__(self, model_path=PROMETHEUS_MODEL, prompt=ABSOLUTE_PROMPT_WO_REF,
-                 save_dir=None):
+    def __init__(
+            self,
+            model_path=PROMETHEUS_MODEL,
+            prompt=ABSOLUTE_PROMPT_WO_REF,
+            prompt_version=PROMETHEUS_PROMPT_VER,
+            save_dir=None,
+        ):
         """
         Initialize the PrometheusEvaluator class.
 
@@ -72,18 +85,27 @@ class PrometheusEvaluator:
         prompt : str, optional
             Prompt template to use. Defaults to absolute grading without
             reference.
+        prompt_version : int, optional
+            If 1, perform both refusal to answer and stereotype/toxicity evaluation
+            in one step.
+            If 2, perform refusal to answer and stereotype/toxicity evaluation
+            separately.
         save_dir : str, optional
             The directory to save evaluation results. Defaults to a directory
             within config.DIR_EVALUATIONS based on the model name.
         """
         assert save_dir, "Please pass a valid `save_dir` to save evaluation results!"
-        model_name = os.path.basename(model_path)
         self.save_dir = save_dir
-
-        # Lazy load LLM, on first call
         self.model_path = model_path
         self.prompt = prompt
+        self.prompt_version = int(prompt_version)
+        # Lazy load LLM, on first call
         self.judge = None
+
+        # Default keys
+        self.prompt_key = "prompt"
+        self.llm_input_col = "res"
+        self.llm_response_col = "eval_res"
 
 
     def load_prometheus(self):
@@ -148,9 +170,13 @@ class PrometheusEvaluator:
         list
             The evaluated data.
         """
+        # Modify keys
+        self.prompt_key = prompt_key or self.prompt_key
+        self.llm_input_col = llm_input_col or self.llm_input_col
+        self.llm_response_col = llm_response_col or self.llm_response_col
+
         # Get rubric
         assert task in config.PROMETHEUS_EVAL_RUBRIC_DATA, f"Invalid task! Please ensure that task `{task}` is in `config.py` / PROMETHEUS_EVAL_RUBRIC_DATA..."
-        rubric_data = config.PROMETHEUS_EVAL_RUBRIC_DATA[task]
 
         # Early return, if no data provided
         if not data:
@@ -158,20 +184,6 @@ class PrometheusEvaluator:
             # Save empty JSON list in the folder
             self.save_progress([], filename=progress_filename)
             return []
-
-        # Ensure that social axis and social group are present
-        first_row = data[0]
-        assert "axis" in first_row, "Social axis column `axis` not found in data!"
-        assert "descriptor" in first_row, "Social group column `descriptor` not found in data!"
-        social_axis = SOCIAL_GROUP_FORMAT[first_row["axis"]]
-        social_group = first_row["descriptor"]
-
-        # Modify rubric string to be targeted towards the social group
-        score_rubric = prepare_rubric_string(
-            rubric_data,
-            social_axis=social_axis,
-            social_group=social_group,
-        )
 
         # If specified, resume from previous evaluation
         if resume:
@@ -183,39 +195,101 @@ class PrometheusEvaluator:
         assert data, "Data provided is empty!"
         assert task is not None, "Task must be specified for evaluation."
 
-        # Split into data that was previously evaluated versus not
-        unevaluated_data = [row for row in data if not row.get(llm_response_col)]
-        evaluated_data = [row for row in data if row.get(llm_response_col)]
-
         # Early return, if all data has been evaluated
+        unevaluated_data = [row for row in data if not row.get(self.llm_response_col)]
         if not unevaluated_data:
-            LOGGER.debug("All data has already been evaluated!")
+            LOGGER.info("All data has already been evaluated!")
             return data
 
-        # Ensure Prometheus is loaded here
-        self.load_prometheus()
-
-        # Get initial instructions and their LLM responses
-        instructions = [row[prompt_key] for row in unevaluated_data]
-        responses = [row[llm_input_col] for row in unevaluated_data]
-
-        # Perform batched LLM evaluation
-        feedbacks, scores = self.judge.absolute_grade(
-            instructions=instructions,
-            responses=responses,
-            rubric=score_rubric,
-        )
-
-        # Store judge responses
-        for idx, row in enumerate(unevaluated_data):
-            feedback = feedbacks[idx]
-            score = scores[idx]
-            row[llm_response_col] = f"Score: {score}\n\nFeedback: ```{feedback}```"
-
         # Save progress
+        self.perform_eval(unevaluated_data, task)
         self.save_progress(data, filename=progress_filename)
 
         return data
+
+
+    def perform_eval(self, data, task):
+        """
+        Parameters
+        ----------
+        data : list of dict, optional
+            Each dict is a question to be evaluated
+        task : str
+            Name of the task to evaluate.
+        """
+        # Early return, if no data
+        if not data:
+            return
+
+        self.load_prometheus()
+
+        # Get social axis and groups present
+        social_axis_to_groups = {}
+        for row in data:
+            social_axis = row["axis"]
+            social_group = row["descriptor"]
+            if social_axis not in social_axis_to_groups:
+                social_axis_to_groups[social_axis] = set([])
+            social_axis_to_groups[social_axis].add(social_group)
+
+        # Evaluate data for each social axis and group, separately
+        for axis, groups in social_axis_to_groups.items():
+            social_axis_data = [row for row in data if row["axis"] == axis]
+            for group in groups:
+                social_group_data = [row for row in social_axis_data if row["descriptor"] == group]
+                self.perform_eval_single_group(social_group_data, task)
+
+
+    def perform_eval_single_group(self, data, task):
+        # Ensure that social axis and social group are present
+        first_row = data[0]
+        assert "axis" in first_row, "Social axis column `axis` not found in data!"
+        assert "descriptor" in first_row, "Social group column `descriptor` not found in data!"
+        social_axis = SOCIAL_GROUP_FORMAT[first_row["axis"]]
+        social_group = first_row["descriptor"]
+
+        self.load_prometheus()
+
+        # Get rubric for stereotype/toxicity
+        rubric_data = config.PROMETHEUS_EVAL_RUBRIC_DATA[task]
+        task_to_rubric = config.PROMETHEUS_VER_TO_RUBRICS[self.prompt_version]
+        rubric_data = task_to_rubric[task]
+
+        # Get initial instructions and their LLM responses
+        instructions = [row[self.prompt_key] for row in data]
+        responses = [row[self.llm_input_col] for row in data]
+
+        # Modify rubric string to be targeted towards the social group
+        fairness_score_rubric = prepare_rubric_string(
+            rubric_data,
+            social_axis=social_axis,
+            social_group=social_group,
+        )
+
+        # CASE: If 2nd prompt version, then perform refusal to answer evaluation too
+        if self.prompt_version != 1:
+            # Evaluate instruction following
+            rta_rubric_data = task_to_rubric["refusal_to_answer"]
+            rta_score_rubric = prepare_rubric_string(rta_rubric_data)
+            rta_feedbacks, rta_scores = self.judge.absolute_grade(
+                instructions=instructions,
+                responses=responses,
+                rubric=rta_score_rubric,
+            )
+            # Store judge responses
+            for idx, row in enumerate(data):
+                rta_col = f"{self.llm_response_col}_rta"
+                row[rta_col] = f"Score: {rta_scores[idx]}\n\nFeedback: ```{rta_feedbacks[idx]}```"
+
+        # Evaluate fairness
+        feedbacks, fairness_scores = self.judge.absolute_grade(
+            instructions=instructions,
+            responses=responses,
+            rubric=fairness_score_rubric,
+        )
+        # Store judge responses
+        for idx, row in enumerate(data):
+            row[self.llm_response_col] = f"Score: {fairness_scores[idx]}\n\nFeedback: ```{feedbacks[idx]}```"
 
 
 ################################################################################

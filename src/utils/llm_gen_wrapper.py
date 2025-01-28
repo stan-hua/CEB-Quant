@@ -8,17 +8,17 @@ import threading
 import time
 
 # Non-standard libraries
+import numpy as np
 import torch
 import traceback
 import urllib3
 from dotenv import load_dotenv
 from fastchat.model import load_model
 from transformers import AutoTokenizer
-from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from config import MODEL_INFO, ALL_DATASETS, DIR_GENERATIONS, DIR_MODELS
+from config import MODEL_INFO, ALL_DATASETS, OPEN_ENDED_DATASETS, DIR_GENERATIONS, DIR_MODELS
 from src.utils import json_utils, llm_gen_utils
 
 
@@ -45,7 +45,9 @@ DEFAULT_CONFIG = {
     # Local model loading
     "num_gpus": 1,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dtype": "float16",
+    "dtype": "bfloat16",
+    "max_num_seqs": 16,         # Maximum number of concurrent requests
+    "gpu_memory_utilization": 0.95,
     "debug": False,
     # Generation parameters
     "use_chat_template": False,
@@ -53,8 +55,6 @@ DEFAULT_CONFIG = {
     "repetition_penalty": 1.0,
     "max_model_len": 4096,      # Maximum input size
     "max_new_tokens": 512,      # Maximum output size
-    "max_num_seqs": 16,         # Maximum number of concurrent requests
-    "gpu_memory_utilization": 0.85,
 }
 
 
@@ -95,13 +95,19 @@ class LLMGeneration:
                 Whether to print debug messages or not. Default is False.
         """
         # Check that dataset is valid
-        if not (dataset_name == "all" or dataset_name in ALL_DATASETS):
-            raise RuntimeError(f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_DATASETS}`")
+        dataset_names = []
+        if dataset_name == "all":
+            dataset_names.extend(ALL_DATASETS)
+        elif dataset_name == "all_open_ended":
+            dataset_names.extend(OPEN_ENDED_DATASETS)
+        else:
+            assert dataset_name in ALL_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_DATASETS}`"
+            dataset_names.append(dataset_name)
 
         # Path to dataset
         self.data_path = data_path
-        # Name of dataset
-        self.dataset_name = dataset_name
+        # Name of dataset/s
+        self.dataset_names = dataset_names
 
         # Store configuration
         self.llm_config = DEFAULT_CONFIG.copy()
@@ -156,15 +162,27 @@ class LLMGeneration:
             #     additional_llm_kwargs["config_format"] = "mistral"
             #     additional_llm_kwargs["load_format"] = "mistral"
 
-            self.vllm = LLM(
-                model=self.model_path,
-                tensor_parallel_size=self.llm_config["num_gpus"],
-                dtype=self.llm_config["dtype"],
-                max_model_len=self.llm_config["max_model_len"],
-                gpu_memory_utilization=self.llm_config["gpu_memory_utilization"],
-                guided_decoding_backend="lm-format-enforcer",
-                **additional_llm_kwargs,
-            )
+            # If multiple GPUs, enforce eager to save as much memory as possible
+            if self.llm_config["num_gpus"] > 1:
+                additional_llm_kwargs["enforce_eager"] = True
+
+            try:
+                self.vllm = LLM(
+                    model=self.model_path,
+                    tensor_parallel_size=self.llm_config["num_gpus"],
+                    dtype=self.llm_config["dtype"],
+                    max_model_len=self.llm_config["max_model_len"],
+                    gpu_memory_utilization=self.llm_config["gpu_memory_utilization"],
+                    max_num_seqs=self.llm_config["max_num_seqs"],
+                    guided_decoding_backend="lm-format-enforcer",
+                    trust_remote_code=True,
+                    **additional_llm_kwargs,
+                )
+            except Exception:
+                LOGGER.critical("[LLMGeneration] Failed to load vLLM model! Exiting early...")
+                tb = traceback.format_exc()
+                LOGGER.error(tb)
+                exit(1)
             self.is_model_loaded = True
             return
 
@@ -261,14 +279,7 @@ class LLMGeneration:
         """
         generate_kwargs = {}
 
-        # Create sampling parameters
-        generate_kwargs["sampling_params"] = SamplingParams(
-            temperature=self.llm_config["temperature"],
-            max_tokens=self.llm_config["max_new_tokens"],
-            seed=1,
-        )
-
-        # Guided Decoding
+        # For Batched Guided Decoding, ensure all choices are the same
         # CASE 0: Batched processing decoding requires all share the same choices
         if choices and isinstance(choices, list) and isinstance(choices[0], list):
             final_choices = choices[0]
@@ -279,11 +290,25 @@ class LLMGeneration:
             LOGGER.debug("[vLLM Generate] Flattening choices across batched requests...")
             choices = final_choices
 
+        # Create sampling parameters
+        sampling_kwargs = {
+            "temperature": self.llm_config["temperature"],
+            "max_tokens": self.llm_config["max_new_tokens"],
+            "seed": 1
+        }
+        # CASE 1: If only 1 choice, then get log probability of sequence and
+        #         set temperature to 1, so it doesn't skew probabilities
+        if choices and len(choices) == 1:
+            sampling_kwargs["temperature"] = 1
+            sampling_kwargs["logprobs"] = 1
+
+        generate_kwargs["sampling_params"] = SamplingParams(**sampling_kwargs)
+
         # CASE 1: Single-row
         if choices:
             assert isinstance(choices, list) and len(choices) > 0, \
                 f"Choices must be a non-empty list! Invalid input: `{choices}`"
-            assert len(choices) >= 2, "There must be 2+ choices!"
+            # assert len(choices) >= 2, "There must be 2+ choices!"
             generate_kwargs["guided_options_request"] = {
                 "guided_choice": choices,
             }
@@ -305,8 +330,19 @@ class LLMGeneration:
 
         # Use vLLM to generate
         response = self.vllm.generate(prompt, **gen_kwargs)
-        return response[0].outputs[0].text
-    
+
+        # Prepare return
+        ret = {
+            "res": response[0].outputs[0].text,
+            "res_seq_prob": None,
+        }
+
+        # If log probabilities are available, then store it
+        if hasattr(response[0].outputs[0], "logprobs"):
+            ret["res_seq_prob"] = compute_prob(response[0].outputs[0].logprobs)
+
+        return ret
+
 
     def vllm_generate_multiple(self, prompts, **kwargs):
         """
@@ -321,8 +357,8 @@ class LLMGeneration:
 
         Returns
         -------
-        list of str
-            The generated responses.
+        list of dict
+            List of generated responses.
         """
         self.ensure_model_loaded()
 
@@ -330,22 +366,34 @@ class LLMGeneration:
         gen_kwargs = self.create_vllm_kwargs(**kwargs)
         # CASE 1: Unable to do batched requests on texts, default to single
         if gen_kwargs is None:
-            ret = []
+            accum_ret = []
             for idx, prompt in enumerate(prompts):
                 curr_kwargs = {
                     k: (v[idx] if len(v) == len(prompts) else v)
                     for k, v in kwargs.items()
                 }
-                ret.append(self.vllm_generate_single(prompt, **curr_kwargs))
-            return ret
+                accum_ret.append(self.vllm_generate_single(prompt, **curr_kwargs))
+            return accum_ret
 
         # CASE 2: Batched requests is possible
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
             prompts = [apply_chat_template_vllm(self.vllm, p) for p in prompts]
 
+        # Generate in batch
         responses = self.vllm.generate(prompts, **gen_kwargs)
-        return [res.outputs[0].text for res in responses]
+
+        # Extract results
+        accum_ret = []
+        for curr_response in responses:
+            curr_ret = {
+                "res": curr_response.outputs[0].text,
+                "res_seq_prob": None,
+            }
+            if hasattr(curr_response.outputs[0], "logprobs"):
+                curr_ret["res_seq_prob"] = compute_prob(curr_response.outputs[0].logprobs)
+            accum_ret.append(curr_ret)
+        return accum_ret
 
 
     ############################################################################
@@ -364,23 +412,26 @@ class LLMGeneration:
 
         Returns
         -------
-        str
-            The generated text as a string.
+        dict
+            Contains generated text in `res` and optionally `res_seq_prob` if
+            choices provided for vLLM
         """
         try:
             model_provider = self.llm_config["model_provider"]
 
             # Generate LLM response
-            response = None
+            ret = {
+                "res": None
+            }
             # CASE 1: vLLM
             if model_provider == "vllm":
                 # NOTE: Temperature isn't passed into vLLM
-                response = self.vllm_generate_single(prompt, **kwargs)
+                ret = self.vllm_generate_single(prompt, **kwargs)
             # CASE 2: Online Models
-            if is_provider_online(model_provider):
+            elif is_provider_online(model_provider):
                 if kwargs.get("choices"):
                     raise NotImplementedError("Choices is not supported for online models!")
-                response = llm_gen_utils.gen_online(
+                ret["res"] = llm_gen_utils.gen_online(
                     self.model_name,
                     prompt=prompt,
                     temperature=temperature,
@@ -392,17 +443,17 @@ class LLMGeneration:
                 # Choices is not implemented for HuggingFace generation
                 if kwargs.get("choices"):
                     raise NotImplementedError(f"Choices is not supported for provider `{model_provider}`!")
-                response = self.huggingface_generate(prompt, temperature)
+                ret["res"] = self.huggingface_generate(prompt, temperature)
             else:
-                raise RuntimeError("This branch should never execute!")
+                raise RuntimeError(f"[generate_single] Invalid model provider given! `{model_provider}`")
 
             # Check if the response is valid before returning
-            if not response:
+            if not ret["res"]:
                 raise ValueError("The response is NULL or an empty string!")
-            return response
+            return ret
         except Exception:
             tb = traceback.format_exc()
-            LOGGER.debug(tb)
+            LOGGER.error(tb)
 
 
     def process_row(self, row, index, temperature, key_name="prompt"):
@@ -423,25 +474,37 @@ class LLMGeneration:
             Default is "prompt".
         """
         try:
-            # If "res" key doesn"t exist or its value is empty, generate a new response
-            if "res" not in row or not row["res"]:
-                # Prepare arguments
-                kwargs = {}
-                # 1. Choices
-                if "choices" in row:
-                    kwargs["choices"] = row["choices"]
+            # If "res" key doesn't exist or its value is empty, generate a new response
+            if row.get("num_attempts", 0) != 3 and row.get("res"):
+                return
 
-                # Perform generation
-                res = self.generate_single(
+            # CASE 1: No choices provided
+            prompt = row[key_name]
+            if not row.get("choices"):
+                curr_response = self.generate_single(
                     prompt=row[key_name],
                     temperature=temperature,
-                    **kwargs
                 )
-                if res:
-                    row["res"] = res
+                row["res"] = curr_response["res"]
+                return
+
+            # CASE 2: Choices are provided, send a request for every choice
+            # NOTE: Store probability for each choice
+            choices = row["choices"]
+            choices_probs = []
+            for choice in choices:
+                curr_response = self.generate_single(prompt, choices=[choice])
+                choices_probs.append(curr_response["res_seq_prob"])
+
+            # Normalize probabilities and store choice with highest probability
+            normalized_probs = [prob / sum(choices_probs) for prob in choices_probs]
+            row["res"] = choices[normalized_probs.index(max(normalized_probs))]
+            row["res_probs"] = [round(prob, 4) for prob in normalized_probs]
         except Exception as e:
             # Print error message if there"s an issue during processing
-            LOGGER.debug(f"Error processing element at index {index}: {e}")
+            LOGGER.error(f"[process_row] Exception occured!")
+            tb = traceback.format_exc()
+            LOGGER.error(tb)
             row["num_attempts"] += 1
 
 
@@ -471,30 +534,65 @@ class LLMGeneration:
         model_provider = self.llm_config["model_provider"]
         # CASE 1: If vLLM, pass multiple row prompts at once
         if model_provider == "vllm":
-            # Prepare arguments
-            kwargs = {}
-            # 1. Prompts
-            prompts = [row["prompt"] for row in filtered_rows]
-            # 2. Choices
+            # Flatten choices if provided multiple rows
+            choices = None
+            revert_to_single = False
             if "choices" in filtered_rows[0]:
-                kwargs["choices"] = [row["choices"] for row in filtered_rows]
+                for row in filtered_rows:
+                    if choices is None:
+                        choices = row["choices"]
+                    else:
+                        revert_to_single = True
+                        break
 
-            # Perform generation
-            llm_responses = self.vllm_generate_multiple(prompts, **kwargs)
+            # CASE 0: If choices differ per row, revert to unbatched processing
+            if revert_to_single:
+                for idx, row in enumerate(filtered_rows):
+                    self.process_row(row, index=idx, temperature=temperature, key_name=key_name)
+                return
 
-            # Check responses
+            # Prepare prompts
+            prompts = [row["prompt"] for row in filtered_rows]
+
+            # CASE 1: No choices provided
+            if choices is None:
+                llm_responses = self.vllm_generate_multiple(prompts)
+
+                # Check responses
+                for idx, row in enumerate(filtered_rows):
+                    # CASE 1: Valid non-empty response
+                    curr_response_text = llm_responses[idx]["res"]
+                    if curr_response_text:
+                        row["res"] = curr_response_text
+                    # CASE 2: Empty string returned
+                    elif curr_response_text == "":
+                        row["res"] = curr_response_text
+                        row["num_attempts"] += 1
+                    else:
+                        raise RuntimeError("Unexpected response from vLLM!")
+                return
+
+            # CASE 2: Choices are provided, send a request for every choice
+            # NOTE: Store probability for each choice
+            prompt_to_probs = {}
+            for choice in choices:
+                llm_responses = self.vllm_generate_multiple(prompts, choices=[choice])
+
+                # Store response for every choice
+                for idx, curr_response in enumerate(llm_responses):
+                    if prompts[idx] not in prompt_to_probs:
+                        prompt_to_probs[prompts[idx]] = []
+                    prompt_to_probs[prompts[idx]].append(curr_response["res_seq_prob"])
+            
+            # Now assign choice response based on sequence probabilities
             for idx, row in enumerate(filtered_rows):
-                # CASE 1: Valid non-empty response
-                if llm_responses[idx]:
-                    row["res"] = llm_responses[idx]
-                # CASE 2: Empty string returned
-                elif llm_responses[idx] == "":
-                    row["res"] = llm_responses[idx]
-                    row["num_attempts"] += 1
-                # CASE 3: Returned None
-                # NOTE: This branch may never execute
-                else:
-                    row["num_attempts"] += 1
+                curr_prompt = row["prompt"]
+                choices_probs = prompt_to_probs[curr_prompt]
+
+                # Normalize probabilities and store choice with highest probability
+                normalized_probs = [prob / sum(choices_probs) for prob in choices_probs]
+                row["res"] = choices[normalized_probs.index(max(normalized_probs))]
+                row["res_probs"] = [round(prob, 4) for prob in normalized_probs]
             return
 
         # CASE 2: If online model, send parallel requests to LLM API
@@ -647,11 +745,8 @@ class LLMGeneration:
             LOGGER.error(f"Dataset path {self.data_path} does not exist.")
             return None
 
-        # If all datasets specified, then run generate for all datasets
-        datasets = ALL_DATASETS if self.dataset_name == "all" else [self.dataset_name]
-
         # Iterate for each dataset
-        for dataset in datasets:
+        for dataset in self.dataset_names:
             num_retries = 0
             successful = False
             while not successful and num_retries < max_retries:
@@ -824,3 +919,26 @@ def apply_chat_template_fastchat(model_path, prompt):
     conv.append_message(conv.roles[0], prompt)
     conv.append_message(conv.roles[1], None)
     return conv.get_prompt()
+
+
+def compute_prob(vllm_logprobs):
+    """
+    Compute normalized probability of generated text
+
+    Parameters
+    ----------
+    vllm_logprobs : list of dict
+        List of LogProbs
+
+    Returns
+    -------
+    float
+        Normalized probability of generated text
+    """
+    try:
+        curr_log_probs = [list(l.values())[0].logprob for l in vllm_logprobs]
+        seq_log_prob = sum(curr_log_probs) / len(curr_log_probs)
+        seq_prob = np.exp(seq_log_prob)
+        return seq_prob
+    except:
+        return None

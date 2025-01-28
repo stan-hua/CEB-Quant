@@ -52,7 +52,7 @@ class StereotypeEval:
             self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
         # CASE 2: Prometheus evaluator
         elif evaluator_choice == "prometheus":
-            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "save_dir"])
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version", "save_dir"])
             self.evaluator = prometheus_evaluator.PrometheusEvaluator(**kwargs)
 
 

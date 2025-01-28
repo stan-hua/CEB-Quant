@@ -72,12 +72,13 @@ class ToxicityEval:
         # Create evaluator
         # CASE 1: ChatGPT evaluator
         if evaluator_choice == "chatgpt":
-            eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
+            eval_utils.pop_invalid_kwargs(kwargs, ["model"])
             self.evaluator = chatgpt_eval.ChatGPTEvaluator(save_dir=save_dir, **kwargs)
         # CASE 2: Prometheus evaluator
         elif evaluator_choice == "prometheus":
-            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "save_dir"])
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version"])
             self.evaluator = prometheus_evaluator.PrometheusEvaluator(save_dir=save_dir, **kwargs)
+
 
     def eval_toxicity(self, dataset_name, data):
         """

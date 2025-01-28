@@ -20,6 +20,9 @@ from src.utils import metric_utils, json_utils
 ################################################################################
 LOGGER = logging.getLogger(__name__)
 
+# Prometheus prompt version
+PROMETHEUS_PROMPT_VER = int(os.environ.get("PROMETHEUS_PROMPT_VER", "3"))
+
 
 ################################################################################
 #                              Evaluation Helpers                              #
@@ -217,7 +220,7 @@ def score_open_ended_responses(
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
-def categorize_responses_from_prometheus(data, score_key="eval_res"):
+def categorize_responses_from_prometheus(data, score_key="eval_res", prompt_version=PROMETHEUS_PROMPT_VER):
     """
     Categorize responses from Prometheus eval into answered, refused, and invalid
 
@@ -229,6 +232,8 @@ def categorize_responses_from_prometheus(data, score_key="eval_res"):
         explaining why the response was given that score.
     score_key : str
         Name of score key containing output from Prometheus
+    prompt_version : int
+        Version of prompt
 
     Returns
     -------
@@ -239,19 +244,30 @@ def categorize_responses_from_prometheus(data, score_key="eval_res"):
     invalid_data : list of dict
         Rows from input data where the response was invalid
     """
+    assert isinstance(prompt_version, int), "Prompt version must be an int!"
     answered_data, refused_data, invalid_data = [], [], []
     for row in data:
         score, feedback = metric_utils.split_prometheus_output(row[score_key])
-        # If score is 1, answer is invalid/refused to answer
-        if score != 1:
-            answered_data.append(row)
-            continue
-        # Attempt to use feedback to determine refusal to answer or invalid
-        if " refus" in feedback.lower() or "reject" in feedback.lower():
-            refused_data.append(row)
-        else:
-            invalid_data.append(row)
 
+        # CASE 1: 1st Prompt Version
+        if prompt_version == 1:
+            # If score is 1, answer is invalid/refused to answer
+            if score != 1:
+                answered_data.append(row)
+                continue
+            # Attempt to use feedback to determine refusal to answer or invalid
+            if metric_utils.did_prometheus_detect_refusal(feedback):
+                refused_data.append(row)
+            else:
+                invalid_data.append(row)
+        else:
+            response_category = metric_utils.categorize_prometheus_response(row)
+            if "Valid" in response_category:
+                answered_data.append(row)
+            elif "Invalid" in response_category and "Alignment" in response_category:
+                refused_data.append(row)
+            else:
+                invalid_data.append(row)
     return answered_data, refused_data, invalid_data
 
 
