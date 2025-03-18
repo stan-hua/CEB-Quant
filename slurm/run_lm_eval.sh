@@ -1,8 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=ceb_lm_eval                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
-#SBATCH --gres=gpu:2
-#SBATCH --reservation=stan_gpu
+#SBATCH --gres=gpu:NVIDIA_L40S:1
 # --nodelist=cn532                         # Number of nodes
 # --gres=gpu:NVIDIA_L40S:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
@@ -10,7 +9,7 @@
 #SBATCH --mem=32GB
 #SBATCH --tmp=8GB
 #SBATCH -o slurm/logs/slurm-lm-eval-%j.out
-#SBATCH --time=28:00:00
+#SBATCH --time=24:00:00
 # --begin=now+4hours
 
 # If you want to do it in the terminal,
@@ -43,7 +42,7 @@ LOCAL_MODEL_DIR="save_data/models"
 LM_EVAL_OUTPUT_DIR="save_data/lm-eval"
 
 # Number of GPUS to Load a Single Model (NOTE: Splits weights onto different GPUs)
-NUM_GPUS_SPLIT=2
+NUM_GPUS_SPLIT=1
 
 # Number of GPUs to Divide and Conquer  (NOTE: Only works if a model can run on 1 GPU)
 NUM_GPUS_DISTRIBUTE=1
@@ -56,16 +55,16 @@ MODEL_NAMES=(
     # # # # 2.0. LLaMA 3.2 1B model
     # llama3.2-1b
     # hf-llama3.2-1b-aqlm-pv-2bit-2x8
-    # llama3.2-1b-instruct
-    # llama3.2-1b-instruct-lc-rtn-w4a16
-    # llama3.2-1b-instruct-lc-smooth-rtn-w4a16
-    # llama3.2-1b-instruct-lc-rtn-w8a8
-    # llama3.2-1b-instruct-lc-smooth-rtn-w8a8
-    # llama3.2-1b-instruct-lc-rtn-w8a16
-    # llama3.2-1b-instruct-lc-gptq-w4a16
-    # llama3.2-1b-instruct-lc-smooth-gptq-w4a16
-    # llama3.2-1b-instruct-awq-w4a16
-    # hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8
+    llama3.2-1b-instruct
+    llama3.2-1b-instruct-lc-rtn-w4a16
+    llama3.2-1b-instruct-lc-smooth-rtn-w4a16
+    llama3.2-1b-instruct-lc-rtn-w8a8
+    llama3.2-1b-instruct-lc-smooth-rtn-w8a8
+    llama3.2-1b-instruct-lc-rtn-w8a16
+    llama3.2-1b-instruct-lc-gptq-w4a16
+    llama3.2-1b-instruct-lc-smooth-gptq-w4a16
+    llama3.2-1b-instruct-awq-w4a16
+    hf-llama3.2-1b-instruct-aqlm-pv-2bit-2x8
 
     # # # # 2.1. LLaMA 3.2 3B model
     # llama3.2-3b
@@ -102,8 +101,8 @@ MODEL_NAMES=(
     llama3.1-70b-instruct-lc-rtn-w8a8
     llama3.1-70b-instruct-lc-smooth-rtn-w8a8
     llama3.1-70b-instruct-lc-rtn-w8a16
-    # nm-llama3.1-70b-instruct-gptq-w4a16
-    # hf-llama3.1-70b-instruct-awq-int4
+    nm-llama3.1-70b-instruct-gptq-w4a16
+    hf-llama3.1-70b-instruct-awq-int4
     
     # # # Mistral 7B
     # mistral-v0.3-7b
@@ -121,15 +120,15 @@ MODEL_NAMES=(
     # ministral-8b-instruct-awq-w4a16
 
     # # # # 2.5 Mistral Small 22B
-    # mistral-small-22b-instruct
-    # mistral-small-22b-instruct-lc-rtn-w4a16
-    # mistral-small-22b-instruct-lc-smooth-rtn-w4a16
-    # mistral-small-22b-instruct-lc-rtn-w8a8
-    # mistral-small-22b-instruct-lc-smooth-rtn-w8a8
-    # mistral-small-22b-instruct-lc-rtn-w8a16
-    # mistral-small-22b-instruct-lc-gptq-w4a16
-    # mistral-small-22b-instruct-lc-smooth-gptq-w4a16
-    # mistral-small-22b-instruct-awq-w4a16
+    mistral-small-22b-instruct
+    mistral-small-22b-instruct-lc-rtn-w4a16
+    mistral-small-22b-instruct-lc-smooth-rtn-w4a16
+    mistral-small-22b-instruct-lc-rtn-w8a8
+    mistral-small-22b-instruct-lc-smooth-rtn-w8a8
+    mistral-small-22b-instruct-lc-rtn-w8a16
+    mistral-small-22b-instruct-lc-gptq-w4a16
+    mistral-small-22b-instruct-lc-smooth-gptq-w4a16
+    mistral-small-22b-instruct-awq-w4a16
 
     # # # # 2.6. Qwen2 7B
     # qwen2-7b
@@ -222,17 +221,17 @@ MODEL_NAMES=(
     # qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
 
     # # # Qwen2.5 32B
-    qwen2.5-32b
-    qwen2.5-32b-instruct
-    qwen2.5-32b-instruct-awq-w4a16
-    qwen2.5-32b-instruct-gptq-w4a16
-    qwen2.5-32b-instruct-gptq-w8a16
-    qwen2.5-32b-instruct-lc-rtn-w4a16
-    qwen2.5-32b-instruct-lc-smooth-rtn-w4a16
-    qwen2.5-32b-instruct-lc-rtn-w8a8
-    qwen2.5-32b-instruct-lc-smooth-rtn-w8a8
-    qwen2.5-32b-instruct-lc-rtn-w8a16
-    qwen2.5-32b-instruct-lc-smooth-rtn-w8a16
+    # qwen2.5-32b
+    # qwen2.5-32b-instruct
+    # qwen2.5-32b-instruct-awq-w4a16
+    # qwen2.5-32b-instruct-gptq-w4a16
+    # qwen2.5-32b-instruct-gptq-w8a16
+    # qwen2.5-32b-instruct-lc-rtn-w4a16
+    # qwen2.5-32b-instruct-lc-smooth-rtn-w4a16
+    # qwen2.5-32b-instruct-lc-rtn-w8a8
+    # qwen2.5-32b-instruct-lc-smooth-rtn-w8a8
+    # qwen2.5-32b-instruct-lc-rtn-w8a16
+    # qwen2.5-32b-instruct-lc-smooth-rtn-w8a16
 
     # # # # Qwen2.5 72B
     qwen2.5-72b

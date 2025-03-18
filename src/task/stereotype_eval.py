@@ -3,7 +3,7 @@ import logging
 
 # Custom libraries
 from src.task import eval_utils
-from src.utils import chatgpt_eval, prometheus_evaluator, metric_utils
+from src.utils import chatgpt_eval, judge_evaluator, metric_utils
 
 
 ################################################################################
@@ -38,7 +38,7 @@ class StereotypeEval:
         filter_kwargs : dict
             Contains keyword arguments to filter prompts for
         evaluator_choice : str
-            Choice of evaluator: ("chatgpt", "prometheus")
+            Choice of evaluator: ("chatgpt", "prometheus", "atla")
         **kwargs : Any
             Keyword arguments for the evaluator
         """
@@ -50,10 +50,13 @@ class StereotypeEval:
         if evaluator_choice == "chatgpt":
             eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
             self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
-        # CASE 2: Prometheus evaluator
-        elif evaluator_choice == "prometheus":
-            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version", "save_dir"])
-            self.evaluator = prometheus_evaluator.PrometheusEvaluator(**kwargs)
+        # CASE 2: Prometheus/Atla evaluator
+        elif evaluator_choice in ["prometheus", "atla"]:
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version", "save_dir", "judge_choice"])
+            kwargs["judge_choice"] = evaluator_choice
+            self.evaluator = judge_evaluator.OpenJudgeEvaluator(**kwargs)
+        else:
+            raise NotImplementedError(f"Invalid evaluator choice! `{evaluator_choice}`")
 
 
     def eval_stereotype(self, dataset_name, data):

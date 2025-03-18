@@ -145,7 +145,7 @@ uritemplate==4.1.1
 urllib3==2.2.3
 uvicorn==0.31.0
 uvloop==0.20.0
-vllm==0.6.2
+# vllm==0.6.2
 watchfiles==0.24.0
 wavedrom==2.0.3.post3
 wcwidth==0.2.13

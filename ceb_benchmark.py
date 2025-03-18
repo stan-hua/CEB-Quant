@@ -12,7 +12,7 @@ Description: Contains high-level functions for the CEB benchmark to:
 Note
 ----
 `./save_data/llm_evaluations` contains all LLM-eval results. Under `llm_evaluations`,
-it is divided into `chatgpt` / `prometheus` for storing artifacts from evaluating
+it is divided into `chatgpt` / `prometheus` / `atla` for storing artifacts from evaluating
 open-ended generation responses. Importantly, we store Perplexity API toxicity
 scores under `chatgpt` for convenience.
 
@@ -33,24 +33,20 @@ import time
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from datetime import datetime
 from glob import glob
 
 # Non-standard libraries
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
 from fire import Fire
-from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 # Custom libraries
 import config
 from src.task.stereotype_eval import StereotypeEval
 from src.task.toxicity_eval import ToxicityEval
-from src.utils import json_utils, metric_utils, viz_utils
+from src.utils import json_utils, metric_utils
 
 
 ################################################################################
@@ -72,11 +68,11 @@ LOGGER = logging.getLogger(__name__)
 # Default evaluator
 DEFAULT_EVALUATOR = "chatgpt"
 
-# Prometheus prompt version
-PROMETHEUS_PROMPT_VER = int(os.environ.get("PROMETHEUS_PROMPT_VER", "3"))
+# Judge LLM prompt version
+JUDGE_PROMPT_VER = int(os.environ.get("JUDGE_PROMPT_VER", "4"))
 
 # Constant to force parallel evaluation
-# NOTE: Overrides single worker for Prometheus-only eval
+# NOTE: Overrides single worker for local Judge LLM eval
 FORCE_PARALLEL = str(os.environ.get("FORCE_PARALLEL", "1")) == 1
 
 
@@ -114,7 +110,7 @@ class CEBBenchmark:
         filter_kwargs : dict, optional
             Keyword arguments to filter prompts based on harmfulness, etc.
         evaluator_choice : str, optional
-            Choice of evaluator: ("chatgpt", "prometheus").
+            Choice of evaluator: ("chatgpt", "prometheus", "atla").
         save_metrics : bool, optional
             If True, save metrics to the metrics directory.
         """
@@ -130,7 +126,7 @@ class CEBBenchmark:
         self.alpha = alpha
         self.filter_kwargs = filter_kwargs
         self.evaluator_choice = evaluator_choice
-        self.eval_prompt_ver = PROMETHEUS_PROMPT_VER
+        self.eval_prompt_ver = JUDGE_PROMPT_VER
         self.save_metrics = save_metrics
 
         # Get model name
@@ -139,9 +135,11 @@ class CEBBenchmark:
 
         # Create directory to save evaluations
         self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, model_name)
-        if self.evaluator_choice == "prometheus":
-            LOGGER.info(f"[CEB Benchmark] Using Prometheus for evaluation with Prompt Version {PROMETHEUS_PROMPT_VER}")
-            self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, "prometheus", str(PROMETHEUS_PROMPT_VER), model_name)
+        self.is_local_judge = False
+        if self.evaluator_choice in ["prometheus", "atla"]:
+            LOGGER.info(f"[CEB Benchmark] Using {self.evaluator_choice.capitalize()} for evaluation with Prompt Version {JUDGE_PROMPT_VER}")
+            self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, str(JUDGE_PROMPT_VER), model_name)
+            self.is_local_judge = True
 
         # Create directory to save metrics
         self.metrics_dir = os.path.join(config.DIR_METRICS, model_name)
@@ -240,9 +238,9 @@ class CEBBenchmark:
         class_attrs = {k:v for k,v in self.__dict__.items() if not callable(v)}
         class_attrs["overwrite"] = overwrite
 
-        # NOTE: If using Prometheus, can only be done serially
+        # NOTE: If using Judge LLM, can only be done serially
         num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
-        num_workers = 1 if self.evaluator_choice == "prometheus" and not FORCE_PARALLEL else num_workers
+        num_workers = 1 if self.is_local_judge and not FORCE_PARALLEL else num_workers
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
         # CASE 1: Serial evaluation
         if num_workers <= 1:
@@ -317,9 +315,9 @@ class CEBBenchmark:
         class_attrs = {k:v for k,v in self.__dict__.items() if not callable(v)}
         class_attrs["overwrite"] = overwrite
 
-        # NOTE: If using Prometheus, can only be done serially
+        # NOTE: If using Judge LLM, can only be done serially
         num_workers = min(config.MAX_WORKER_AUTOEVAL, os.cpu_count())
-        num_workers = 1 if self.evaluator_choice == "prometheus" and not FORCE_PARALLEL else num_workers
+        num_workers = 1 if self.is_local_judge and not FORCE_PARALLEL else num_workers
         LOGGER.info(f"Beginning CEB Evaluation / `{dataset_names}`...with {num_workers} workers")
         # CASE 1: Serial evaluation
         if num_workers <= 1:
@@ -988,7 +986,7 @@ def ceb_delete(
                 os.remove(eval_file)
 
 
-def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
+def ceb_compute_judge_correlation(bin_chatgpt_scores=False):
     """
     Compute Spearman correlation between Prometheus evaluation scores and
     ChatGPT stereotype bias / Perplexity API toxicity scores.
@@ -1033,12 +1031,12 @@ def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
                 continue
             df_baseline_eval["base_eval_score"] = df_baseline_eval["toxicity"]
         # Load Prometheus evaluations
-        df_prometheus_eval = pd.DataFrame(json_utils.load_json(curr_path))
-        df_prometheus_eval["prometheus_eval_score"] = df_prometheus_eval["eval_res"].map(
-            metric_utils.extract_prometheus_bias_score)
+        df_judge_eval = pd.DataFrame(json_utils.load_json(curr_path))
+        df_judge_eval["judge_eval_score"] = df_judge_eval["eval_res"].map(
+            metric_utils.extract_judge_bias_score)
         # Join on prompt
         df_eval = pd.merge(
-            df_baseline_eval, df_prometheus_eval,
+            df_baseline_eval, df_judge_eval,
             how="right", on="prompt", suffixes=("__dup", ""),
         )
         # Remove duplicate columns
@@ -1050,7 +1048,7 @@ def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
         # Append eval scores
         keep_cols = [
             "model_name", "dataset_name", "social_axis", "axis", "bucket", "rta", "res",
-            "base_eval_score", "prometheus_eval_score"
+            "base_eval_score", "judge_eval_score"
         ]
         accum_eval_scores.append(df_eval[keep_cols])
 
@@ -1058,20 +1056,20 @@ def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
     df_accum = pd.concat(accum_eval_scores, ignore_index=True)
 
     # Drop rows with invalid Prometheus eval scores (i.e., Prometheus-Eval failed)
-    mask = df_accum["prometheus_eval_score"] != -1
+    mask = df_accum["judge_eval_score"] != -1
     df_accum = df_accum[mask]
 
     # Check how well refusal to answer matches
     df_accum["chatgpt_rta"] = df_accum["base_eval_score"].isna()
-    df_accum["prometheus_rta"] = df_accum["prometheus_eval_score"].isna()
+    df_accum["judge_rta"] = df_accum["judge_eval_score"].isna()
 
     # Count correspondence in refusal to answer
-    rta_cols = ["prometheus_rta", "chatgpt_rta"]
+    rta_cols = ["judge_rta", "chatgpt_rta"]
     print(df_accum[rta_cols].value_counts(normalize=True))
 
     # Compute correlation between scores
     # NOTE: Only compute on rows where scores in both rows is not present
-    eval_cols = ["base_eval_score", "prometheus_eval_score"]
+    eval_cols = ["base_eval_score", "judge_eval_score"]
     mask = ~df_accum[eval_cols].isna().any(axis=1)
     overall_corr = df_accum.loc[mask, eval_cols].corr("spearman").iloc[1, 0]
     print(f"[Prometheus x ChatGPT/Toxicity] Correlation: {overall_corr:.2f}")
@@ -1086,7 +1084,7 @@ def ceb_compute_prometheus_correlation(bin_chatgpt_scores=False):
     print("[ChatGPT] Stereotyping Bias Eval Scores:")
     print(df_accum[mask].groupby("social_axis").apply(lambda df: df["base_eval_score"].value_counts(normalize=True)))
     print("[Prometheus] Stereotyping Bias Eval Scores:")
-    print(df_accum[mask].groupby("social_axis").apply(lambda df: df["prometheus_eval_score"].value_counts(normalize=True)))
+    print(df_accum[mask].groupby("social_axis").apply(lambda df: df["judge_eval_score"].value_counts(normalize=True)))
 
 
 ################################################################################
@@ -1234,286 +1232,6 @@ def toxicity_process_json(class_attrs, dataset_name, json_path):
     # Return metrics
     dset_to_axis_to_metrics = {dataset_name: {social_axis: metrics}}
     return dset_to_axis_to_metrics
-
-
-################################################################################
-#                           Load Evaluated Questions                           #
-################################################################################
-def load_evaluated_generations(
-        model_name, evaluator_choice="prometheus",
-        dataset_names="all", social_axes=None,
-        on_missing_gen="raise", on_missing_eval="raise",
-    ):
-    """
-    Load JSON for generations post-evaluation (if applicable) and get
-    row-specific score.
-
-    Parameters
-    ----------
-    model_name : str
-        Name of model
-    evaluator_choice : str, optional
-        Evaluator choice for open-ended generation, by default "prometheus"
-    dataset_names : str or list, optional
-        List of datasets whose names to load, by default None
-    social_axes : list, optional
-        List of social axes to cover, by default None
-    on_missing_gen : str, optional
-        If "raise", raise error when generations are missing
-    on_missing_eval : str, optional
-        If "raise", raise error when evaluations are missing
-
-    Returns
-    -------
-    list of dict
-        List of dictionaries where each dict is a row with LLM generations post-evaluation
-    """
-    # Use all datasets, if not specified
-    if isinstance(dataset_names, str):
-        if dataset_names == "all":
-            dataset_names = config.ALL_DATASETS
-        elif dataset_names == "all_open_ended":
-            dataset_names = config.OPEN_ENDED_DATASETS
-        else:
-            raise RuntimeError(f"Invalid dataset/s name! `{dataset_names}`")
-
-    # Get evaluated generations for each dataset
-    # NOTE: Accumulate (dataset, social_axis) whose generations are all invalid
-    #       and so there's nothing to evaluate. This is different from missing
-    evaluated_generations = []
-    for dataset_name in dataset_names:
-        # Use all social axes, if not specified
-        curr_social_axes = social_axes
-        if curr_social_axes is None:
-            curr_social_axes = config.DATASETS_TO_SOCIAL_AXIS[dataset_name]
-
-        # Only if dataset is Continuation/Conversation, use evaluations directory
-        dir_data = config.DIR_GENERATIONS
-        is_open_ended = "Continuation" in dataset_name or "Conversation" in dataset_name
-        if is_open_ended:
-            dir_data = os.path.join(config.DIR_EVALUATIONS, evaluator_choice)
-            if evaluator_choice == "prometheus":
-                dir_data = os.path.join(dir_data, str(PROMETHEUS_PROMPT_VER))
-
-        # Assert that dataset exists for this model
-        model_dir = os.path.join(dir_data, model_name)
-        if not os.path.exists(model_dir):
-            if on_missing_gen != "raise":
-                continue
-            raise RuntimeError(f"[Load Eval. Generations] Model Directory doesn't exist! {model_dir}")
-
-        # Load evaluated generations for each social axis
-        for social_axis in curr_social_axes:
-            # CASE 1: Continuation/Conversation dataset
-            if is_open_ended:
-                # Get path to evaluated generations
-                social_axis_dir = os.path.join(model_dir, dataset_name, social_axis)
-                possible_fnames = ["eval_progress.json", "prometheus_autoeval.json"]
-                eval_json_path = None
-                for fname in possible_fnames:
-                    if os.path.exists(os.path.join(social_axis_dir, fname)):
-                        eval_json_path = os.path.join(social_axis_dir, fname)
-
-                # Get raw generations (pre-evaluation)
-                gen_json_path = os.path.join(config.DIR_GENERATIONS, model_name, dataset_name, f"{social_axis}.json")
-                # Handle case when generations are missing
-                if not os.path.exists(gen_json_path):
-                    if on_missing_gen != "raise":
-                        continue
-                    raise RuntimeError(
-                        "[Load Eval. Generations] Generations are missing for "
-                        f"\n\tModel: `{model_name}`"
-                        f"\n\tDataset: `{dataset_name}`"
-                        f"\n\tSocial Axis: `{social_axis}`"
-                    )
-                raw_generations = json_utils.load_json(gen_json_path)
-
-                eval_generations = None
-                # CASE 1: Evaluations don't exist
-                if not eval_json_path:
-                    # CASE 1: Evaluations are simply missing
-                    if not all(not row["res"] for row in raw_generations):
-                        if on_missing_eval != "raise":
-                            continue
-                        raise RuntimeError(
-                            "[Load Eval. Generations] Evaluations are simply missing for "
-                            f"\n\tModel: `{model_name}`"
-                            f"\n\tDataset: `{dataset_name}`"
-                            f"\n\tSocial Axis: `{social_axis}`"
-                        )
-                    
-                    # CASE 2: All questions are invalid, so no eval was needed
-                    eval_generations = raw_generations
-                    # Mark all as invalid
-                    for row in eval_generations:
-                        row["score"] = None
-                # CASE 2: Evaluations exist
-                else:
-                    eval_generations = json_utils.load_json(eval_json_path)
-                    # Ensure all questions are present
-                    exist_prompts = set([row["prompt"] for row in eval_generations])
-                    missing_evals = []
-                    # For questions missing evaluation, categorize issue
-                    for row in raw_generations:
-                        if row["prompt"] not in exist_prompts:
-                            row = row.copy()
-                            row["score"] = None
-
-                            # Mark reason for invalid
-                            # CASE 1: Empty response (starts with EOS token)
-                            if not row["res"]:
-                                row["response_type"] = "Invalid (Empty)"
-                            # CASE 2: ChatGPT Refusal to Answer (so it doesn't appear in evals)
-                            elif evaluator_choice == "chatgpt":
-                                # NOTE: Only useful for chatgpt
-                                row["response_type"] = "Invalid (Alignment - Refusal)"
-                            # CASE 3: Simply an invalid response
-                            else:
-                                row["response_type"] = "Invalid"
-                            missing_evals.append(row)
-                    eval_generations.extend(missing_evals)
-            # CASE 2: Recognition/Selection Dataset
-            else:
-                json_path = os.path.join(model_dir, dataset_name, f"{social_axis}.json")
-                eval_generations = json_utils.load_json(json_path)
-
-            # Load evaluated generations
-            for row in eval_generations:
-                row["model"] = model_name
-                row["dataset"] = dataset_name
-                row["social_axis"] = social_axis
-
-                # Skip, if score pre-defined (useful for invalids)
-                if "score" in row:
-                    continue
-
-                # Create row-specific score
-                row["score"] = None
-                # CASE 1: Open-ended evaluation. Parse score
-                row["response_type"] = "Valid"
-                if is_open_ended:
-                    if evaluator_choice == "chatgpt":
-                        row["score"] = metric_utils.extract_number_from_0_to_99(row["bias_score"])
-                    else:
-                        prometheus_score = metric_utils.extract_prometheus_bias_score(row["eval_res"], PROMETHEUS_PROMPT_VER)
-
-                        # TODO: Remove after debugging
-                        row["rta_score"] = -1
-
-                        # Store reasons for invalid responses
-                        if prometheus_score == -1:
-                            row["response_type"] = "Evaluation Error (Prometheus Failed)"
-                        elif prometheus_score is None:
-                            row["response_type"] = "Invalid"
-                        # If valid, then update score
-                        else:
-                            row["response_type"] = metric_utils.categorize_prometheus_response(row)
-                            row["score"] = prometheus_score
-                            row["rta_score"] = metric_utils.split_prometheus_output(row["eval_res_rta"])[0]
-                            row["bias_feedback"] = metric_utils.split_prometheus_output(row["eval_res"])[-1]
-                            row["rta_feedback"] = metric_utils.split_prometheus_output(row["eval_res_rta"])[-1]
-                # CASE 2: CEB-Selection-* evaluation. Check if correct
-                elif "Selection" in dataset_name:
-                    row["score"] = metric_utils.is_selection_correct(row)
-                # CASE 3: CEB-Recognition-* evaluation. Check if correct
-                elif "Recognition" in dataset_name:
-                    row["score"] = metric_utils.is_recognition_correct(row, dataset_name.endswith("-S"))
-            evaluated_generations.extend(eval_generations)
-    return evaluated_generations
-
-
-def load_pairwise_differences(modified_to_base):
-    """
-    Load evaluated generations for baseline and modified model. Compute
-    pairwise differences in fairness scores between rows.
-
-    Parameters
-    ----------
-    modified_to_base : dict
-        Mapping from modified model name to baseline model name
-
-    Returns
-    -------
-    tuple of (pd.DataFrame, pd.DataFrame)
-        (i) Dataframe of all responses with pairwise differences in fairness scores
-        (ii) Dataframe of transition matrix for invalid responses in base/modified models
-    """
-    # For each base & quantized model, compute difference in score column
-    accum_valid = []
-    accum_invalid = []
-    num_na = 0
-    for modified_model, base_model in modified_to_base.items():
-        keys = ["dataset", "social_axis", "prompt"]
-        try:
-            shared_kwargs = {"dataset_names": "all_open_ended", "on_missing_gen": "ignore"}
-            df_base = pd.DataFrame(load_evaluated_generations(base_model, **shared_kwargs))
-            df_modified = pd.DataFrame(load_evaluated_generations(modified_model, **shared_kwargs))
-
-            assert set(keys).issubset(set(df_base.columns.tolist())), f"Base model is missing key columns! Base Columns: {df_base.columns.tolist()}"
-            assert set(keys).issubset(set(df_modified.columns.tolist())), f"Modified Model is missing key columns! Modified Columns: {df_modified.columns.tolist()}"
-        except:
-            LOGGER.error(f"Failed to load evaluated generations for models: ({base_model}, {modified_model})")
-            tb = traceback.format_exc()
-            LOGGER.error(tb)
-            continue
-
-        # Set index
-        keys = ["dataset", "social_axis", "descriptor", "prompt"]
-        df_base = df_base.set_index(keys)
-        df_modified = df_modified.set_index(keys)
-
-        # Join to get the number of null to null transforms
-        keep_cols = ["score", "response_type", "rta_score", "res", "bias_feedback", "rta_feedback"]
-        df_joined = pd.merge(
-            df_base[keep_cols], df_modified[keep_cols],
-            how="inner", on=keys,
-            suffixes=["_base", "_modified"],
-        ).reset_index()
-
-        # Add base and modified model
-        df_joined["model_base"] = base_model
-        df_joined["model_modified"] = modified_model
-
-        # Compute difference
-        df_joined["score_diff"] = df_joined["score_modified"] - df_joined["score_base"]
-
-        # Determine valid vs invalid responses
-        response_type_cols = ["response_type_base", "response_type_modified"]
-        # 1. Missing Eval Scores
-        df_joined[response_type_cols] = df_joined[response_type_cols].fillna("Invalid")
-        valid_mask = ~df_joined[["score_base", "score_modified"]].isna().any(axis=1)
-        # 2. Invalid Response Type
-        valid_mask = valid_mask & df_joined["response_type_base"].map(lambda x: x.startswith("Valid"))
-        valid_mask = valid_mask & df_joined["response_type_modified"].map(lambda x: x.startswith("Valid"))
-        accum_invalid.append(df_joined[~valid_mask].copy())
-        accum_valid.append(df_joined[valid_mask].copy())
-
-    # Get transition between valid to invalid responses
-    df_invalid = pd.concat(accum_invalid)
-    # group_cols = ["response_type_base", "response_type_modified"]
-    # df_invalid_trans = df_invalid.groupby(group_cols, dropna=False)["count"].sum()
-    # df_invalid_trans = df_invalid_trans.sort_index(ascending=False)
-    # NOTE: Uncomment if need to return percentages instead of counts
-    # df_invalid_trans = (100 * df_invalid_trans / df_invalid_trans.sum()).round(1)
-
-    # Get transition between valid to valid responses
-    df_valid = pd.concat(accum_valid, ignore_index=True)
-
-    # NOTE: Uncomment the following when the transition matrix is needed
-    # df_counts = df_valid.groupby(["dataset"])["score_diff"].value_counts().reset_index()
-    # df_valid_trans = df_counts.pivot(index='dataset', columns='score_diff', values='count')
-    # df_valid_trans = (100 * df_valid_trans.T / df_valid_trans.T.sum()).T.round(1)
-
-    # Package return
-    ret = {
-        "accum_valid": df_valid,
-        "accum_invalid": df_invalid,
-        # "accum_invalid": df_invalid_trans,
-        "null_percent": len(df_invalid) / (len(df_invalid) + len(df_valid)),
-        "null_size": len(df_invalid),
-    }
-
-    return ret
 
 
 ################################################################################
@@ -1861,6 +1579,8 @@ def extract_model_metadata_from_name(model_name):
     for q_method in ["rtn", "gptq", "awq", "aqlm"]:
         if q_method in model_name:
             accum_metadata["q_method"] = q_method
+    if accum_metadata["q_method"] == "awq":
+        accum_metadata["w_bits"] = 4
     accum_metadata["smoothquant"] = False
     if "-smooth-" in model_name:
         accum_metadata["smoothquant"] = True
@@ -1882,6 +1602,8 @@ def extract_model_metadata_from_name(model_name):
             accum_metadata["base_model"] = base_model
             break
     assert accum_metadata["base_model"] is not None, f"[Extract Model Metadata] Failed to find base model for: {model_name}!"
+    # Get model family
+    accum_metadata["model_family"] = accum_metadata["base_model"].split("-")[0]
     return accum_metadata
 
 

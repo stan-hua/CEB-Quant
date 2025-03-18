@@ -12,7 +12,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from fire import Fire
 from matplotlib import rc
 from matplotlib.container import ErrorbarContainer
 
@@ -25,11 +24,37 @@ LOGGER = logging.getLogger(__name__)
 # Random seed
 SEED = 42
 
+# Color palette
+COLORS = [
+    "#4C9AC9",  # Sky Blue
+    "#F1A7C1",  # Soft Pink
+    "#F2B87D",  # Golden Yellow
+    "#B85C5C",  # Warm Red
+    "#C6D89E",  # Light Olive Green
+    "#85B8A2",  # Soft Teal
+    "#7D85A7",  # Slate Blue
+    "#F4A2A2",  # Light Coral Red
+    "#D3A9F5",  # Lavender
+    "#A9D9B2",  # Pale Green
+    "#FF7F4C",  # Bright Orange
+    "#6E82B5",  # Dusty Blue
+    "#C78E72",  # Muted Clay
+    "#F6D07F",  # Warm Yellow
+]
+
+# Create diverging palette
+DIVERGING_PALETTE = sns.diverging_palette(h_neg=120, h_pos=10, s=50, l=70, sep=1, n=6, center='light')
+
+PALETTE = {
+    "ERM": "#60B2E5", "RWY": "#F9F5E3", "RWG": "#E95C47",
+    "RWY-ES": "#E9C5C5", "RWG-ES": "#E97C7C", "GDRO-ES": "#1F497D"
+}
+
 
 ################################################################################
 #                              Plotting Functions                              #
 ################################################################################
-def set_theme(tick_scale=1.3, figsize=(10, 6)):
+def set_theme(tick_scale=1.3, figsize=(10, 6), style="whitegrid", rcparams=None):
     """
     Create scientific theme for plot
     """
@@ -37,13 +62,15 @@ def set_theme(tick_scale=1.3, figsize=(10, 6)):
         "axes.spines.right": False, "axes.spines.top": False,
         "figure.figsize": figsize,
     }
-    sns.set_theme(style="ticks", font_scale=tick_scale, rc=custom_params)
+    if rcparams is not None:
+        custom_params.update(rcparams)
+    sns.set_theme(style=style, font_scale=tick_scale, rc=custom_params)
 
 
 def catplot(
         df, x=None, y=None, hue=None,
         bar_labels=None, exclude_bar_labels=False,
-        palette="colorblind",
+        palette=COLORS,
         plot_type="bar",
         figsize=None,
         title=None, title_size=None,
@@ -53,6 +80,7 @@ def catplot(
         y_lim=None,
         tick_params=None,
         legend=False,
+        horizontal_legend=False,
         save_dir=None,
         save_fname=None,
         **extra_plot_kwargs,
@@ -133,7 +161,7 @@ def catplot(
         plot_kwargs.pop("palette", None)
 
     # Raise error, if plot type is invalid
-    supported_types = ["bar", "bar_with_ci", "grouped_bar_with_ci", "count", "pie", "hist", "kde"]
+    supported_types = ["bar", "bar_with_ci", "grouped_bar_with_ci", "count", "pie", "hist", "kde", "heatmap"]
     if plot_type not in supported_types:
         raise ValueError(f"Invalid plot type: `{plot_type}`! See supported types: {supported_types}")
 
@@ -174,6 +202,9 @@ def catplot(
 
         # Create the pie chart
         plot_func = plt.pie
+    elif plot_type == "heatmap":
+        plot_func = heatmap
+        remove_dict_keys(plot_kwargs, ["hue", "palette", "legend"])
 
     # Create figure
     if figsize is not None:
@@ -187,6 +218,7 @@ def catplot(
         bar_kwargs = {"labels": bar_labels}
         if plot_type == "count":
             bar_kwargs.pop("labels")
+        bar_label_fmt = bar_kwargs.get("fmt", "%.1f")
 
         # Add bar labels
         for container in ax.containers:
@@ -196,7 +228,7 @@ def catplot(
             if isinstance(container, ErrorbarContainer):
                 print("Skipping labeling of error bar container...")
                 continue
-            ax.bar_label(container, size=12, weight="semibold", **bar_kwargs)
+            ax.bar_label(container, fmt=bar_label_fmt, size=12, weight="semibold", **bar_kwargs)
 
     # Perform post-plot logic
     ax = post_plot_logic(
@@ -205,14 +237,15 @@ def catplot(
         xlabel=xlabel, ylabel=ylabel,
         x_lim=x_lim, y_lim=y_lim,
         tick_params=tick_params,
-        legend=legend and plot_type not in ["hist", "kde"],
+        legend=legend and plot_type not in ["hist", "kde", "count", "bar"],
+        horizontal_legend=horizontal_legend,
         save_dir=save_dir, save_fname=save_fname,
     )
 
 
 def numplot(
         df, x=None, y=None, hue=None,
-        palette=None,
+        palette=COLORS,
         plot_type="box",
         vertical_lines=None,
         figsize=None,
@@ -223,6 +256,7 @@ def numplot(
         y_lim=None,
         tick_params=None,
         legend=False,
+        horizontal_legend=False,
         save_dir=None,
         save_fname=None,
         **extra_plot_kwargs,
@@ -276,9 +310,6 @@ def numplot(
     matplotlib.axes.Axes
         Returns the Axes object with the plot for further tweaking.
     """
-    # Add default arguments
-    palette = palette or "colorblind"
-
     # Create plot keyword arguments
     plot_kwargs = {
         "data": df, "x": x, "y": y, "hue": hue,
@@ -288,7 +319,7 @@ def numplot(
     }
 
     # Raise error, if plot type is invalid
-    supported_types = ["box", "strip", "line", "scatter"]
+    supported_types = ["box", "strip", "line", "scatter", "violin"]
     if plot_type not in supported_types:
         raise ValueError(f"Invalid plot type: `{plot_type}`! See supported types: {supported_types}")
 
@@ -304,6 +335,8 @@ def numplot(
         plot_func = sns.lineplot
     elif plot_type == "scatter":
         plot_func = sns.scatterplot
+    elif plot_type == "violin":
+        plot_func = sns.violinplot
 
     # Create figure
     if figsize is not None:
@@ -325,6 +358,7 @@ def numplot(
         x_lim=x_lim, y_lim=y_lim,
         tick_params=tick_params,
         legend=legend,
+        horizontal_legend=horizontal_legend,
         save_dir=save_dir, save_fname=save_fname,
     )
 
@@ -484,6 +518,54 @@ def grouped_barplot_with_ci(
     return ax
 
 
+def heatmap(data, y, x, order=None, stat="proportion", **kwargs):
+    """
+    Generate a heatmap to visualize transition matrices.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The data frame containing the columns to be used for the heatmap.
+    y : str
+        The column name used for the heatmap's y-axis.
+    x : str
+        The column name used for the heatmap's x-axis.
+    order : list, optional
+        The specific order of categories for both axes, by default None.
+    stat : str, optional
+        The statistic to compute, either 'proportion' or 'count', by default "proportion".
+    **kwargs : Any
+        Keyword arguments to pass to `sns.heatmap`
+
+    Raises
+    ------
+    AssertionError
+        If the specified `stat` is not within ["proportion", "count"].
+    """
+
+    assert stat in ["proportion", "count"], f"Invalid stat! {stat}"
+
+    # Create transition matrix
+    normalize = stat == "proportion"
+    df_valid_transition = data[[y, x]].value_counts(normalize=normalize).reset_index()
+    transition_matrix = df_valid_transition.pivot(index=y, columns=x, values='proportion')
+    transition_matrix.columns = transition_matrix.columns.astype(str)
+    transition_matrix.index = transition_matrix.index.astype(str)
+
+    # Reorder rows and columns
+    if order:
+        order = np.array(order).astype(str)
+        transition_matrix = transition_matrix.loc[order].loc[:, order[::-1]]
+    # Round to percentage
+    transition_matrix = (100 * transition_matrix).round()
+
+    # Create heatmap
+    cmap = sns.light_palette("#C6D89E", as_cmap=True)
+    ax = sns.heatmap(transition_matrix, annot=True, cmap=cmap, robust=True, cbar=False, **kwargs)
+
+    return ax
+
+
 def post_plot_logic(
         ax,
         title=None, title_size=None,
@@ -491,6 +573,7 @@ def post_plot_logic(
         x_lim=None, y_lim=None,
         tick_params=None,
         legend=False,
+        horizontal_legend=False,
         save_dir=None, save_fname=None,
         dpi=600,
     ):
@@ -524,6 +607,10 @@ def post_plot_logic(
     dpi : int, optional
         DPI to save the plot at, by default 600
     """
+    # Early return, if no more things to plot
+    if ax is None:
+        return
+
     # Add x-axis and y-axis labels
     if xlabel is not None:
         ax.set_xlabel(xlabel)
@@ -549,11 +636,18 @@ def post_plot_logic(
 
     # If legend specified, add it outside the figure
     if legend:
-        ax.legend(
-            loc='center left',
-            bbox_to_anchor=(1, 0.5),
-            ncol=1,
-        )
+        if horizontal_legend:
+            ax.legend(
+                loc='upper center',
+                bbox_to_anchor=(0.5, -0.05),
+                ncol=len(ax.get_legend_handles_labels()[0]),
+            )
+        else:
+            ax.legend(
+                loc='center left',
+                bbox_to_anchor=(1, 0.5),
+                ncol=1,
+            )
 
     # Return plot, if not saving
     if not save_dir or not save_fname:

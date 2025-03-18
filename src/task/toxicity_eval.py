@@ -15,7 +15,7 @@ from config import (
     PERSPECTIVE_KEY, PERSPECTIVE_LOCK_FNAME,
 )
 from src.task import eval_utils
-from src.utils import chatgpt_eval, prometheus_evaluator, json_utils, metric_utils
+from src.utils import chatgpt_eval, judge_evaluator, json_utils, metric_utils
 
 
 ################################################################################
@@ -49,7 +49,7 @@ class ToxicityEval:
         filter_kwargs : bool
             If True, filter for harmful prompts
         evaluator_choice : str
-            Choice of evaluator: ("chatgpt", "prometheus")
+            Choice of evaluator: ("chatgpt", "prometheus", "atla")
         **kwargs : Any
             Keyword arguments to be passed to the ChatGPT/Prometheus evaluator
         """
@@ -74,10 +74,13 @@ class ToxicityEval:
         if evaluator_choice == "chatgpt":
             eval_utils.pop_invalid_kwargs(kwargs, ["model"])
             self.evaluator = chatgpt_eval.ChatGPTEvaluator(save_dir=save_dir, **kwargs)
-        # CASE 2: Prometheus evaluator
-        elif evaluator_choice == "prometheus":
-            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version"])
-            self.evaluator = prometheus_evaluator.PrometheusEvaluator(save_dir=save_dir, **kwargs)
+        # CASE 2: Prometheus/Atla evaluator
+        elif evaluator_choice in ["prometheus", "atla"]:
+            eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version", "judge_choice"])
+            kwargs["judge_choice"] = evaluator_choice
+            self.evaluator = judge_evaluator.OpenJudgeEvaluator(save_dir=save_dir, **kwargs)
+        else:
+            raise NotImplementedError(f"Invalid evaluator choice! `{evaluator_choice}`")
 
 
     def eval_toxicity(self, dataset_name, data):

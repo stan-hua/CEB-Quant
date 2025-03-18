@@ -1,8 +1,8 @@
 """
-prometheus_evaluator.py
+judge_evaluator.py
 
-Description: Uses Prometheus-Eval 2.0 as a judge to evaluate stereotype/toxicity
-             in LLM-generated text.
+Description: Uses Prometheus-Eval 2.0 / Atla as a judge to evaluate
+             stereotype/toxicity in LLM-generated text.
 """
 
 # Standard libraries
@@ -11,9 +11,10 @@ import os
 
 # Non-standard libraries
 import torch
+from atla_eval import AtlaEval
 from prometheus_eval.vllm import VLLM
 from prometheus_eval import PrometheusEval
-from prometheus_eval.prompts import ABSOLUTE_PROMPT_WO_REF, SCORE_RUBRIC_TEMPLATE
+from prometheus_eval.prompts import SCORE_RUBRIC_TEMPLATE
 
 # Custom libraries
 import config
@@ -31,9 +32,10 @@ os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 # Default Prometheus model for evaluation
 PROMETHEUS_MODEL = "prometheus-eval/prometheus-7b-v2.0"
 # PROMETHEUS_MODEL = "prometheus-eval/prometheus-bgb-8x7b-v2.0"
+ATLA_MODEL = "AtlaAI/Selene-1-Mini-Llama-3.1-8B"
 
 # Default save name
-DEFAULT_SAVE_FNAME = "prometheus_autoeval.json"
+DEFAULT_SAVE_FNAME = "{judge}_autoeval.json"
 
 # Mapping of social group to name in template `{social_group} group`
 SOCIAL_GROUP_FORMAT = {
@@ -50,38 +52,39 @@ NUM_GPUS = 0
 if torch.cuda.is_available():
     NUM_GPUS = torch.cuda.device_count()
 
-# Get default prometheus prompt version
-PROMETHEUS_PROMPT_VER = os.environ.get("PROMETHEUS_PROMPT_VER", 2)
+# Get default prompt version
+JUDGE_PROMPT_VER = os.environ.get("JUDGE_PROMPT_VER", 2)
 
 
 ################################################################################
 #                                   Classes                                    #
 ################################################################################
-# TODO: Consider a relative grading between full-precision and quantized model
-class PrometheusEvaluator:
+class OpenJudgeEvaluator:
     """
-    PrometheusEvaluator class.
+    OpenJudgeEvaluator class.
 
     Notes
     -----
-    Used to evaluate LLM responses via Prometheus 2.0
+    Used to evaluate LLM responses via Prometheus 2.0 or Atla
     """
 
     def __init__(
             self,
-            model_path=PROMETHEUS_MODEL,
-            prompt=ABSOLUTE_PROMPT_WO_REF,
-            prompt_version=PROMETHEUS_PROMPT_VER,
+            judge_choice="prometheus",
+            model_path=None,
+            prompt=None,
+            prompt_version=JUDGE_PROMPT_VER,
             save_dir=None,
         ):
         """
-        Initialize the PrometheusEvaluator class.
+        Initialize the OpenJudgeEvaluator class.
 
         Parameters
         ----------
+        judge_choice : str
+            Choice of open LLM judge (prometheus/atla)
         model_path : str, optional
-            HuggingFace path to Prometheus model to be used for evaluation, by
-            default PROMETHEUS_MODEL.
+            HuggingFace path to model to be used for evaluation
         prompt : str, optional
             Prompt template to use. Defaults to absolute grading without
             reference.
@@ -95,10 +98,12 @@ class PrometheusEvaluator:
             within config.DIR_EVALUATIONS based on the model name.
         """
         assert save_dir, "Please pass a valid `save_dir` to save evaluation results!"
+        assert judge_choice in ["prometheus", "atla"], "Only supports Prometheus/Atla evaluators currently!"
         self.save_dir = save_dir
         self.model_path = model_path
         self.prompt = prompt
         self.prompt_version = int(prompt_version)
+        self.judge_choice = judge_choice
         # Lazy load LLM, on first call
         self.judge = None
 
@@ -106,22 +111,35 @@ class PrometheusEvaluator:
         self.prompt_key = "prompt"
         self.llm_input_col = "res"
         self.llm_response_col = "eval_res"
+        self.default_filename = DEFAULT_SAVE_FNAME.format(judge=judge_choice)
+
+        # Default model based on judge choice
+        if self.model_path is None:
+            judge_to_path = {"prometheus": PROMETHEUS_MODEL, "atla": ATLA_MODEL}
+            self.model_path = judge_to_path[self.judge_choice]
 
 
-    def load_prometheus(self):
+    def load_judge(self):
         """
-        Load Prometheus
+        Load judge LLM
         """
         if self.judge is None:
+            # Load vLLM model
             model = VLLM(
                 model=self.model_path,
                 tensor_parallel_size=NUM_GPUS,
                 gpu_memory_utilization=0.8,
             )
-            self.judge = PrometheusEval(model=model, absolute_grade_template=self.prompt)
+
+            # Create Judge class
+            judge_to_cls = {"prometheus": PrometheusEval, "atla": AtlaEval}
+            kwargs = {}
+            if self.prompt:
+                kwargs["absolute_grade_template"] = self.prompt
+            self.judge = judge_to_cls[self.judge_choice](model=model, **kwargs)
 
 
-    def save_progress(self, data, filename=DEFAULT_SAVE_FNAME, **save_kwargs):
+    def save_progress(self, data, filename=None, **save_kwargs):
         """
         Save evaluation progress to a JSON file.
 
@@ -129,6 +147,7 @@ class PrometheusEvaluator:
             data: Data to be saved.
             filename (str): Name of the file for saving the data.
         """
+        filename = filename or self.default_filename
         os.makedirs(self.save_dir, exist_ok=True)
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
@@ -137,13 +156,13 @@ class PrometheusEvaluator:
     def evaluate(
         self, data, task,
         resume=True,
-        progress_filename=DEFAULT_SAVE_FNAME,
+        progress_filename=None,
         prompt_key="prompt",
         llm_input_col="res",
         llm_response_col="eval_res",
     ):
         """
-        Evaluate a dataset using the OpenAI API.
+        Evaluate a dataset using an open judge LLM.
 
         Parameters
         ----------
@@ -170,13 +189,12 @@ class PrometheusEvaluator:
         list
             The evaluated data.
         """
+        progress_filename = progress_filename or self.default_filename
+
         # Modify keys
         self.prompt_key = prompt_key or self.prompt_key
         self.llm_input_col = llm_input_col or self.llm_input_col
         self.llm_response_col = llm_response_col or self.llm_response_col
-
-        # Get rubric
-        assert task in config.PROMETHEUS_EVAL_RUBRIC_DATA, f"Invalid task! Please ensure that task `{task}` is in `config.py` / PROMETHEUS_EVAL_RUBRIC_DATA..."
 
         # Early return, if no data provided
         if not data:
@@ -221,7 +239,7 @@ class PrometheusEvaluator:
         if not data:
             return
 
-        self.load_prometheus()
+        self.load_judge()
 
         # Get social axis and groups present
         social_axis_to_groups = {}
@@ -248,11 +266,10 @@ class PrometheusEvaluator:
         social_axis = SOCIAL_GROUP_FORMAT[first_row["axis"]]
         social_group = first_row["descriptor"]
 
-        self.load_prometheus()
+        self.load_judge()
 
         # Get rubric for stereotype/toxicity
-        rubric_data = config.PROMETHEUS_EVAL_RUBRIC_DATA[task]
-        task_to_rubric = config.PROMETHEUS_VER_TO_RUBRICS[self.prompt_version]
+        task_to_rubric = config.PROMPT_VER_TO_RUBRICS[self.prompt_version]
         rubric_data = task_to_rubric[task]
 
         # Get initial instructions and their LLM responses
