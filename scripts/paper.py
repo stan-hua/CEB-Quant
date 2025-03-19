@@ -34,7 +34,7 @@ EVALUATOR_CHOICE = os.environ.get("EVALUATOR_CHOICE", "atla")
 JUDGE_PROMPT_VER = int(os.environ.get("JUDGE_PROMPT_VER", "4"))
 
 # Default save directory
-SAVE_DIR = "temp_atla"
+SAVE_DIR = f"temp_{EVALUATOR_CHOICE}"
 
 
 ################################################################################
@@ -66,7 +66,7 @@ def ceb_check_impact_of_instruction(save_dir=SAVE_DIR):
     results_accum = {}
 
     print(f"""
-    a total of N={df_accum} paired responses. Of which, only {df_valid} contain valid responses in both
+    a total of N={len(df_accum)} paired responses. Of which, only {len(df_valid)} contain valid responses in both
     """.strip())
 
     # 1. What happens if you only consider the average
@@ -259,8 +259,8 @@ def ceb_check_impact_of_quantization(save_dir=SAVE_DIR):
 
     # Accumulate changes
     cols = [
-        "Bias Type", "Task Type", "Social Axis", "Social Group",
-        "Quantizer", "Bit Config.", "Model Family", "Param. Size",
+        "Task Type", "Bias Type", "Social Axis", "Social Group",
+        "Model Family", "Param. Size", "Quantizer", "Bit Config.",
     ]
     accum_change = []
     for col in cols:
@@ -279,8 +279,8 @@ def ceb_check_impact_of_quantization(save_dir=SAVE_DIR):
     avg_pairwise_diffs = df_valid.groupby("Social Group")["score_diff"].mean()
     diff_min, diff_max = round(avg_pairwise_diffs.min(), 2), round(avg_pairwise_diffs.max(), 2)
     print(f"Across {len(avg_pairwise_diffs)} social groups, the average pairwise difference varies from {diff_min} to {diff_max}")
-    print("5 Least-Impacted Social Groups (Fairness Flips):", curr_social_group_fair["Value"].head(5).tolist())
-    print("5 Most-Impacted Social Groups (Fairness Flips):", curr_social_group_fair["Value"].tail(5).tolist())
+    print("10 Least-Impacted Social Groups (Fairness Flips):", curr_social_group_fair["Value"].head(10).tolist())
+    print("10 Most-Impacted Social Groups (Fairness Flips):", curr_social_group_fair["Value"].tail(10).tolist())
 
     # Find top and bottom 2 in social group based on Fairness
     filter_social_groups = curr_social_group_fair["Value"].head(2).tolist() + curr_social_group_fair["Value"].tail(2).tolist()
@@ -399,6 +399,15 @@ def ceb_check_impact_of_quantization(save_dir=SAVE_DIR):
     fig.savefig(os.path.join(save_dir, f"fig3-{EVALUATOR_CHOICE.lower()}.svg"), bbox_inches="tight")
     plt.close()
 
+
+    ############################################################################
+    #                                 Text                                     #
+    ############################################################################
+    df_valid.groupby(["Quantizer", "Bit Config."])["score_diff"].mean()
+    print(f"""
+    Among the quantization methods tested, ...
+    \t{df_valid.groupby(["Quantizer", "Bit Config."])["score_diff"].mean()}
+    """.strip())
 
     ############################################################################
     #                            Unused Figures                                #
@@ -584,6 +593,11 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
     df_bench = pd.concat([df_bench, model_metadata], axis=1)
     df_bench["Is Quantized"] = df_bench["base_model"] != df_bench["model"]
 
+    # Filter for instruct models
+    df_bench = df_bench[df_bench["instruct_tuned"]]
+    # Remove AQLM since it skews the distribution
+    df_bench = df_bench[~df_bench["model"].str.lower().str.contains("AQLM")]
+
     # LM-Eval columns
     lm_eval_cols = [
         'hellaswag / acc',
@@ -598,8 +612,7 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
     # 1. Only full-precision instruct models
     # Filter for base model vs. not base model
     is_full_precision = (df_bench["w_bits"] == 16) & (df_bench["a_bits"] == 16)
-    is_instruct = df_bench["instruct_tuned"]
-    df_full_precision = df_bench.loc[is_full_precision & is_instruct].copy()
+    df_full_precision = df_bench.loc[is_full_precision].copy()
     # Normalize score columns
     # scaler = StandardScaler()
     # df_full_precision[all_eval_cols] = scaler.fit_transform(df_full_precision[all_eval_cols])
@@ -632,10 +645,6 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
     ############################################################################
     viz_utils.set_theme(tick_scale=2.3, figsize=(35, 10), rcparams={"legend.fontsize": "small"}, style="whitegrid")
     fig, axs = plt.subplots(1, 3)
-
-    # Remove AQLM since it skews the distribution
-    df_bench_orig = df_bench.copy()
-    df_bench = df_bench[~df_bench["model"].str.contains("AQLM")]
 
     # 2. Plot base and quantized models
     df_together = df_bench.copy()
@@ -707,7 +716,7 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
         ylabel="Difference in Avg. Benchmark Accuracy",
         legend=True,
         horizontal_legend=True,
-        y_lim=[-0.15, 0.05],
+        y_lim=[-0.1, 0.05],
         ax=axs[2],
     )
 
@@ -715,7 +724,6 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
     plt.subplots_adjust(hspace=0.15, wspace=0.4)
     fig.savefig(os.path.join(save_dir, f"fig4-{EVALUATOR_CHOICE.lower()}.svg"), bbox_inches="tight")
     plt.close()
-
 
 
 def ceb_sample_for_human_annotation():
@@ -745,11 +753,13 @@ def ceb_compute_judge_human_agreement():
     accum_rows = []
     for col in ["is_valid", "score_base", "is_fair"]:  # "rta_score_base", 
         df_curr = df_all.copy()
-        # If on bias scores, filter for valid responses only
+        # If on bias scores, filter for responses model think is valid
         if col in ["score_base", "is_fair"]:
-            df_curr = df_curr[df_curr["is_valid"].fillna(False).astype(bool)]
+            valid_mask = df_curr[f"is_valid"].fillna(False).astype(bool)
+            df_curr = df_curr[valid_mask]
         # Compute agreement between human and judges
         for judge, suffix in llm_judge_to_suffix:
+            # Drop rows with incomplete scores
             score_cols = [f"{col}", f"{col}{suffix}"]
             df_temp = df_curr.dropna(subset=score_cols)
             weight_to_kappa = {}
@@ -772,11 +782,9 @@ def ceb_compute_judge_human_agreement():
     df_curr = df_all.dropna(subset=["is_fair"])
     df_agreement.to_csv("human_evaluator-agreement.csv", index=False)
     pd.crosstab(df_curr["is_valid"], df_curr["is_valid_a"]).to_csv("human_atla-validity_cont.csv")
-    pd.crosstab(df_curr["is_fair"], df_curr["is_fair_a"]).to_csv("human_atla-is_fair_cont.csv")
-    pd.crosstab(df_curr["score_base"], df_curr["score_base_a"]).to_csv("human_atla-bias_score_cont.csv")
-
-
-
+    valid_mask = df_curr["is_valid"].fillna(False).astype(bool)
+    pd.crosstab(df_curr.loc[valid_mask, "is_fair"], df_curr.loc[valid_mask, "is_fair_a"]).to_csv("human_atla-is_fair_cont.csv")
+    pd.crosstab(df_curr.loc[valid_mask, "score_base"], df_curr.loc[valid_mask, "score_base_a"]).to_csv("human_atla-bias_score_cont.csv")
 
 
 def supp_get_existing_models(save_dir=SAVE_DIR):
@@ -810,7 +818,7 @@ def supp_get_existing_models(save_dir=SAVE_DIR):
 ################################################################################
 def identify_valid_responses(df_accum, col_suffix="", use_regex=False):
     # Add valid responses
-    mask = (df_accum[f"rta_score{col_suffix}"] >= 4)
+    mask = (df_accum[f"rta_score{col_suffix}"] >= 4).fillna(False)
     # Identify valid responses (that were labeled invalid)
     if use_regex:
         rta_blacklist = "copy|copie|duplicat|refus|reiterat|repet|repeat|restat|re-stat|redundant|incoheren|nonsensical|irrelevant|unrelated|(not engag)|unnecessary|(lack of coheren|relevan|relat)|vague|((does not|fails to)( \S*)? (continue|engage))|lacks( \S*) content|without any expansion/continuation"
@@ -821,7 +829,6 @@ def identify_valid_responses(df_accum, col_suffix="", use_regex=False):
         mask = mask | valid_invalid_mask
     mask[df_accum[f"rta_score{col_suffix}"].isna()] = None
     return mask.astype(float)
-
 
 
 def plot_change_in_fairness(df, col, **kwargs):
