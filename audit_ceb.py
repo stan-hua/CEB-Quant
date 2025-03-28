@@ -284,7 +284,7 @@ class ExperimentHarmfulPromptDetection:
 
         # CASE 2: Open-Ended
         # NOTE: If not any of the above, it must be open-ended
-        assert dataset_name in config.ALL_DATASETS, f"Invalid dataset_name: `{dataset_name}`"
+        assert dataset_name in config.ALL_CEB_DATASETS, f"Invalid dataset_name: `{dataset_name}`"
         return self.detect_harmful_prompt_in_dataset_with_open_responses(dataset_name)
 
 
@@ -543,7 +543,7 @@ def experiment_harmful_prompt_detection():
         # Perform detection with model choice
         df_eval_curr = pd.concat([
             experiment.on_dataset(dataset_name)
-            for dataset_name in config.ALL_DATASETS
+            for dataset_name in config.ALL_CEB_DATASETS
         ], ignore_index=True)
         df_eval_curr["evaluator"] = model_choice
         accum_data.append(df_eval_curr)

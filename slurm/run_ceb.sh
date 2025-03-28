@@ -2,9 +2,12 @@
 #SBATCH --job-name=ceb_generate                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --gres=gpu:NVIDIA_L40S:1
+#--qos=gpu_deadline_q
 # --reservation=stan_gpu
 # --gres=gpu:1
 # --nodelist=cn532                         # Number of nodes
+# --gres=gpu:NVIDIA_L40S:1
+# --gres=gpu:NVIDIA_H100_NVL:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
 #SBATCH --cpus-per-task=8                 # Number of CPU cores per TASK
 #SBATCH --mem=32GB
@@ -190,7 +193,7 @@ MODEL_NAMES=(
     # qwen2.5-3b-instruct-lc-rtn-w8a16
     # qwen2.5-3b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 7B
+    # # # # Qwen2.5 7B
     # qwen2.5-7b
     # qwen2.5-7b-instruct
     # qwen2.5-7b-instruct-awq-w4a16
@@ -203,20 +206,20 @@ MODEL_NAMES=(
     # qwen2.5-7b-instruct-lc-rtn-w8a16
     # qwen2.5-7b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 14B
+    # # # # Qwen2.5 14B
     # qwen2.5-14b
-    # qwen2.5-14b-instruct
-    # qwen2.5-14b-instruct-awq-w4a16
-    # qwen2.5-14b-instruct-gptq-w4a16
-    # qwen2.5-14b-instruct-gptq-w8a16
-    # qwen2.5-14b-instruct-lc-rtn-w4a16
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-14b-instruct-lc-rtn-w8a8
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-14b-instruct-lc-rtn-w8a16
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
+    qwen2.5-14b-instruct
+    qwen2.5-14b-instruct-awq-w4a16
+    qwen2.5-14b-instruct-gptq-w4a16
+    qwen2.5-14b-instruct-gptq-w8a16
+    qwen2.5-14b-instruct-lc-rtn-w4a16
+    qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-14b-instruct-lc-rtn-w8a8
+    qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-14b-instruct-lc-rtn-w8a16
+    qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
 
-    # # # # Qwen2.5 32B
+    # # # # # Qwen2.5 32B
     # qwen2.5-32b
     # qwen2.5-32b-instruct
     # qwen2.5-32b-instruct-awq-w4a16
@@ -269,32 +272,32 @@ MODEL_NAMES=(
     # phi3-14b-instruct-lc-smooth-rtn-w8a16
     # phi3-14b-instruct-lc-smooth-rtn-w8a8
 
-    # Gemma 2B
-    gemma2-2b-instruct
-    gemma2-2b-instruct-lc-rtn-w4a16
-    gemma2-2b-instruct-lc-rtn-w8a16
-    gemma2-2b-instruct-lc-rtn-w8a8
-    gemma2-2b-instruct-lc-smooth-rtn-w4a16
-    gemma2-2b-instruct-lc-smooth-rtn-w8a16
-    gemma2-2b-instruct-lc-smooth-rtn-w8a8
+    # # Gemma 2B
+    # gemma2-2b-instruct
+    # gemma2-2b-instruct-lc-rtn-w4a16
+    # gemma2-2b-instruct-lc-rtn-w8a16
+    # gemma2-2b-instruct-lc-rtn-w8a8
+    # gemma2-2b-instruct-lc-smooth-rtn-w4a16
+    # gemma2-2b-instruct-lc-smooth-rtn-w8a16
+    # gemma2-2b-instruct-lc-smooth-rtn-w8a8
 
-    # Gemma 9B
-    gemma2-9b-instruct
-    gemma2-9b-instruct-lc-rtn-w4a16
-    gemma2-9b-instruct-lc-rtn-w8a16
-    gemma2-9b-instruct-lc-rtn-w8a8
-    gemma2-9b-instruct-lc-smooth-rtn-w4a16
-    gemma2-9b-instruct-lc-smooth-rtn-w8a16
-    gemma2-9b-instruct-lc-smooth-rtn-w8a8
+    # # Gemma 9B
+    # gemma2-9b-instruct
+    # gemma2-9b-instruct-lc-rtn-w4a16
+    # gemma2-9b-instruct-lc-rtn-w8a16
+    # gemma2-9b-instruct-lc-rtn-w8a8
+    # gemma2-9b-instruct-lc-smooth-rtn-w4a16
+    # gemma2-9b-instruct-lc-smooth-rtn-w8a16
+    # gemma2-9b-instruct-lc-smooth-rtn-w8a8
 
-    # Gemma 27B
-    gemma2-27b-instruct
-    gemma2-27b-instruct-lc-rtn-w4a16
-    gemma2-27b-instruct-lc-rtn-w8a16
-    gemma2-27b-instruct-lc-rtn-w8a8
-    gemma2-27b-instruct-lc-smooth-rtn-w4a16
-    gemma2-27b-instruct-lc-smooth-rtn-w8a16
-    gemma2-27b-instruct-lc-smooth-rtn-w8a8
+    # # Gemma 27B
+    # gemma2-27b-instruct
+    # gemma2-27b-instruct-lc-rtn-w4a16
+    # gemma2-27b-instruct-lc-rtn-w8a16
+    # gemma2-27b-instruct-lc-rtn-w8a8
+    # gemma2-27b-instruct-lc-smooth-rtn-w4a16
+    # gemma2-27b-instruct-lc-smooth-rtn-w8a16
+    # gemma2-27b-instruct-lc-smooth-rtn-w8a8
 )
 
 QUIP_MODELS=(
@@ -310,15 +313,15 @@ VPTQ_MODELS=(
 
 # Flag to use chat template (include both to run w/ and w/o chat template)
 CHAT_FLAGS=(
-    # "False"
-    "True"
+    "False"
+    # "True"
 )
 
 # Number of GPUS
 NUM_GPUS=1
 
-# Datasets to infer on ("all", "all_open_ended")
-DATASET_NAME="all_open_ended"       # ("all", "all_open_ended")
+# Datasets to infer on ("all_ceb", "all_ceb_open_ended")
+DATASET_NAME="all_fmt"       # ("all", "all_ceb_open_ended")
 
 
 ################################################################################

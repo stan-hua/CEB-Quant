@@ -94,6 +94,7 @@ class CEBBenchmark:
             alpha=0.05,
             filter_kwargs=None,
             evaluator_choice=DEFAULT_EVALUATOR,
+            system_prompt_type="no_sys_prompt",
             save_metrics=True,
         ):
         """
@@ -111,12 +112,14 @@ class CEBBenchmark:
             Keyword arguments to filter prompts based on harmfulness, etc.
         evaluator_choice : str, optional
             Choice of evaluator: ("chatgpt", "prometheus", "atla").
+        system_prompt_type : str, optional
+            Choice of system prompt: ("no_sys_prompt", ...).
         save_metrics : bool, optional
             If True, save metrics to the metrics directory.
         """
         # If exists in `config.DIR_GENERATIONS`, then prepend directory
-        if not os.path.exists(results_dir) and os.path.exists(os.path.join(config.DIR_GENERATIONS, results_dir)):
-            results_dir = os.path.join(config.DIR_GENERATIONS, results_dir)
+        if not os.path.exists(results_dir) and os.path.exists(os.path.join(config.DIR_GENERATIONS, system_prompt_type, results_dir)):
+            results_dir = os.path.join(config.DIR_GENERATIONS, system_prompt_type, results_dir)
 
         assert os.path.exists(results_dir), f"Directory doesn't exist!\n\tDirectory: {results_dir}"
 
@@ -134,11 +137,11 @@ class CEBBenchmark:
         self.model_name = model_name
 
         # Create directory to save evaluations
-        self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, model_name)
+        self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, system_prompt_type, model_name)
         self.is_local_judge = False
         if self.evaluator_choice in ["prometheus", "atla"]:
             LOGGER.info(f"[CEB Benchmark] Using {self.evaluator_choice.capitalize()} for evaluation with Prompt Version {JUDGE_PROMPT_VER}")
-            self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, str(JUDGE_PROMPT_VER), model_name)
+            self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, str(JUDGE_PROMPT_VER), system_prompt_type, model_name)
             self.is_local_judge = True
 
         # Create directory to save metrics
@@ -510,7 +513,7 @@ class CEBBenchmark:
 ################################################################################
 def ceb_generate(
         model_path_or_name,
-        dataset_name="all",
+        dataset_name="all_ceb",
         model_provider="vllm",
         use_chat_template=False,
         num_gpus=None,
@@ -652,7 +655,7 @@ def ceb_compare_multiple(
             else (len(results_dirs)-1)
 
     # Determine number of actual comparisons (model comparisons x dataset comparisons)
-    total_comparisons = model_comparisons * len(config.ALL_DATASETS)
+    total_comparisons = model_comparisons * len(config.ALL_CEB_DATASETS)
 
     # Compute alpha score
     alpha = 0.05 / (total_comparisons)
@@ -853,7 +856,7 @@ def ceb_find_unfinished(pattern="*", filter_models=None, generation=False, evalu
                 continue
 
             # Check each dataset
-            for dataset_name in config.ALL_DATASETS:
+            for dataset_name in config.ALL_CEB_DATASETS:
                 json_paths = glob(os.path.join(result_dir, dataset_name, "*.json"))
 
                 # Early return if missing JSON files

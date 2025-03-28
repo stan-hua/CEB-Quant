@@ -18,10 +18,14 @@ from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
 # Custom libraries
-from config import MODEL_INFO, ALL_DATASETS, OPEN_ENDED_DATASETS, DIR_GENERATIONS, DIR_MODELS
+from config import (
+    MODEL_INFO, ALL_CEB_DATASETS, OPEN_ENDED_DATASETS, DIR_GENERATIONS, DIR_MODELS,
+    SYSTEM_PROMPT_MAP, FMT_USER_KEY, FMT_ASSISTANT_KEY,
+)
 from src.utils import json_utils, llm_gen_utils
 
 
+# Disable warnings
 load_dotenv()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -67,6 +71,7 @@ class LLMGeneration:
             data_path,
             dataset_name,
             model_path_or_name,
+            system_prompt_type="no_sys_prompt",
             **overwrite_config,
         ):
         """
@@ -80,6 +85,8 @@ class LLMGeneration:
             Name of the dataset.
         model_path_or_name : str
             Model name, or path to HuggingFace model
+        system_prompt_type : str, optional
+            Type of system prompt to use
         **overwrite_config : Any
             Keyword arguments, which includes:
             model_provider : str
@@ -96,18 +103,33 @@ class LLMGeneration:
         """
         # Check that dataset is valid
         dataset_names = []
-        if dataset_name == "all":
-            dataset_names.extend(ALL_DATASETS)
-        elif dataset_name == "all_open_ended":
+        self.dataset_collection = "ceb"
+        if dataset_name == "all_ceb":
+            dataset_names.extend(ALL_CEB_DATASETS)
+        elif dataset_name == "all_ceb_open_ended":
             dataset_names.extend(OPEN_ENDED_DATASETS)
+        elif dataset_name == "all_fmt":
+            self.dataset_collection = "fmt"
+            # Overwrite parameters to faithfully follow FMT-Bench paper
+            overwrite_config["max_new_tokens"] = 150
+            # NOTE: This is functionally equivalent to temperature = 0, but is kept for consistency
+            overwrite_config["temperature"] = 0.7
+            overwrite_config["top_k"] = 1
+            dataset_names.extend(ALL_FMT_DATASETS)
         else:
-            assert dataset_name in ALL_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_DATASETS}`"
+            assert dataset_name in ALL_CEB_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_CEB_DATASETS}`"
             dataset_names.append(dataset_name)
 
         # Path to dataset
         self.data_path = data_path
         # Name of dataset/s
         self.dataset_names = dataset_names
+
+        # Type of system prompt
+        self.system_prompt_type = system_prompt_type
+        # System prompt for dataset (to fill)
+        # NOTE: Only for chat datasets
+        self.system_prompt = None
 
         # Store configuration
         self.llm_config = DEFAULT_CONFIG.copy()
@@ -298,7 +320,8 @@ class LLMGeneration:
         }
         # CASE 1: If only 1 choice, then get log probability of sequence and
         #         set temperature to 1, so it doesn't skew probabilities
-        if choices and len(choices) == 1:
+        if choices:
+            LOGGER.info(["vLLM Generate] Choices are provided! Setting temperature to 1 to avoid skewing the probability distribution..."])
             sampling_kwargs["temperature"] = 1
             sampling_kwargs["logprobs"] = 1
 
@@ -396,6 +419,80 @@ class LLMGeneration:
         return accum_ret
 
 
+    def vllm_chat_single(self, conversation, **kwargs):
+        """
+        Generates a response using a VLLM model.
+
+        Parameters
+        ----------
+        conversation : list of dict
+            Single conversation
+
+        Returns
+        -------
+        dict
+            Contains generated responses.
+        """
+        self.ensure_model_loaded()
+
+        # Create vLLM arguments
+        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+
+        # Use vLLM to chat
+        response = self.vllm.chat(conversation, **gen_kwargs)
+
+        # Prepare return
+        ret = {
+            "res": response[0].outputs[0].text,
+        }
+        return ret
+
+
+    def vllm_chat_multiple(self, conversations, **kwargs):
+        """
+        Generates multiple responses using a VLLM model.
+
+        Parameters
+        ----------
+        conversations : list of list of dict
+            Multiple conversations
+        **kwargs : Any
+            Additional keyword arguments for vLLM generation
+
+        Returns
+        -------
+        list of dict
+            List of generated responses.
+        """
+        self.ensure_model_loaded()
+
+        # Create vLLM arguments
+        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        # CASE 1: Unable to do batched requests on texts, default to single
+        if gen_kwargs is None:
+            accum_ret = []
+            for idx, conversation in enumerate(conversations):
+                curr_kwargs = {
+                    k: (v[idx] if len(v) == len(conversations) else v)
+                    for k, v in kwargs.items()
+                }
+                accum_ret.append(self.vllm_chat_single(conversation, **curr_kwargs))
+            return accum_ret
+
+        # CASE 2: Batched requests is possible
+        # Generate in batch
+        responses = self.vllm.generate(conversations, **gen_kwargs)
+
+        # Extract results
+        accum_ret = []
+        for curr_response in responses:
+            curr_ret = {
+                "res": curr_response.outputs[0].text,
+            }
+            accum_ret.append(curr_ret)
+        return accum_ret
+
+
     ############################################################################
     #                        Other Helper Functions                            #
     ############################################################################
@@ -456,7 +553,63 @@ class LLMGeneration:
             LOGGER.error(tb)
 
 
-    def process_row(self, row, index, temperature, key_name="prompt"):
+    def chat_single(self, conversation, temperature=None, **kwargs):
+        """
+        Generates a response to a chat using a given model.
+
+        Parameters
+        ----------
+        conversation : list of dict
+            Single conversation to continue by the model
+        temperature : float, optional
+            The temperature setting for text generation. Default is None.
+
+        Returns
+        -------
+        dict
+            Contains generated text in `res`
+        """
+        try:
+            model_provider = self.llm_config["model_provider"]
+
+            # Generate LLM response
+            ret = {
+                "res": None
+            }
+            # CASE 1: vLLM
+            if model_provider == "vllm":
+                # NOTE: Temperature isn't passed into vLLM
+                ret = self.vllm_chat_single(conversation, **kwargs)
+            # CASE 2: Online Models
+            elif is_provider_online(model_provider):
+                raise NotImplementedError("Online models with chat format is not yet supported!")
+                # ret["res"] = llm_gen_utils.gen_online(
+                #     self.model_name,
+                #     conversation=conversation,
+                #     temperature=temperature,
+                #     replicate=(model_provider == "replicate"),
+                #     deepinfra=(model_provider == "deepinfra"),
+                # )
+            # CASE 3: HuggingFace / VPTQ
+            elif model_provider in ["huggingface", "vptq"]:
+                raise NotImplementedError(f"`{model_provider}` models with chat format is not yet supported!")
+                # ret["res"] = self.huggingface_generate(conversation, temperature)
+            else:
+                raise RuntimeError(f"[chat_single] Invalid model provider given! `{model_provider}`")
+
+            # Check if the response is valid before returning
+            if not ret["res"]:
+                raise ValueError("The response is NULL or an empty string!")
+            return ret
+        except Exception:
+            tb = traceback.format_exc()
+            LOGGER.error(tb)
+
+
+    ############################################################################
+    #                            CEB Functions                                 #
+    ############################################################################
+    def process_row_ceb(self, row, index, temperature, key_name="prompt"):
         """
         Process a single row of input data, generating a response using the
         current model if the "res" key doesn't exist or its value is empty.
@@ -502,13 +655,13 @@ class LLMGeneration:
             row["res_probs"] = [round(prob, 4) for prob in normalized_probs]
         except Exception as e:
             # Print error message if there"s an issue during processing
-            LOGGER.error(f"[process_row] Exception occured!")
+            LOGGER.error(f"[process_row_ceb] Exception occured!")
             tb = traceback.format_exc()
             LOGGER.error(tb)
             row["num_attempts"] += 1
 
 
-    def process_rows(self, rows, temperature, key_name="prompt"):
+    def process_rows_ceb(self, rows, temperature, key_name="prompt"):
         """
         Process a list of input data rows, generating responses using the
         current model if the "res" key doesn't exist or its value is empty.
@@ -548,7 +701,7 @@ class LLMGeneration:
             # CASE 0: If choices differ per row, revert to unbatched processing
             if revert_to_single:
                 for idx, row in enumerate(filtered_rows):
-                    self.process_row(row, index=idx, temperature=temperature, key_name=key_name)
+                    self.process_row_ceb(row, index=idx, temperature=temperature, key_name=key_name)
                 return
 
             # Prepare prompts
@@ -600,7 +753,7 @@ class LLMGeneration:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(filtered_rows)) as executor:
                 futures = [
                     executor.submit(
-                            self.process_row,
+                            self.process_row_ceb,
                             row=row,
                             index=idx,
                             temperature=temperature,
@@ -619,10 +772,7 @@ class LLMGeneration:
         return
 
 
-    ############################################################################
-    #                            Main Functions                                #
-    ############################################################################
-    def process_file(self, input_path, output_path, file_config=None, prompt_key="prompt"):
+    def process_file_ceb(self, input_path, output_path, file_config=None, prompt_key="prompt"):
         """
         Processes a file containing multiple data points for text generation.
 
@@ -634,7 +784,7 @@ class LLMGeneration:
         """
         # INPUT: Sanitize file_config
         file_config = file_config or {}
-        temperature = file_config.get(os.path.basename(input_path), 0.0)
+        temperature = file_config.get(os.path.basename(input_path), self.llm_config["temperature"])
 
         # Check if the input file exists
         if not os.path.exists(input_path):
@@ -690,7 +840,7 @@ class LLMGeneration:
                 break
 
             # Process the grouped rows
-            self.process_rows(grouped_rows, temperature, prompt_key)
+            self.process_rows_ceb(grouped_rows, temperature, prompt_key)
 
             # Save the updated saved data to the output file
             json_utils.save_json(saved_data, output_path, lock=lock)
@@ -701,6 +851,220 @@ class LLMGeneration:
         LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
 
 
+    ############################################################################
+    #                        FairMT-Bench Functions                            #
+    ############################################################################
+    def process_row_fmt(self, row, index, temperature):
+        """
+        Move 1 conversation along by one step (e.g., 1->2 or 3->4)
+
+        Note
+        ----
+        For a 5-turn conversation, you need to pass the row into this function
+        5 times.
+
+        Parameters
+        ----------
+        row : dict
+            The input data element.
+        index : int
+            The index of the element in the input data.
+        temperature : float
+            The temperature setting for text generation.
+        """
+        try:
+            # If "res" key doesn't exist or its value is empty, generate a new response
+            if row.get("num_attempts", 0) != 3 and not is_conversation_done(row):
+                return
+
+            # Raise error, if choices provided
+            if row.get("choices"):
+                raise RuntimeError("Chat template is not compatible with choices currently!")
+
+            # Get conversation till this point
+            curr_turn, conversation = extract_conversation_till_turn(row)
+
+            # Early exit, if conversation is already done
+            if curr_turn is None:
+                LOGGER.debug("Conversation is already ended!")
+                return
+
+            # Prepend system message
+            if self.system_prompt:
+                conversation.insert(0, {"role": "system", "content": self.system_prompt})
+    
+            # Generate chat response
+            curr_response = self.chat_single(
+                conversation=conversation,
+                temperature=temperature,
+            )
+            response_key = FMT_ASSISTANT_KEY.format(turn=curr_turn)
+            row[response_key] = curr_response["res"]
+            return
+        except Exception as e:
+            # Print error message if there"s an issue during processing
+            LOGGER.error(f"[process_row_fmt] Exception occured!")
+            tb = traceback.format_exc()
+            LOGGER.error(tb)
+            row["num_attempts"] += 1
+
+
+    def process_rows_fmt(self, rows, temperature, key_name="prompt"):
+        """
+        Move multiple conversations along by one step (e.g., 1->2 or 3->4)
+
+        Parameters
+        ----------
+        rows : list
+            The input data elements.
+        temperature : float
+            The temperature setting for text generation.
+        key_name : str, optional
+            The key to use for accessing the prompt in the input data elements.
+            Default is "prompt".
+        """
+        # Filter for rows without a LLM response
+        filtered_rows = [row for row in rows if not is_conversation_done(row)]
+
+        # Early exit, if no rows to process
+        if not filtered_rows:
+            LOGGER.debug("No grouped rows to process")
+            return
+
+        model_provider = self.llm_config["model_provider"]
+        # CASE 1: If vLLM, pass multiple row prompts at once
+        if model_provider == "vllm":
+            # Raise error, if choices provided
+            if "choices" in filtered_rows[0]:
+                raise RuntimeError("Chat template is not compatible with choices currently!")
+
+            # Get conversation till this point
+            conversations = []
+            conv_turns = []
+            for row in filtered_rows:
+                curr_turn, conversation = extract_conversation_till_turn(row)
+                # Prepend system message
+                if self.system_prompt:
+                    conversation.insert(0, {"role": "system", "content": self.system_prompt})
+                # Raise error, if conversation is already done
+                if curr_turn is None:
+                    raise RuntimeError("Conversation is already ended, despite being flagged as not done!")
+                conversations.append(conversation)
+                conv_turns.append(curr_turn)
+
+            # Get LLM responses
+            llm_responses = self.vllm_chat_multiple(conversations)
+
+            # Assign responses for each row
+            for idx, row in enumerate(filtered_rows):
+                # CASE 1: Valid non-empty response
+                curr_response_text = llm_responses[idx]["res"]
+                response_key = FMT_ASSISTANT_KEY.format(turn=conv_turns[idx])
+                row[response_key] = curr_response_text
+                # NOTE: Error-handling is commented out for now
+                # elif curr_response_text == "":
+                #     row["num_attempts"] += 1
+                # else:
+                #     raise RuntimeError("Unexpected response from vLLM!")
+            return
+
+        # CASE 2: If online model, send parallel requests to LLM API
+        if is_provider_online(model_provider):
+            raise NotImplementedError("Online models with chat format is not yet supported!")
+            # with concurrent.futures.ThreadPoolExecutor(max_workers=len(filtered_rows)) as executor:
+            #     futures = [
+            #         executor.submit(
+            #                 self.process_row,
+            #                 row=row,
+            #                 index=idx,
+            #                 temperature=temperature,
+            #                 key_name=key_name,
+            #             )
+            #         for idx, row in enumerate(filtered_rows)
+            #     ]
+
+            #     # Wait for all futures to complete
+            #     concurrent.futures.wait(futures)
+            return
+
+        # TODO: CASE 3: If FastChat, pass multiple prompts sequentially
+        raise NotImplementedError()
+        return
+
+
+    def process_file_fmt(self, input_path, output_path, file_config=None):
+        """
+        Performs inference for a single json file in the FairMT-Bench.
+
+        Args:
+            input_path (str): Path to the input data file.
+            output_path (str): Path where the processed data will be saved.
+            file_config (dict): Configuration settings for file processing.
+        """
+        # INPUT: Sanitize file_config
+        file_config = file_config or {}
+        temperature = file_config.get(os.path.basename(input_path), self.llm_config["temperature"])
+
+        # Check if the input file exists
+        if not os.path.exists(input_path):
+            raise RuntimeError(f"File {input_path} does not exist")
+
+        # Check if the output file already exists
+        if os.path.exists(output_path):
+            LOGGER.info(f"Resuming from {output_path}")
+            saved_data = json_utils.load_json(output_path)
+        else:
+            # Load the input data from the file
+            LOGGER.info(f"Loading data from {input_path}")
+            saved_data = json_utils.load_json(input_path)
+
+        # Early return, if all rows are done
+        if all(is_conversation_done(row) for row in saved_data):
+            LOGGER.info("Already done, returning early!")
+            return
+
+        # Create thread lock
+        lock = threading.Lock()
+
+        # Process the input data in groups
+        batch_size = 32 if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
+
+        # Add number of attempts to each row
+        MAX_ATTEMPTS = 3
+        for row in saved_data:
+            row["num_attempts"] = 0
+
+        # Perform inference in batches
+        while not all(is_conversation_done(row) for row in saved_data):
+            curr_idx = 0
+            grouped_rows = []
+            while curr_idx < len(saved_data) and len(grouped_rows) < batch_size:
+                row = saved_data[curr_idx]
+                # Include if no valid response yet and hasn't failed excessively
+                if row.get("num_attempts") < MAX_ATTEMPTS and \
+                        not is_conversation_done(row):
+                    grouped_rows.append(row)
+                curr_idx += 1
+
+            # If no more data, then break before creating threads
+            if not grouped_rows:
+                break
+
+            # Process the grouped rows
+            self.process_rows_fmt(grouped_rows, temperature)
+
+            # Save the updated saved data to the output file
+            json_utils.save_json(saved_data, output_path, lock=lock)
+            LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
+
+        # Save the updated saved data to the output file
+        json_utils.save_json(saved_data, output_path, lock=lock)
+        LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
+
+
+    ############################################################################
+    #                       Dataset-Level Functions                            #
+    ############################################################################
     def infer_dataset_single(self, dataset_name):
         """
         Executes a single test based on specified parameters.
@@ -718,16 +1082,28 @@ class LLMGeneration:
         LOGGER.info(f"Beginning generation with `{dataset_name}` evaluation at temperature {self.llm_config['temperature']}.")
         LOGGER.info(f"Evaluating target model: {self.model_name}")
 
-        base_dir = os.path.join(self.data_path, dataset_name)
-        result_dir = os.path.join(DIR_GENERATIONS, self.model_name, dataset_name)
+        # Specify function to process each file based on dataset collection
+        collection_to_proc_func = {
+            "ceb": self.process_file_ceb,
+            "fmt": self.process_file_fmt
+        }
+        process_file_func = collection_to_proc_func[self.dataset_collection]
+
+        # Assign dataset-specific system prompt
+        self.system_prompt = SYSTEM_PROMPT_MAP[self.system_prompt_type]
+
+        # Creare result dir
+        result_dir = os.path.join(DIR_GENERATIONS, self.model_name, self.system_prompt_type, dataset_name)
         os.makedirs(result_dir, exist_ok=True)
 
+        # Process each JSON file
+        base_dir = os.path.join(self.data_path, dataset_name)
         json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))
-        assert json_paths, f"[LLMGeneration] Could not find data files for CEB dataset `{dataset_name}`"
+        assert json_paths, f"[LLMGeneration] Could not find data files for dataset `{dataset_name}`"
         for json_path in json_paths:
             LOGGER.debug("Processing file: %s", json_path)
             save_path = os.path.join(result_dir, os.path.basename(json_path))
-            self.process_file(json_path, save_path)
+            process_file_func(json_path, save_path)
 
 
     def infer_dataset(self, max_retries=2, retry_interval=3):
@@ -942,3 +1318,64 @@ def compute_prob(vllm_logprobs):
         return seq_prob
     except:
         return None
+
+
+def is_conversation_done(row):
+    return "4-turn Conv Response" in row
+
+
+def extract_conversation_till_turn(row, turn=4):
+    """
+    Get conversation until before the latest LLM response.
+
+    Parameters
+    ----------
+    row : dict
+        Row containing a conversation in the form of:
+        {
+            "0-turn Conv": [USER PROMPT],
+            "0-turn Conv Response": [LLM RESPONSE],
+            ...
+            "4-turn Conv": [USER PROMPT],
+            "4-turn Conv Response": [LLM RESPONSE],
+        }
+    turn : int, optional
+        Maximum number of turns to consider
+
+    Returns
+    -------
+    tuple of (int, list of dict)
+        (i) Number of latest turn without a response (or None if complete),
+        (ii) Formatted conversation in the form of a user/assistant conversation
+        [
+            {"role": "user", "content": USER PROMPT (1-turn)},
+            {"role": "assistant", "content": LLM RESPONSE (1-turn)},
+            ...
+            {"role": "user", "content": USER PROMPT (K-turn)},
+            # Optional: {"role": "assistant", "content": LLM RESPONSE (K-turn)},
+        ]
+        , where K is the latest turn without an LLM response 
+    """
+    accum_conv = []
+    for curr_turn in range(0, turn+1):
+        # 1. Add prompt
+        curr_prompt_key = FMT_USER_KEY.format(turn=curr_turn)
+        curr_prompt = row[curr_prompt_key]
+        accum_conv.append({
+            "role": "user",
+            "content": curr_prompt,
+        })
+
+        # Check if response is here, if not, return early with turn
+        curr_response_key = FMT_ASSISTANT_KEY.format(turn=curr_turn)
+        if curr_response_key not in row:
+            return curr_turn, accum_conv
+
+        # 2. Add response
+        curr_response = row[curr_response_key]
+        accum_conv.append({
+            "role": "assistant",
+            "content": curr_response,
+        })
+
+    return None, accum_conv

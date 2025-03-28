@@ -559,7 +559,7 @@ def ceb_compute_fairness_vs_lm_eval_correlation(save_dir=SAVE_DIR):
     accum_ceb_metrics = []
     for model_name in lm_filter_models:
         try:
-            df_curr = pd.DataFrame(load_evaluated_generations(model_name, dataset_names="all_open_ended", evaluator_choice=EVALUATOR_CHOICE))
+            df_curr = pd.DataFrame(load_evaluated_generations(model_name, dataset_names="all_ceb_open_ended", evaluator_choice=EVALUATOR_CHOICE))
         except:
             print(f"Unable to load metrics for model {model_name}")
             continue
@@ -1140,7 +1140,7 @@ def load_pairwise_differences(modified_to_base, **kwargs):
     for modified_model, base_model in modified_to_base.items():
         keys = ["dataset", "social_axis", "prompt"]
         try:
-            shared_kwargs = {"dataset_names": "all_open_ended", "on_missing_gen": "ignore"}
+            shared_kwargs = {"dataset_names": "all_ceb_open_ended", "on_missing_gen": "ignore"}
             df_base = pd.DataFrame(load_evaluated_generations(base_model, **shared_kwargs, **kwargs))
             df_modified = pd.DataFrame(load_evaluated_generations(modified_model, **shared_kwargs, **kwargs))
 
@@ -1213,7 +1213,7 @@ def load_pairwise_differences(modified_to_base, **kwargs):
 
 def load_evaluated_generations(
         model_name, evaluator_choice=EVALUATOR_CHOICE,
-        dataset_names="all", social_axes=None,
+        dataset_names="all_ceb", social_axes=None,
         on_missing_gen="raise", on_missing_eval="raise",
     ):
     """
@@ -1242,9 +1242,9 @@ def load_evaluated_generations(
     """
     # Use all datasets, if not specified
     if isinstance(dataset_names, str):
-        if dataset_names == "all":
-            dataset_names = config.ALL_DATASETS
-        elif dataset_names == "all_open_ended":
+        if dataset_names == "all_ceb":
+            dataset_names = config.ALL_CEB_DATASETS
+        elif dataset_names == "all_ceb_open_ended":
             dataset_names = config.OPEN_ENDED_DATASETS
         else:
             raise RuntimeError(f"Invalid dataset/s name! `{dataset_names}`")
