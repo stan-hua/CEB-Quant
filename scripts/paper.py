@@ -1246,6 +1246,12 @@ def load_evaluated_generations(
             dataset_names = config.ALL_CEB_DATASETS
         elif dataset_names == "all_ceb_open_ended":
             dataset_names = config.OPEN_ENDED_DATASETS
+        elif dataset_names == "all_ceb_close_ended":
+            dataset_names = config.CLOSE_ENDED_DATASETS
+        elif dataset_names == "all_fmt":
+            dataset_names = config.ALL_FMT_DATASETS
+        elif dataset_names == "de":
+            dataset_names = config.ALL_DE_DATASETS
         else:
             raise RuntimeError(f"Invalid dataset/s name! `{dataset_names}`")
 

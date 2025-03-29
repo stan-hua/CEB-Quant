@@ -19,7 +19,8 @@ from vllm import LLM, SamplingParams
 
 # Custom libraries
 from config import (
-    MODEL_INFO, ALL_CEB_DATASETS, OPEN_ENDED_DATASETS, DIR_GENERATIONS, DIR_MODELS,
+    MODEL_INFO, ALL_CEB_DATASETS, OPEN_ENDED_DATASETS, CLOSE_ENDED_DATASETS, ALL_FMT_DATASETS, ALL_DE_DATASETS,
+    DIR_GENERATIONS, DIR_MODELS,
     SYSTEM_PROMPT_MAP, FMT_USER_KEY, FMT_ASSISTANT_KEY,
 )
 from src.utils import json_utils, llm_gen_utils
@@ -52,6 +53,7 @@ DEFAULT_CONFIG = {
     "dtype": "bfloat16",
     "max_num_seqs": 16,         # Maximum number of concurrent requests
     "gpu_memory_utilization": 0.95,
+    "enable_chunked_prefill": True,
     "debug": False,
     # Generation parameters
     "use_chat_template": False,
@@ -66,6 +68,7 @@ DEFAULT_CONFIG = {
 #                                   Classes                                    #
 ################################################################################
 class LLMGeneration:
+
     def __init__(
             self,
             data_path,
@@ -108,14 +111,23 @@ class LLMGeneration:
             dataset_names.extend(ALL_CEB_DATASETS)
         elif dataset_name == "all_ceb_open_ended":
             dataset_names.extend(OPEN_ENDED_DATASETS)
+        elif dataset_name == "all_ceb_close_ended":
+            dataset_names.extend(CLOSE_ENDED_DATASETS)
         elif dataset_name == "all_fmt":
             self.dataset_collection = "fmt"
             # Overwrite parameters to faithfully follow FMT-Bench paper
+            LOGGER.info("Overwriting parameters to faithfully follow FMT-Bench paper (temperature=0.7, top_k=1)")
             overwrite_config["max_new_tokens"] = 150
             # NOTE: This is functionally equivalent to temperature = 0, but is kept for consistency
             overwrite_config["temperature"] = 0.7
             overwrite_config["top_k"] = 1
             dataset_names.extend(ALL_FMT_DATASETS)
+        elif dataset_name == "de":
+            self.dataset_collection = "de"
+            dataset_names = ALL_DE_DATASETS
+            LOGGER.info("Overwriting parameters for DiscrimEval close-ended datasets (temperature=1, chat template=False)")
+            overwrite_config["temperature"] = 1
+            overwrite_config["use_chat_template"] = False
         else:
             assert dataset_name in ALL_CEB_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_CEB_DATASETS}`"
             dataset_names.append(dataset_name)
@@ -196,7 +208,7 @@ class LLMGeneration:
                     max_model_len=self.llm_config["max_model_len"],
                     gpu_memory_utilization=self.llm_config["gpu_memory_utilization"],
                     max_num_seqs=self.llm_config["max_num_seqs"],
-                    guided_decoding_backend="lm-format-enforcer",
+                    enable_chunked_prefill=self.llm_config["enable_chunked_prefill"],
                     trust_remote_code=True,
                     **additional_llm_kwargs,
                 )
@@ -282,15 +294,15 @@ class LLMGeneration:
     ############################################################################
     #                                 vLLM                                     #
     ############################################################################
-    def create_vllm_kwargs(self, choices=None):
+    def create_vllm_kwargs_choice(self, **extra_sampling_kwargs):
         """
-        Create keyword arguments for `vllm.generate()`.
+        Create keyword arguments for when using `vllm.generate()` for computing
+        log probabilities.
 
         Parameters
         ----------
-        choices : list of str, optional
-            If provided, the VLLM will generate a response according to
-            the provided choices. The order of the choices is preserved.
+        **extra_sampling_kwargs : Any
+            Keyword arguments to override in SamplingParams
 
         Returns
         -------
@@ -301,16 +313,38 @@ class LLMGeneration:
         """
         generate_kwargs = {}
 
-        # For Batched Guided Decoding, ensure all choices are the same
-        # CASE 0: Batched processing decoding requires all share the same choices
-        if choices and isinstance(choices, list) and isinstance(choices[0], list):
-            final_choices = choices[0]
-            for curr_choices in choices[1:]:
-                if curr_choices != final_choices:
-                    LOGGER.debug("Not all choices in the batch are the same! Returning None")
-                    return None
-            LOGGER.debug("[vLLM Generate] Flattening choices across batched requests...")
-            choices = final_choices
+        LOGGER.info(["vLLM Generate] Choices are provided! Using prompt_logprobs to get choice probability..."])
+        # Create sampling parameters
+        sampling_kwargs = {
+            "temperature": 1,
+            "prompt_logprobs": 1,
+            "max_tokens": 1,
+            "seed": 1
+        }
+        # Overwrite sampling parameters
+        sampling_kwargs.update(extra_sampling_kwargs)
+        generate_kwargs["sampling_params"] = SamplingParams(**sampling_kwargs)
+
+        return generate_kwargs
+
+
+    def create_vllm_kwargs_generate(self, **extra_sampling_kwargs):
+        """
+        Create keyword arguments for `vllm.generate()` or `vllm.chat()`.
+
+        Parameters
+        ----------
+        **extra_sampling_kwargs : Any
+            Keyword arguments to override in SamplingParams
+
+        Returns
+        -------
+        generate_kwargs : dict or None
+            Keywords arguments to pass to `vllm.generate()`. If returns None,
+            then that implies that batched requests cannot be supported due
+            to some unmatched keyword arguments.
+        """
+        generate_kwargs = {}
 
         # Create sampling parameters
         sampling_kwargs = {
@@ -318,38 +352,129 @@ class LLMGeneration:
             "max_tokens": self.llm_config["max_new_tokens"],
             "seed": 1
         }
-        # CASE 1: If only 1 choice, then get log probability of sequence and
-        #         set temperature to 1, so it doesn't skew probabilities
-        if choices:
-            LOGGER.info(["vLLM Generate] Choices are provided! Setting temperature to 1 to avoid skewing the probability distribution..."])
-            sampling_kwargs["temperature"] = 1
-            sampling_kwargs["logprobs"] = 1
-
+        # Overwrite sampling parameters
+        sampling_kwargs.update(extra_sampling_kwargs)
         generate_kwargs["sampling_params"] = SamplingParams(**sampling_kwargs)
 
-        # CASE 1: Single-row
-        if choices:
-            assert isinstance(choices, list) and len(choices) > 0, \
-                f"Choices must be a non-empty list! Invalid input: `{choices}`"
-            # assert len(choices) >= 2, "There must be 2+ choices!"
-            generate_kwargs["guided_options_request"] = {
-                "guided_choice": choices,
-            }
         return generate_kwargs
 
 
-    def vllm_generate_single(self, prompt, **kwargs):
+    def vllm_logprob_single(self, prompt, choice, **kwargs):
+        """
+        Given a promt and choice of continuation, compute log probability of
+        provided continuation.
+
+        Parameters
+        ----------
+        prompt : str
+            Initial prompt string
+        choice : str
+            Choice of continuation directly from the prompt
+        """
+        self.ensure_model_loaded()
+
+        # Create vLLM arguments
+        gen_kwargs = self.create_vllm_kwargs_choice(**kwargs)
+
+        # Convert to chat format
+        if self.llm_config["use_chat_template"]:
+            prompt = apply_chat_template_vllm(self.vllm, prompt, self.system_prompt)
+        # If not chat format, prepend system prompt (if available)
+        elif self.system_prompt:
+            prompt = self.system_prompt + "\n\n" + prompt
+
+        # Append choice text
+        # NOTE: Add space in between if no space already at the end of the prompt
+        between_text = "" if prompt[-1].isspace() else " "
+        prompt = prompt + between_text
+        final_prompt = prompt + choice
+
+        # Use vLLM to generate
+        response = self.vllm.generate(final_prompt, **gen_kwargs)
+
+        # Prepare return
+        ret = {
+            "res": choice,
+        }
+
+        # Get average probability for the choice
+        prompt_logprobs = response[0].prompt_logprobs
+        ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs)
+        return ret
+
+
+    def vllm_logprob_multiple(self, prompts, choice, **kwargs):
+        """
+        Computes log probability for the same set choices between multiple prompts.
+
+        Parameters
+        ----------
+        prompts : list of str
+            The prompts to generate responses for.
+        choice : str
+            Same hypothetical text continuation across multiple prompts
+        **kwargs : Any
+            Additional keyword arguments for vLLM generation
+
+        Returns
+        -------
+        list of dict
+            List of generated responses.
+        """
+        assert isinstance(choice, str), "Only one choice text is possible for `vllm_logprob_multiple()`!"
+        self.ensure_model_loaded()
+
+        # Create vLLM arguments
+        gen_kwargs = self.create_vllm_kwargs_choice(**kwargs)
+
+        # Convert to chat format
+        if self.llm_config["use_chat_template"]:
+            prompts = [apply_chat_template_vllm(self.vllm, p, self.system_prompt) for p in prompts]
+        # If not chat format, prepend system prompt (if available)
+        elif self.system_prompt:
+            prompts = [self.system_prompt + "\n\n" + p for p in prompts]
+
+        # Append choice text
+        accum_final_prompts = []
+        for prompt in prompts:
+            # NOTE: Add space in between if no space already at the end of the prompt
+            between_text = "" if prompt[-1].isspace() else " "
+            prompt = prompt + between_text
+            final_prompt = prompt + choice
+            accum_final_prompts.append(final_prompt)
+
+        # Generate in batch
+        responses = self.vllm.generate(accum_final_prompts, **gen_kwargs)
+
+        # Extract results
+        accum_ret = []
+        for curr_response in responses:
+            curr_ret = {
+                "res": choice,
+            }
+            # Get average probability for the choice
+            prompt_logprobs = curr_response.prompt_logprobs
+            curr_ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs)
+            accum_ret.append(curr_ret)
+
+        return accum_ret
+
+
+    def vllm_generate_single(self, prompt, choices=None, **kwargs):
         """
         Generates a response using a VLLM model.
         """
         self.ensure_model_loaded()
 
         # Create vLLM arguments
-        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        gen_kwargs = self.create_vllm_kwargs_generate(choices=choices, **kwargs)
 
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
-            prompt = apply_chat_template_vllm(self.vllm, prompt)
+            prompt = apply_chat_template_vllm(self.vllm, prompt, self.system_prompt)
+        # If not chat format, prepend system prompt (if available)
+        elif self.system_prompt:
+            prompt = self.system_prompt + "\n\n" + prompt
 
         # Use vLLM to generate
         response = self.vllm.generate(prompt, **gen_kwargs)
@@ -357,12 +482,7 @@ class LLMGeneration:
         # Prepare return
         ret = {
             "res": response[0].outputs[0].text,
-            "res_seq_prob": None,
         }
-
-        # If log probabilities are available, then store it
-        if hasattr(response[0].outputs[0], "logprobs"):
-            ret["res_seq_prob"] = compute_prob(response[0].outputs[0].logprobs)
 
         return ret
 
@@ -386,22 +506,14 @@ class LLMGeneration:
         self.ensure_model_loaded()
 
         # Create vLLM arguments
-        gen_kwargs = self.create_vllm_kwargs(**kwargs)
-        # CASE 1: Unable to do batched requests on texts, default to single
-        if gen_kwargs is None:
-            accum_ret = []
-            for idx, prompt in enumerate(prompts):
-                curr_kwargs = {
-                    k: (v[idx] if len(v) == len(prompts) else v)
-                    for k, v in kwargs.items()
-                }
-                accum_ret.append(self.vllm_generate_single(prompt, **curr_kwargs))
-            return accum_ret
+        gen_kwargs = self.create_vllm_kwargs_generate(**kwargs)
 
-        # CASE 2: Batched requests is possible
         # Convert to chat format
         if self.llm_config["use_chat_template"]:
-            prompts = [apply_chat_template_vllm(self.vllm, p) for p in prompts]
+            prompts = [apply_chat_template_vllm(self.vllm, p, self.system_prompt) for p in prompts]
+        # If not chat format, prepend system prompt (if available)
+        elif self.system_prompt:
+            prompts = [self.system_prompt + "\n\n" + p for p in prompts]
 
         # Generate in batch
         responses = self.vllm.generate(prompts, **gen_kwargs)
@@ -410,11 +522,8 @@ class LLMGeneration:
         accum_ret = []
         for curr_response in responses:
             curr_ret = {
-                "res": curr_response.outputs[0].text,
-                "res_seq_prob": None,
+                "res": curr_response.outputs[0].text
             }
-            if hasattr(curr_response.outputs[0], "logprobs"):
-                curr_ret["res_seq_prob"] = compute_prob(curr_response.outputs[0].logprobs)
             accum_ret.append(curr_ret)
         return accum_ret
 
@@ -436,7 +545,7 @@ class LLMGeneration:
         self.ensure_model_loaded()
 
         # Create vLLM arguments
-        gen_kwargs = self.create_vllm_kwargs(**kwargs)
+        gen_kwargs = self.create_vllm_kwargs_generate(**kwargs)
 
         # Use vLLM to chat
         response = self.vllm.chat(conversation, **gen_kwargs)
@@ -467,21 +576,10 @@ class LLMGeneration:
         self.ensure_model_loaded()
 
         # Create vLLM arguments
-        gen_kwargs = self.create_vllm_kwargs(**kwargs)
-        # CASE 1: Unable to do batched requests on texts, default to single
-        if gen_kwargs is None:
-            accum_ret = []
-            for idx, conversation in enumerate(conversations):
-                curr_kwargs = {
-                    k: (v[idx] if len(v) == len(conversations) else v)
-                    for k, v in kwargs.items()
-                }
-                accum_ret.append(self.vllm_chat_single(conversation, **curr_kwargs))
-            return accum_ret
+        gen_kwargs = self.create_vllm_kwargs_generate(**kwargs)
 
-        # CASE 2: Batched requests is possible
         # Generate in batch
-        responses = self.vllm.generate(conversations, **gen_kwargs)
+        responses = self.vllm.chat(conversations, **gen_kwargs)
 
         # Extract results
         accum_ret = []
@@ -496,6 +594,42 @@ class LLMGeneration:
     ############################################################################
     #                        Other Helper Functions                            #
     ############################################################################
+    def logprobs_single(self, prompt, choice, **kwargs):
+        """
+        Generates a response using a given model.
+
+        Parameters
+        ----------
+        prompt : str
+            The input text prompt for the model.
+        choice : str
+            The hypothetical continuation of the prompt
+
+        Returns
+        -------
+        dict
+            Contains generated text in `res` and `res_seq_prob` for choice
+            choices provided for vLLM
+        """
+        try:
+            model_provider = self.llm_config["model_provider"]
+
+            # Get sequence probability for LLM response
+            # CASE 1: vLLM
+            if model_provider == "vllm":
+                ret = self.vllm_logprob_single(prompt, choice, **kwargs)
+            else:
+                raise NotImplementedError(f"[logprobs_single] Model provider given `{model_provider}` is not yet supported!")
+
+            # Check if the response is valid before returning
+            if not ret["res"]:
+                raise ValueError("The response is NULL or an empty string!")
+            return ret
+        except Exception:
+            tb = traceback.format_exc()
+            LOGGER.error(tb)
+
+
     def generate_single(self, prompt, temperature=None, **kwargs):
         """
         Generates a response using a given model.
@@ -510,8 +644,7 @@ class LLMGeneration:
         Returns
         -------
         dict
-            Contains generated text in `res` and optionally `res_seq_prob` if
-            choices provided for vLLM
+            Contains generated text in `res`
         """
         try:
             model_provider = self.llm_config["model_provider"]
@@ -522,12 +655,9 @@ class LLMGeneration:
             }
             # CASE 1: vLLM
             if model_provider == "vllm":
-                # NOTE: Temperature isn't passed into vLLM
-                ret = self.vllm_generate_single(prompt, **kwargs)
+                ret = self.vllm_generate_single(prompt, temperature=temperature, **kwargs)
             # CASE 2: Online Models
             elif is_provider_online(model_provider):
-                if kwargs.get("choices"):
-                    raise NotImplementedError("Choices is not supported for online models!")
                 ret["res"] = llm_gen_utils.gen_online(
                     self.model_name,
                     prompt=prompt,
@@ -537,9 +667,6 @@ class LLMGeneration:
                 )
             # CASE 3: HuggingFace / VPTQ
             elif model_provider in ["huggingface", "vptq"]:
-                # Choices is not implemented for HuggingFace generation
-                if kwargs.get("choices"):
-                    raise NotImplementedError(f"Choices is not supported for provider `{model_provider}`!")
                 ret["res"] = self.huggingface_generate(prompt, temperature)
             else:
                 raise RuntimeError(f"[generate_single] Invalid model provider given! `{model_provider}`")
@@ -578,8 +705,7 @@ class LLMGeneration:
             }
             # CASE 1: vLLM
             if model_provider == "vllm":
-                # NOTE: Temperature isn't passed into vLLM
-                ret = self.vllm_chat_single(conversation, **kwargs)
+                ret = self.vllm_chat_single(conversation, temperature=temperature, **kwargs)
             # CASE 2: Online Models
             elif is_provider_online(model_provider):
                 raise NotImplementedError("Online models with chat format is not yet supported!")
@@ -646,14 +772,14 @@ class LLMGeneration:
             choices = row["choices"]
             choices_probs = []
             for choice in choices:
-                curr_response = self.generate_single(prompt, choices=[choice])
+                curr_response = self.logprobs_single(prompt, choice)
                 choices_probs.append(curr_response["res_seq_prob"])
 
             # Normalize probabilities and store choice with highest probability
             normalized_probs = [prob / sum(choices_probs) for prob in choices_probs]
             row["res"] = choices[normalized_probs.index(max(normalized_probs))]
             row["res_probs"] = [round(prob, 4) for prob in normalized_probs]
-        except Exception as e:
+        except Exception:
             # Print error message if there"s an issue during processing
             LOGGER.error(f"[process_row_ceb] Exception occured!")
             tb = traceback.format_exc()
@@ -694,7 +820,7 @@ class LLMGeneration:
                 for row in filtered_rows:
                     if choices is None:
                         choices = row["choices"]
-                    else:
+                    elif row["choices"] != choices:
                         revert_to_single = True
                         break
 
@@ -725,22 +851,21 @@ class LLMGeneration:
                         raise RuntimeError("Unexpected response from vLLM!")
                 return
 
-            # CASE 2: Choices are provided, send a request for every choice
+            # CASE 2: Choices are provided (and the same for every row), send a request for each choice
             # NOTE: Store probability for each choice
-            prompt_to_probs = {}
+            idx_to_probs = {}
             for choice in choices:
-                llm_responses = self.vllm_generate_multiple(prompts, choices=[choice])
+                llm_responses = self.vllm_logprob_multiple(prompts, choice)
 
                 # Store response for every choice
                 for idx, curr_response in enumerate(llm_responses):
-                    if prompts[idx] not in prompt_to_probs:
-                        prompt_to_probs[prompts[idx]] = []
-                    prompt_to_probs[prompts[idx]].append(curr_response["res_seq_prob"])
-            
+                    if idx not in idx_to_probs:
+                        idx_to_probs[idx] = []
+                    idx_to_probs[idx].append(curr_response["res_seq_prob"])
+
             # Now assign choice response based on sequence probabilities
             for idx, row in enumerate(filtered_rows):
-                curr_prompt = row["prompt"]
-                choices_probs = prompt_to_probs[curr_prompt]
+                choices_probs = idx_to_probs[idx]
 
                 # Normalize probabilities and store choice with highest probability
                 normalized_probs = [prob / sum(choices_probs) for prob in choices_probs]
@@ -767,7 +892,6 @@ class LLMGeneration:
             return
 
         # TODO: CASE 3: If FastChat, pass multiple prompts sequentially
-
         raise NotImplementedError()
         return
 
@@ -892,7 +1016,7 @@ class LLMGeneration:
             # Prepend system message
             if self.system_prompt:
                 conversation.insert(0, {"role": "system", "content": self.system_prompt})
-    
+
             # Generate chat response
             curr_response = self.chat_single(
                 conversation=conversation,
@@ -1082,10 +1206,19 @@ class LLMGeneration:
         LOGGER.info(f"Beginning generation with `{dataset_name}` evaluation at temperature {self.llm_config['temperature']}.")
         LOGGER.info(f"Evaluating target model: {self.model_name}")
 
+        # Temporarilly overwrite parameters, if CEB and closed-ended
+        orig_llm_config = self.llm_config.copy()
+        if self.dataset_collection == "ceb" and dataset_name in CLOSE_ENDED_DATASETS:
+            # Overwrite parameters for close-ended datasets
+            LOGGER.info("Overwriting parameters for CEB close-ended datasets (temperature=1, chat template=True)")
+            self.llm_config["temperature"] = 1
+            self.llm_config["use_chat_template"] = True
+
         # Specify function to process each file based on dataset collection
         collection_to_proc_func = {
             "ceb": self.process_file_ceb,
-            "fmt": self.process_file_fmt
+            "fmt": self.process_file_fmt,
+            "de": self.process_file_ceb,    # NOTE: using choices implemented for CEB
         }
         process_file_func = collection_to_proc_func[self.dataset_collection]
 
@@ -1093,7 +1226,7 @@ class LLMGeneration:
         self.system_prompt = SYSTEM_PROMPT_MAP[self.system_prompt_type]
 
         # Creare result dir
-        result_dir = os.path.join(DIR_GENERATIONS, self.model_name, self.system_prompt_type, dataset_name)
+        result_dir = os.path.join(DIR_GENERATIONS, self.system_prompt_type, self.model_name, dataset_name)
         os.makedirs(result_dir, exist_ok=True)
 
         # Process each JSON file
@@ -1104,6 +1237,9 @@ class LLMGeneration:
             LOGGER.debug("Processing file: %s", json_path)
             save_path = os.path.join(result_dir, os.path.basename(json_path))
             process_file_func(json_path, save_path)
+
+        # Revert LLM generation parameters
+        self.llm_config = orig_llm_config
 
 
     def infer_dataset(self, max_retries=2, retry_interval=3):
@@ -1209,7 +1345,7 @@ def extract_model_path_or_name(model_path_or_name, model_provider="vllm", use_ch
     return model_name, model_path
 
 
-def apply_chat_template_vllm(llm_engine, prompt):
+def apply_chat_template_vllm(llm_engine, prompt, system_prompt=None):
     """
     Apply chat template to text using vLLM
 
@@ -1219,6 +1355,8 @@ def apply_chat_template_vllm(llm_engine, prompt):
         vLLM object
     prompt : str
         User prompt
+    system_prompt : str
+        Add system prompt, if necessary
 
     Returns
     -------
@@ -1228,8 +1366,13 @@ def apply_chat_template_vllm(llm_engine, prompt):
     # Get tokenizer
     tokenizer = llm_engine.get_tokenizer()
 
+    # Add system prompt (if provided) and user prompt
+    messages = []
+    if system_prompt:
+        messages.append({'role': 'system', 'content': system_prompt})
+    messages.append({'role': 'user', 'content': prompt})
+
     # Apply chat template, stored on the tokenizer
-    messages = [{'role': 'user', 'content': prompt}]
     formatted_prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -1318,6 +1461,65 @@ def compute_prob(vllm_logprobs):
         return seq_prob
     except:
         return None
+
+
+def extract_choice_logprobs(choice, prompt_logprobs):
+    """
+    Extract log probabilities for tokens added to the original prompt.
+
+    Parameters
+    ----------
+    choice : str:
+        The hypothetical continuation, whose sequence probability to get.
+    prompt_logprobs : list of dict
+        Output of output.prompt_logprobs. A list, where each item corresponds
+        to each token in the prompt.
+    
+    Returns:
+    Dict containing log probabilities of the added tokens
+    """
+    # Remove first token, if it's None
+    # NOTE: It normally corresponds to the conditional probability of the sequence before it
+    if prompt_logprobs[0] is None:
+        prompt_logprobs = prompt_logprobs[1:]
+
+    # Work backwards to reconstruct the added text
+    added_text = choice
+    reconst_choice = ""
+    num_prompt_tokens = len(prompt_logprobs)
+    for token in prompt_logprobs[::-1]:
+        # Find the token with the highest probability (rank 1)
+        chosen_token = list(token.values())[0]
+        reconst_choice = chosen_token.decoded_token + reconst_choice
+        num_prompt_tokens -= 1
+
+        # Stop if we've reconstructed the original prompt. Or if we're already too far
+        if added_text.strip() == reconst_choice.strip():
+            break
+
+    # Raise error, if we weren't able to extract the prompt
+    if choice.strip() != reconst_choice.strip():
+        raise RuntimeError(f"""Reconstructed choice doesn't match original choice!
+
+Original: `{choice}`
+Reconstructed: `{reconst_choice}`
+        """)
+
+    # Get logprobs of continuation tokens
+    accum_logprobs = []
+    reconst_cont = ""
+    for token in prompt_logprobs[num_prompt_tokens:]:
+        chosen_token = list(token.values())[0]
+        accum_logprobs.append(chosen_token.logprob)
+        reconst_cont += chosen_token.decoded_token
+
+    # Compute average log probability
+    avg_logprob = sum(accum_logprobs) / len(accum_logprobs)
+
+    # Compute sequence probability
+    seq_prob = np.exp(avg_logprob)
+
+    return seq_prob
 
 
 def is_conversation_done(row):

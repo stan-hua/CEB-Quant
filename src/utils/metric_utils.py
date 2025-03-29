@@ -1175,9 +1175,9 @@ def extract_valid_choice(text, choices=(1, 2, 3)):
         assert is_text_truthy(choice), f"All choices must be truthy! Failed: {choice}"
 
     # CASE 1: If choices are longer than 5 characters, check if it is in the text
-    if all([c for c in choices if len(c) >= 5]):
+    if all(len(c) >= 5 for c in choices):
         # Match on stripped text
-        simplify_text = lambda x: x.replace(" ", "")
+        simplify_text = lambda x: x.lower().strip()
         matched = [c for c in choices if simplify_text(c) in simplify_text(text)]
         # If only 1 matched, can assume it's real
         if len(matched) == 1:

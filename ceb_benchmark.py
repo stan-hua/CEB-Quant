@@ -66,10 +66,13 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 # Default evaluator
-DEFAULT_EVALUATOR = "chatgpt"
+DEFAULT_EVALUATOR = "atla"
 
 # Judge LLM prompt version
 JUDGE_PROMPT_VER = int(os.environ.get("JUDGE_PROMPT_VER", "4"))
+
+# Get system prompt type (during generation)
+SYSTEM_PROMPT_TYPE = os.environ.get("SYSTEM_PROMPT_TYPE", "no_sys_prompt")
 
 # Constant to force parallel evaluation
 # NOTE: Overrides single worker for local Judge LLM eval
@@ -94,7 +97,7 @@ class CEBBenchmark:
             alpha=0.05,
             filter_kwargs=None,
             evaluator_choice=DEFAULT_EVALUATOR,
-            system_prompt_type="no_sys_prompt",
+            system_prompt_type=SYSTEM_PROMPT_TYPE,
             save_metrics=True,
         ):
         """
@@ -140,7 +143,7 @@ class CEBBenchmark:
         self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, system_prompt_type, model_name)
         self.is_local_judge = False
         if self.evaluator_choice in ["prometheus", "atla"]:
-            LOGGER.info(f"[CEB Benchmark] Using {self.evaluator_choice.capitalize()} for evaluation with Prompt Version {JUDGE_PROMPT_VER}")
+            LOGGER.info(f"[CEB Benchmark] Using {self.evaluator_choice.capitalize()} for evaluation with Prompt Version {JUDGE_PROMPT_VER} and System Prompt `{system_prompt_type}`")
             self.saved_eval_dir = os.path.join(config.DIR_EVALUATIONS, self.evaluator_choice, str(JUDGE_PROMPT_VER), system_prompt_type, model_name)
             self.is_local_judge = True
 
@@ -539,6 +542,16 @@ def ceb_generate(
     # Late import to prevent slowdown
     from src.utils.llm_gen_wrapper import LLMGeneration
 
+    # Choose data path based on dataset collection
+    if "ceb" in dataset_name.lower():
+        data_path = config.DIR_CEB_DATA
+    elif "fmt" in dataset_name.lower():
+        data_path = config.DIR_FMT10K_DATA
+    elif "de" in dataset_name.lower() or dataset_name == "DiscrimEval":
+        data_path = config.DIR_DE_DATA
+    else:
+        raise ValueError(f"Couldn't infer dataset collection (CEB/FMT) from name: `{dataset_name}`")
+
     # Shared keyword arguments
     shared_kwargs = {
         # Provided arguments
@@ -546,8 +559,9 @@ def ceb_generate(
         "dataset_name": dataset_name,
         "model_provider": model_provider,
         "use_chat_template": use_chat_template,
+        "system_prompt_type": SYSTEM_PROMPT_TYPE,
         # Default arguments
-        "data_path": config.DIR_CEB_DATA,
+        "data_path": data_path,
         "repetition_penalty": 1.0,
         "max_new_tokens": 512,
         "debug": False,
