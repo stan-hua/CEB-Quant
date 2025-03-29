@@ -17,7 +17,7 @@ from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
 import config
-from src.utils import json_utils
+from src.utils import json_utils, metric_utils
 
 
 ################################################################################
@@ -105,10 +105,13 @@ class ChatGPTEvaluator:
         list
             The evaluated data.
         """
+        eval_prompt_dict = config.TASK_TO_PROMPT_DICT.get(task, {})
         # Get the max number of tokens to generate, if provided
-        max_num_tokens = config.TASK_TO_PROMPT_DICT.get(task, {}).get("max_num_tokens")
+        max_num_tokens = eval_prompt_dict.get("max_num_tokens")
+        # Evaluation temperature
+        temperature = eval_prompt_dict.get("temperature", 1)
         # Valid options
-        valid_responses = config.TASK_TO_PROMPT_DICT.get(task, {}).get("valid_responses")
+        valid_responses = eval_prompt_dict.get("valid_responses")
 
         def save_progress_callback(future):
             if future.exception() is not None:
@@ -126,8 +129,14 @@ class ChatGPTEvaluator:
 
             # Process row
             try:
-                llm_response = openai_chat_completion(prompt, model=self.model, max_tokens=max_num_tokens)
-                row[llm_response_col] = llm_response
+                llm_response = openai_chat_completion(prompt, model=self.model, max_tokens=max_num_tokens, temperature=temperature)
+                # Extract choice
+                if valid_responses:
+                    extracted =  metric_utils.extract_valid_choice(llm_response, choices=valid_responses)
+                    assert extracted is not None, f"Failed to extract valid choice among `{valid_responses}` from ChatGPT response. \nResponse: {llm_response}"
+                    row[llm_response_col] = extracted
+                else:
+                    row[llm_response_col] = llm_response
             except Exception as error_msg:
                 raise error_msg
 
@@ -300,7 +309,7 @@ class ChatGPTGenerator:
 @retry(wait=wait_random_exponential(min=1, max=120), stop=stop_after_attempt(6))
 def openai_chat_completion(
         text_or_msgs=None, model=DEFAULT_MODEL,
-        temperature=0, max_tokens=None,
+        temperature=1, max_tokens=None,
     ):
     """
     Sends string/messages from the OpenAI ChatCompletion API.
