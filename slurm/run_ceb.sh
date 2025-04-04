@@ -1,25 +1,24 @@
 #!/bin/bash -l
-#SBATCH --job-name=ceb_generate                    # Job name
+#SBATCH --job-name=cclosed_generate                    # Job name
+#SBATCH -o slurm/logs/slurm-run_cclosed-%j.out
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --gres=gpu:NVIDIA_L40S:1
 #--qos=gpu_deadline_q
 # --reservation=stan_gpu
-# --gres=gpu:1
-# --nodelist=cn532                         # Number of nodes
+#--nodelist=cn527                         # Number of nodes
 # --gres=gpu:NVIDIA_L40S:1
 # --gres=gpu:NVIDIA_H100_NVL:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
 #SBATCH --cpus-per-task=8                 # Number of CPU cores per TASK
-#SBATCH --mem=32GB
+#SBATCH --mem=16GB
 #SBATCH --tmp=8GB
-#SBATCH -o slurm/logs/slurm-run_ceb-%j.out
 #SBATCH --time=28:00:00
 # --begin=now+10hours
 
 # If you want to do it in the terminal,
-# salloc --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_L40S:1 --cpus-per-task=2 --mem=16G --tmp 8GB
-# salloc --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_NVL:1 --cpus-per-task=2 --mem=16G --tmp 8GB
-# salloc --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_80GB_HBM3:1 --cpus-per-task=1 --mem=16G --tmp 8GB
+# salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_L40S:1 --cpus-per-task=2 --mem=16G --tmp 8GB
+# salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_NVL:1 --cpus-per-task=2 --mem=16G --tmp 8GB
+# salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_80GB_HBM3:1 --cpus-per-task=1 --mem=16G --tmp 8GB
 # srun (command)
 
 
@@ -48,7 +47,7 @@ HF_ID="stan-hua"
 
 # Models to generate for
 MODEL_NAMES=(
-    # # # 2.0. LLaMA 3.2 1B model
+    # # 2.0. LLaMA 3.2 1B model
     # llama3.2-1b
     # hf-llama3.2-1b-aqlm-pv-2bit-2x8
     # llama3.2-1b-instruct
@@ -89,11 +88,11 @@ MODEL_NAMES=(
     # hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8
     # hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16
 
-    # # # 2.3. LLaMA 3.1 70B model
+    # # 2.3. LLaMA 3.1 70B model
     # llama3.1-70b
     # llama3.1-70b-instruct
     # llama3.1-70b-instruct-lc-rtn-w4a16
-    # # llama3.1-70b-instruct-lc-rtn-w4a16kv8
+    # llama3.1-70b-instruct-lc-rtn-w4a16kv8
     # llama3.1-70b-instruct-lc-smooth-rtn-w4a16
     # llama3.1-70b-instruct-lc-rtn-w8a8
     # llama3.1-70b-instruct-lc-smooth-rtn-w8a8
@@ -118,7 +117,7 @@ MODEL_NAMES=(
     # ministral-8b-instruct-lc-smooth-gptq-w4a16
     # ministral-8b-instruct-awq-w4a16
 
-    # # # 2.5 Mistral Small 22B
+    # # 2.5 Mistral Small 22B
     # mistral-small-22b-instruct
     # mistral-small-22b-instruct-lc-rtn-w4a16
     # mistral-small-22b-instruct-lc-smooth-rtn-w4a16
@@ -141,7 +140,7 @@ MODEL_NAMES=(
     # hf-qwen2-7b-instruct-gptq-w4a16
     # hf-qwen2-7b-instruct-gptq-w8a16
 
-    # 2.7. Qwen2 72B
+    # # 2.7. Qwen2 72B
     # qwen2-72b
     # qwen2-72b-instruct
     # qwen2-72b-instruct-lc-rtn-w4a16
@@ -154,7 +153,7 @@ MODEL_NAMES=(
     # hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16
     # hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16
 
-    # # 2.8. Qwen2.5 0.5B
+    # # # 2.8. Qwen2.5 0.5B
     # qwen2.5-0.5b
     # qwen2.5-0.5b-instruct
     # qwen2.5-0.5b-instruct-awq-w4a16
@@ -208,18 +207,18 @@ MODEL_NAMES=(
 
     # # # # Qwen2.5 14B
     # qwen2.5-14b
-    qwen2.5-14b-instruct
-    qwen2.5-14b-instruct-awq-w4a16
-    qwen2.5-14b-instruct-gptq-w4a16
-    qwen2.5-14b-instruct-gptq-w8a16
-    qwen2.5-14b-instruct-lc-rtn-w4a16
-    qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
-    qwen2.5-14b-instruct-lc-rtn-w8a8
-    qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
-    qwen2.5-14b-instruct-lc-rtn-w8a16
-    qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
+    # qwen2.5-14b-instruct
+    # qwen2.5-14b-instruct-awq-w4a16
+    # qwen2.5-14b-instruct-gptq-w4a16
+    # qwen2.5-14b-instruct-gptq-w8a16
+    # qwen2.5-14b-instruct-lc-rtn-w4a16
+    # qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
+    # qwen2.5-14b-instruct-lc-rtn-w8a8
+    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
+    # qwen2.5-14b-instruct-lc-rtn-w8a16
+    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
 
-    # # # # # Qwen2.5 32B
+    # # # Qwen2.5 32B
     # qwen2.5-32b
     # qwen2.5-32b-instruct
     # qwen2.5-32b-instruct-awq-w4a16
@@ -242,8 +241,8 @@ MODEL_NAMES=(
     # qwen2.5-72b-instruct-lc-smooth-rtn-w4a16
     # qwen2.5-72b-instruct-lc-rtn-w8a8
     # qwen2.5-72b-instruct-lc-smooth-rtn-w8a8
-    # # # qwen2.5-72b-instruct-lc-rtn-w8a16
-    # # # qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
+    # # qwen2.5-72b-instruct-lc-rtn-w8a16
+    # # qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
 
     # # # Phi3 8B
     # phi3-3.8b-instruct
@@ -320,8 +319,11 @@ CHAT_FLAGS=(
 # Number of GPUS
 NUM_GPUS=1
 
-# Datasets to infer on ("all_ceb", "all_ceb_open_ended")
-DATASET_NAME="all_fmt"       # ("all", "all_ceb_open_ended")
+# Datasets to infer on ("all_ceb", "all_ceb_open_ended", "all_ceb_close_ended", "all_fmt", "de")
+DATASET_NAME="all_ceb_close_ended"
+
+# System prompt type ("no_sys_prompt", "really_1x", "really_2x", "really_3x", "really_4x")
+export SYSTEM_PROMPT_TYPE="no_sys_prompt"
 
 
 ################################################################################

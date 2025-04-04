@@ -6,3 +6,7 @@ save_data
 .envrc
 
 temp
+temp_atla
+temp_prometheus
+temp_redo
+FairMT-bench

@@ -31,7 +31,13 @@ def save_json(data, file_path, lock=None):
         lock.release()
 
 
-def update_with_existing_data(new_data, prev_data=None, prev_path=None, rename_keys=None):
+def update_with_existing_data(
+        new_data,
+        prev_data=None,
+        prev_path=None,
+        rename_keys=None,
+        prompt_key="prompt",
+    ):
     """
     Given current data and saved (evaluation) data from a previous run, update
     the current data to sync data from the previous run.
@@ -47,6 +53,8 @@ def update_with_existing_data(new_data, prev_data=None, prev_path=None, rename_k
         correspond to data from `new_data`
     rename_keys : dict
         If provided, renames existing keys
+    prompt_key : str, optional
+        Name of prompt key
 
     Returns
     -------
@@ -77,13 +85,13 @@ def update_with_existing_data(new_data, prev_data=None, prev_path=None, rename_k
 
     # Get mapping of prompt to prev. row
     prompt_to_old = {
-        row["prompt"]: row
+        row[prompt_key]: row
         for row in prev_data
     }
     # For each row in the current dataset, attempt to load in
     # whatever was created from the previous session
     for row in new_data:
-        curr_prompt = row["prompt"]
+        curr_prompt = row[prompt_key]
         if curr_prompt not in prompt_to_old:
             continue
         prev_row = prompt_to_old[curr_prompt].copy()

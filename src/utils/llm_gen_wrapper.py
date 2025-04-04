@@ -50,7 +50,7 @@ DEFAULT_CONFIG = {
     # Local model loading
     "num_gpus": 1,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "dtype": "bfloat16",
+    # "dtype": None,              # "bfloat16",
     "max_num_seqs": 16,         # Maximum number of concurrent requests
     "gpu_memory_utilization": 0.95,
     "enable_chunked_prefill": True,
@@ -201,15 +201,22 @@ class LLMGeneration:
                 additional_llm_kwargs["enforce_eager"] = True
 
             try:
+                config_to_kwargs = {
+                    "num_gpus": "tensor_parallel_size",
+                    "max_model_len": "max_model_len",
+                    "dtype": "dtype",
+                    "gpu_memory_utilization": "gpu_memory_utilization",
+                    "max_num_seqs": "max_num_seqs",
+                    "enable_chunked_prefill": "enable_chunked_prefill",
+                }
+                config_kwargs = {
+                    config_to_kwargs[k]: v for k,v in self.llm_config.items()
+                    if k in config_to_kwargs and v is not None
+                }
                 self.vllm = LLM(
                     model=self.model_path,
-                    tensor_parallel_size=self.llm_config["num_gpus"],
-                    dtype=self.llm_config["dtype"],
-                    max_model_len=self.llm_config["max_model_len"],
-                    gpu_memory_utilization=self.llm_config["gpu_memory_utilization"],
-                    max_num_seqs=self.llm_config["max_num_seqs"],
-                    enable_chunked_prefill=self.llm_config["enable_chunked_prefill"],
                     trust_remote_code=True,
+                    **config_kwargs,
                     **additional_llm_kwargs,
                 )
             except Exception:

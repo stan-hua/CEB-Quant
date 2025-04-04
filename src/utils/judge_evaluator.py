@@ -89,10 +89,7 @@ class OpenJudgeEvaluator:
             Prompt template to use. Defaults to absolute grading without
             reference.
         prompt_version : int, optional
-            If 1, perform both refusal to answer and stereotype/toxicity evaluation
-            in one step.
-            If 2, perform refusal to answer and stereotype/toxicity evaluation
-            separately.
+            Prompt version (see `config.py` for more details)
         save_dir : str, optional
             The directory to save evaluation results. Defaults to a directory
             within config.DIR_EVALUATIONS based on the model name.
@@ -206,7 +203,7 @@ class OpenJudgeEvaluator:
         # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_key)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
@@ -283,10 +280,10 @@ class OpenJudgeEvaluator:
             social_group=social_group,
         )
 
-        # CASE: If 2nd prompt version, then perform refusal to answer evaluation too
+        # CASE: If 2nd prompt version, then perform instruction-following evaluation too
         if self.prompt_version != 1:
             # Evaluate instruction following
-            rta_rubric_data = task_to_rubric["refusal_to_answer"]
+            rta_rubric_data = task_to_rubric["instruction_following"]
             rta_score_rubric = prepare_rubric_string(rta_rubric_data)
             rta_feedbacks, rta_scores = self.judge.absolute_grade(
                 instructions=instructions,

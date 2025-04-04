@@ -13,6 +13,7 @@ import threading
 
 # Non-standard libraries
 from openai import OpenAI
+from tqdm import tqdm
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # Custom libraries
@@ -27,6 +28,10 @@ LOGGER = logging.getLogger(__name__)
 
 # Default OpenAI model for evaluation
 DEFAULT_MODEL = "gpt-4o-2024-08-06"
+
+# Default save filename for in-progress results
+EVAL_SAVE_FNAME = "eval_progress.json"
+INFER_SAVE_FNAME = "infer_progress.json"
 
 
 ################################################################################
@@ -58,7 +63,7 @@ class ChatGPTEvaluator:
         self.max_worker = config.MAX_WORKER_AUTOEVAL
 
 
-    def save_progress(self, data, filename='auto_eval.json', **save_kwargs):
+    def save_progress(self, data, filename=EVAL_SAVE_FNAME, **save_kwargs):
         """
         Save evaluation progress to a JSON file.
 
@@ -74,9 +79,12 @@ class ChatGPTEvaluator:
     def evaluate(
         self, data, task,
         resume=True,
-        progress_filename="eval_progress.json",
+        progress_filename=EVAL_SAVE_FNAME,
         llm_input_col="res",
         llm_response_col="eval_res",
+        prompt_col="prompt",
+        eval_params=None,
+        func_prep_llm_eval_prompts=None,
     ):
         """
         Evaluate a dataset using the OpenAI API.
@@ -99,19 +107,27 @@ class ChatGPTEvaluator:
             in config.config prompts
         llm_response_col : str, optional
             Key to store the judge LLM's response.
+        prompt_col : str, optional
+            Name of prompt key
+        eval_params : dict, optional
+            Dictionary of evaluation parameters, specifically `max_num_tokens`,
+            `temperature`, and `valid_responses`
+        func_prep_llm_eval_prompts : Callable, optional
+            Function to create evaluation prompts given (data, task, llm_input_col)
 
         Returns
         -------
         list
             The evaluated data.
         """
-        eval_prompt_dict = config.TASK_TO_PROMPT_DICT.get(task, {})
+        # Get evaluation parameters
+        eval_params = eval_params or config.TASK_TO_PROMPT_DICT.get(task, {})
         # Get the max number of tokens to generate, if provided
-        max_num_tokens = eval_prompt_dict.get("max_num_tokens")
+        max_num_tokens = eval_params.get("max_num_tokens")
         # Evaluation temperature
-        temperature = eval_prompt_dict.get("temperature", 1)
+        temperature = eval_params.get("temperature", 1)
         # Valid options
-        valid_responses = eval_prompt_dict.get("valid_responses")
+        valid_responses = eval_params.get("valid_responses")
 
         def save_progress_callback(future):
             if future.exception() is not None:
@@ -122,21 +138,25 @@ class ChatGPTEvaluator:
             # Early return, if row is already processed
             prev_response = row.get(llm_response_col)
             if prev_response:
-                if valid_responses is None:
-                    return
-                if prev_response in valid_responses:
+                if valid_responses is None \
+                        or prev_response in valid_responses \
+                        or metric_utils.extract_valid_choice(prev_response, choices=valid_responses):
+                    LOGGER.info("Row is already finished! Skipping...")
                     return
 
             # Process row
             try:
+                LOGGER.info("Sending OpenAI Chat Completion Request...")
                 llm_response = openai_chat_completion(prompt, model=self.model, max_tokens=max_num_tokens, temperature=temperature)
                 # Extract choice
                 if valid_responses:
-                    extracted =  metric_utils.extract_valid_choice(llm_response, choices=valid_responses)
+                    extracted = metric_utils.extract_valid_choice(llm_response, choices=valid_responses)
                     assert extracted is not None, f"Failed to extract valid choice among `{valid_responses}` from ChatGPT response. \nResponse: {llm_response}"
+                    row[llm_response_col + "_full"] = llm_response
                     row[llm_response_col] = extracted
                 else:
                     row[llm_response_col] = llm_response
+                LOGGER.info("Sending OpenAI Chat Completion Request...Success!")
             except Exception as error_msg:
                 raise error_msg
 
@@ -145,12 +165,13 @@ class ChatGPTEvaluator:
             return []
 
         # Prepare prompts for evaluating LLM responses
-        prompts = prepare_llm_eval_prompts(data, task, llm_input_col)
+        create_prompt_func = func_prep_llm_eval_prompts if callable(func_prep_llm_eval_prompts) else prepare_llm_eval_prompts
+        prompts = create_prompt_func(data, task, llm_input_col)
 
         # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_col)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
@@ -164,11 +185,13 @@ class ChatGPTEvaluator:
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_worker) as executor:
             futures = [executor.submit(process_row, prompt, row) for prompt, row in zip(prompts, data)]
 
-            # Add a callback to handle completion and errors
-            for idx, future in enumerate(concurrent.futures.as_completed(futures)):
-                future.add_done_callback(save_progress_callback)
-                if idx % 10 == 0:
-                    self.save_progress(data, filename=progress_filename, lock=lock)
+            with tqdm(total=len(futures), desc="Processing", unit="tasks") as progress_bar:
+                # Add a callback to handle completion and errors
+                for idx, future in enumerate(concurrent.futures.as_completed(futures)):
+                    future.add_done_callback(save_progress_callback)
+                    progress_bar.update(1)
+                    if idx % 10 == 0:
+                        self.save_progress(data, filename=progress_filename, lock=lock)
 
             # Wait for all futures to complete
             concurrent.futures.wait(futures)
@@ -205,7 +228,7 @@ class ChatGPTGenerator:
         self.max_worker = config.MAX_WORKER_AUTOEVAL
 
 
-    def save_progress(self, data, filename="infer_progress.json", **save_kwargs):
+    def save_progress(self, data, filename=INFER_SAVE_FNAME, **save_kwargs):
         """
         Save progress to a JSON file.
 
@@ -223,8 +246,8 @@ class ChatGPTGenerator:
 
     def infer(
         self, data,
-        resume=True, progress_filename="infer_progress.json",
-        llm_input_col="prompt", llm_response_col="res",
+        resume=True, progress_filename=INFER_SAVE_FNAME,
+        llm_input_col="prompt", llm_response_col="res", prompt_col="prompt",
     ):
         """
         Perform inference on a dataset using the OpenAI API.
@@ -243,6 +266,8 @@ class ChatGPTGenerator:
             Key to prompt to perform inference on
         llm_response_col : str, optional
             Key to store LLM's response.
+        prompt_col : str, optional
+            Name of prompt key
 
         Returns
         -------
@@ -257,9 +282,14 @@ class ChatGPTGenerator:
         def process_row(prompt, row):
             try:
                 if not row.get(llm_response_col):
+                    LOGGER.info("Sending OpenAI Chat Completion Request...")
                     llm_response = openai_chat_completion(prompt, model=self.model)
                     row[llm_response_col] = llm_response
+                    LOGGER.info("Sending OpenAI Chat Completion Request...Success!")
+                else:
+                    LOGGER.info("Row is already finished! Skipping...")
             except Exception as error_msg:
+                LOGGER.info("Sending OpenAI Chat Completion Request...Failed!")
                 raise error_msg
 
         # Early return, if no data provided
@@ -275,7 +305,7 @@ class ChatGPTGenerator:
         # If specified, resume from previous inference
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_col)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"

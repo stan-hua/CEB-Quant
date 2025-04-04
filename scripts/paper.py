@@ -29,9 +29,10 @@ from ceb_benchmark import *
 ################################################################################
 SEED = 42
 
-# Judge LLM prompt version
+# Judge LLM Parameters
 EVALUATOR_CHOICE = os.environ.get("EVALUATOR_CHOICE", "atla")
 JUDGE_PROMPT_VER = int(os.environ.get("JUDGE_PROMPT_VER", "4"))
+SYSTEM_PROMPT_TYPE = os.environ.get("SYSTEM_PROMPT_TYPE", "no_sys_prompt")
 
 # Default save directory
 SAVE_DIR = f"temp_{EVALUATOR_CHOICE}"
@@ -158,7 +159,7 @@ def ceb_check_impact_of_quantization(save_dir=SAVE_DIR):
     os.makedirs(save_dir, exist_ok=True)
 
     # Get all evaluated models
-    all_models = os.listdir(os.path.join(config.DIR_EVALUATIONS, EVALUATOR_CHOICE, str(JUDGE_PROMPT_VER)))
+    all_models = os.listdir(os.path.join(config.DIR_EVALUATIONS, EVALUATOR_CHOICE, str(JUDGE_PROMPT_VER), SYSTEM_PROMPT_TYPE))
     # Get the base model for every model
     base_models = [extract_model_metadata_from_name(m)["base_model"] for m in all_models]
 
@@ -789,7 +790,7 @@ def ceb_compute_judge_human_agreement():
 
 def supp_get_existing_models(save_dir=SAVE_DIR):
     # Get all evaluated models
-    all_models = os.listdir(os.path.join(config.DIR_EVALUATIONS, EVALUATOR_CHOICE, str(JUDGE_PROMPT_VER)))
+    all_models = os.listdir(os.path.join(config.DIR_EVALUATIONS, EVALUATOR_CHOICE, str(JUDGE_PROMPT_VER), SYSTEM_PROMPT_TYPE))
     # Get the base model for every model
     base_models = [extract_model_metadata_from_name(m)["base_model"] for m in all_models]
 
@@ -1136,13 +1137,13 @@ def load_pairwise_differences(modified_to_base, **kwargs):
     # For each base & quantized model, compute difference in score column
     accum_valid = []
     accum_invalid = []
-    num_na = 0
     for modified_model, base_model in modified_to_base.items():
         keys = ["dataset", "social_axis", "prompt"]
         try:
             shared_kwargs = {"dataset_names": "all_ceb_open_ended", "on_missing_gen": "ignore"}
-            df_base = pd.DataFrame(load_evaluated_generations(base_model, **shared_kwargs, **kwargs))
-            df_modified = pd.DataFrame(load_evaluated_generations(modified_model, **shared_kwargs, **kwargs))
+            shared_kwargs.update(kwargs)
+            df_base = pd.DataFrame(load_evaluated_generations(base_model, **shared_kwargs))
+            df_modified = pd.DataFrame(load_evaluated_generations(modified_model, **shared_kwargs))
 
             assert set(keys).issubset(set(df_base.columns.tolist())), f"Base model is missing key columns! Base Columns: {df_base.columns.tolist()}"
             assert set(keys).issubset(set(df_modified.columns.tolist())), f"Modified Model is missing key columns! Modified Columns: {df_modified.columns.tolist()}"
@@ -1213,11 +1214,12 @@ def load_pairwise_differences(modified_to_base, **kwargs):
 
 def load_evaluated_generations(
         model_name, evaluator_choice=EVALUATOR_CHOICE,
+        system_prompt_type=SYSTEM_PROMPT_TYPE,
         dataset_names="all_ceb", social_axes=None,
         on_missing_gen="raise", on_missing_eval="raise",
     ):
     """
-    Load JSON for generations post-evaluation (if applicable) and get
+    Load JSON for CEB generations post-evaluation (if applicable) and get
     row-specific score.
 
     Parameters
@@ -1226,6 +1228,8 @@ def load_evaluated_generations(
         Name of model
     evaluator_choice : str, optional
         Evaluator choice for open-ended generation, by default "prometheus"
+    system_prompt_type : str
+        System prompt type
     dataset_names : str or list, optional
         List of datasets whose names to load, by default None
     social_axes : list, optional
@@ -1262,7 +1266,7 @@ def load_evaluated_generations(
     for dataset_name in dataset_names:
         # Use all social axes, if not specified
         curr_social_axes = social_axes
-        if curr_social_axes is None:
+        if not curr_social_axes:
             curr_social_axes = config.DATASETS_TO_SOCIAL_AXIS[dataset_name]
 
         # Only if dataset is Continuation/Conversation, use evaluations directory
@@ -1274,7 +1278,7 @@ def load_evaluated_generations(
                 dir_data = os.path.join(dir_data, str(JUDGE_PROMPT_VER))
 
         # Assert that dataset exists for this model
-        model_dir = os.path.join(dir_data, model_name)
+        model_dir = os.path.join(dir_data, system_prompt_type, model_name)
         if not os.path.exists(model_dir):
             if on_missing_gen != "raise":
                 continue
@@ -1293,7 +1297,7 @@ def load_evaluated_generations(
                         eval_json_path = os.path.join(social_axis_dir, fname)
 
                 # Get raw generations (pre-evaluation)
-                gen_json_path = os.path.join(config.DIR_GENERATIONS, model_name, dataset_name, f"{social_axis}.json")
+                gen_json_path = os.path.join(config.DIR_GENERATIONS, system_prompt_type, model_name, dataset_name, f"{social_axis}.json")
                 # Handle case when generations are missing
                 if not os.path.exists(gen_json_path):
                     if on_missing_gen != "raise":
@@ -1316,6 +1320,7 @@ def load_evaluated_generations(
                         raise RuntimeError(
                             "[Load Eval. Generations] Evaluations are simply missing for "
                             f"\n\tModel: `{model_name}`"
+                            f"\n\tPrompt Type: `{system_prompt_type}`"
                             f"\n\tDataset: `{dataset_name}`"
                             f"\n\tSocial Axis: `{social_axis}`"
                         )

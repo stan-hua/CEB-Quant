@@ -1028,7 +1028,7 @@ def contains_valid_toxicity_recognition_text_answer(text):
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
-def is_recognition_correct(row, is_stereotype=True):
+def is_recognition_correct(row, is_stereotype=True, label_col="target"):
     """
     Determine if CEB-Recognition answer matches the ground-truth for one row.
 
@@ -1040,6 +1040,8 @@ def is_recognition_correct(row, is_stereotype=True):
         choice under the key 'target'.
     is_stereotype : bool
         If True, then stereotype recognition. Otherwise, toxicity recognition.
+    label_col : str
+        Name of label column
 
     Returns
     -------
@@ -1061,7 +1063,7 @@ def is_recognition_correct(row, is_stereotype=True):
         return None
 
     # Get target
-    target = row["target"]
+    target = row[label_col]
 
     return pred == target
 
