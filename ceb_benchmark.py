@@ -392,7 +392,7 @@ class CEBBenchmark:
         all_metrics.update(dict(self.dset_toxicity_metrics))
         flattened_metrics = {}
         for dataset_name, social_axis_to_metrics in all_metrics.items():
-            if only_open_ended and dataset_name not in config.OPEN_ENDED_DATASETS:
+            if only_open_ended and dataset_name not in config.CEB_OPEN_ENDED_DATASETS:
                 continue
             for social_axis, metrics_dict in social_axis_to_metrics.items():
                 task_type = dataset_name.split("-")[1]
@@ -545,12 +545,12 @@ def ceb_generate(
     # Choose data path based on dataset collection
     if "ceb" in dataset_name.lower():
         data_path = config.DIR_CEB_DATA
-    elif "fmt" in dataset_name.lower():
-        data_path = config.DIR_FMT10K_DATA
-    elif "de" in dataset_name.lower() or dataset_name == "DiscrimEval":
-        data_path = config.DIR_DE_DATA
+    elif "all_discrim" in dataset_name.lower():
+        data_path = config.DIR_DISCRIM_DATA
+    elif "all_gen" in dataset_name.lower() or "fmt" in dataset_name.lower():
+        data_path = config.DIR_GEN_DATA
     else:
-        raise ValueError(f"Couldn't infer dataset collection (CEB/FMT) from name: `{dataset_name}`")
+        raise ValueError(f"Couldn't infer dataset collection from name: `{dataset_name}`")
 
     # Shared keyword arguments
     shared_kwargs = {
@@ -982,7 +982,7 @@ def ceb_delete(
 
     # 1. Remove all generations
     if inference:
-        regex_suffix = f"{model_regex}/{dataset_regex}/{file_regex}"
+        regex_suffix = f"{model_regex}/*/{dataset_regex}/{file_regex}"
         print("[CEB Delete] Deleting inference results matching following regex: ", regex_suffix)
         time.sleep(3)
         for infer_file in tqdm(glob(config.DIR_GENERATIONS + "/" + regex_suffix)):

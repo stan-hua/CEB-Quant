@@ -43,16 +43,15 @@ TEST_TYPES = ["Recognition", "Selection", "Continuation", "Conversation"]
 STEREOTYPE_DATASETS = [f"CEB-{test}-S" for test in TEST_TYPES] + [
     "CEB-Adult",
     "CEB-Credit",
-    # TODO: Handle later
-    # "CEB-RB-Recognition",
-    # "CEB-WB-Recognition",
-    # "CEB-CP-Recognition",
+
+    "CEB-RB-Recognition",
+    "CEB-WB-Recognition",
+    "CEB-CP-Recognition",
+    "CEB-SS-Recognition",
 ]
 # Names of Toxicity Datasets
 TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
     "CEB-Jigsaw",
-    # TODO: Handle later
-    # "CEB-SS-Recognition",
 ]
 # Names of all CEB datasets
 ALL_CEB_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
@@ -61,35 +60,56 @@ ALL_CEB_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 BIAS_TO_TASK_TYPE_TO_DATASETS = {
     "stereotype": {
         "direct": [f"CEB-{test}-S" for test in ["Recognition", "Selection"]] + [
-            # TODO: Handle later
-            # "CEB-RB-Recognition",
-            # "CEB-WB-Recognition",
-            # "CEB-CP-Recognition",
-            # "CEB-SS-Recognition",
+            "CEB-RB-Recognition",
+            "CEB-WB-Recognition",
+            "CEB-CP-Recognition",
+            "CEB-SS-Recognition",
         ],
         "indirect": [f"CEB-{test}-S" for test in ["Continuation", "Conversation"]] + [
-            # "CEB-Adult",
-            # "CEB-Credit",
+            "CEB-Adult",
+            "CEB-Credit",
         ],
     },
     "toxicity": {
         "direct": [f"CEB-{test}-T" for test in ["Recognition", "Selection"]],
         "indirect": [f"CEB-{test}-T" for test in ["Continuation", "Conversation"]] + [
-            # "CEB-Jigsaw",
+            "CEB-Jigsaw",
         ],
     }
 }
 # Open ended generation datasets
-OPEN_ENDED_DATASETS = [
+CEB_OPEN_ENDED_DATASETS = [
     f"CEB-{test}-{bias_type}"
     for test in ["Continuation", "Conversation"]
     for bias_type in ["S", "T"]
 ]
 # Close ended generation datasets
-CLOSE_ENDED_DATASETS = ["CEB-Adult", "CEB-Credit", "CEB-Jigsaw"] + \
-    [f"CEB-{task_type}-{bias_type}" for task_type in ["Recognition", "Selection"] for bias_type in ["S", "T"]]
+CEB_CLOSE_ENDED_DATASETS = BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"]["direct"] + BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"]["direct"]
+
+# TODO: Add 
+# All discriminative datasets
+ALL_DISCRIM_DATASETS = [
+    "DiscrimEval",
+    "StereoSet-Intrasentence", "StereoSet-Intersentence",
+    "SocialStigmaQA",
+    "BBQ",
+    "IAT",
+    "BiasLens-YesNo", "BiasLens-Choices",
+]
+
+# All generative datasets
+ALL_GEN_DATASETS = [
+    "FMT10K-IM-S",
+    "FMT10K-IM-T",
+    "BOLD",
+    "BiasLens-GenWhy",
+    "DoNotAnswer-S",
+    "DoNotAnswer-T",
+]
+
 
 # Datasets to Social Axis
+# NOTE: The following are used directly as filenames
 DATASETS_TO_SOCIAL_AXIS = {
     "CEB-Adult": ["gender", "race"],
     "CEB-Credit": ["age", "gender"],
@@ -103,6 +123,16 @@ DATASETS_TO_SOCIAL_AXIS = {
     # FairMT-10K
     "FMT10K-IM-S": ["age", "appearance", "disable", "gender", "race", "religion"],
     "FMT10K-IM-T": ["disable", "gender", "race", "religion"],
+
+    # NOTE: The following are exceptions and are just the filenames
+    # Crow S Pairs
+    "CEB-CP-Recognition": ["crowspairs"],
+    # RedditBias
+    "CEB-RB-Recognition": ["redditbias"],
+    # StereoSet
+    "CEB-SS-Recognition": ["stereoset"],
+    # WinoBias
+    "CEB-WB-Recognition": ["winobias"],
 
     # DiscrimEval
     "DiscrimEval": ["explicit"],
@@ -212,18 +242,12 @@ ANCHOR_MODELS = {
 ALL_FMT_DATASETS = [
     f"FMT10K-{format_type}-{bias_type}"
     for format_type in ["IM"]   # NOTE: Include the following if implemented: ["AE", "FF", "JT", "NF", "SQ"]
-    for bias_type in ["S"]      # NOTE: Only stereotype considered for now (toxicity="T") can be added
+    for bias_type in ["S", "T"]      # NOTE: Only stereotype considered for now (toxicity="T") can be added
 ]
 
 # Within-Row Keys
 FMT_USER_KEY = "{turn}-turn Conv"
 FMT_ASSISTANT_KEY = "{turn}-turn Conv Response"
-
-
-################################################################################
-#                            DiscrimEval Constants                             #
-################################################################################
-ALL_DE_DATASETS = ["DiscrimEval"]
 
 
 ################################################################################
@@ -251,8 +275,10 @@ assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 DIR_CEB_DATA = os.path.join(DIR_PROJECT, "ceb_dataset")
 # Path to FairMT10K datasets directory
 DIR_FMT10K_DATA = os.path.join(DIR_PROJECT, "fmt10k_dataset")
-# Path to DiscrimEval datasets directory
-DIR_DE_DATA = os.path.join(DIR_PROJECT, "de_dataset")
+# Path to generative datasets directory (excluding CEB)
+DIR_GEN_DATA = os.path.join(DIR_PROJECT, "gen_datasets")
+# Path to discriminative datasets directory
+DIR_DISCRIM_DATA = os.path.join(DIR_PROJECT, "discrim_dataset")
 # Path to directory to save things
 DIR_SAVE_DATA = os.path.join(DIR_PROJECT, "save_data")
 # Path to LLM generations (to evaluate)

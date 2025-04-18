@@ -1249,13 +1249,13 @@ def load_evaluated_generations(
         if dataset_names == "all_ceb":
             dataset_names = config.ALL_CEB_DATASETS
         elif dataset_names == "all_ceb_open_ended":
-            dataset_names = config.OPEN_ENDED_DATASETS
+            dataset_names = config.CEB_OPEN_ENDED_DATASETS
         elif dataset_names == "all_ceb_close_ended":
-            dataset_names = config.CLOSE_ENDED_DATASETS
+            dataset_names = config.CEB_CLOSE_ENDED_DATASETS
         elif dataset_names == "all_fmt":
             dataset_names = config.ALL_FMT_DATASETS
-        elif dataset_names == "de":
-            dataset_names = config.ALL_DE_DATASETS
+        elif dataset_names == "all_discrim":
+            dataset_names = config.ALL_DISCRIM_DATASETS
         else:
             raise RuntimeError(f"Invalid dataset/s name! `{dataset_names}`")
 
@@ -1271,7 +1271,7 @@ def load_evaluated_generations(
 
         # Only if dataset is Continuation/Conversation, use evaluations directory
         dir_data = config.DIR_GENERATIONS
-        is_open_ended = "Continuation" in dataset_name or "Conversation" in dataset_name
+        is_open_ended = dataset_name in config.CEB_OPEN_ENDED_DATASETS + config.ALL_GEN_DATASETS
         if is_open_ended:
             dir_data = os.path.join(config.DIR_EVALUATIONS, evaluator_choice)
             if evaluator_choice in ["prometheus", "atla"]:

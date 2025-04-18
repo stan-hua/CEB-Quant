@@ -772,7 +772,7 @@ def supp_load_pairwise_differences_de(system_prompt_type=SYSTEM_PROMPT_TYPE):
 
     # Prepare keyword arguments
     load_kwargs = {
-        "dataset_names": "de",
+        "dataset_names": "all_discrim",
         "system_prompt_type": system_prompt_type,
     }
 
@@ -970,14 +970,14 @@ def load_evaluated_generations_supp(
     # Use all datasets, if not specified
     if isinstance(dataset_names, str):
         if dataset_names == "all_ceb_close_ended":
-            dataset_names = config.CLOSE_ENDED_DATASETS
+            dataset_names = config.CEB_CLOSE_ENDED_DATASETS
         elif dataset_names == "all_fmt":
             dataset_names = config.ALL_FMT_DATASETS
             # Overwrite columns/keys
             prompt_col = "4-turn Conv"
             llm_response_col = "4-turn Conv Response"
-        elif dataset_names == "de":
-            dataset_names = config.ALL_DE_DATASETS
+        elif dataset_names == "all_discrim":
+            dataset_names = config.ALL_DISCRIM_DATASETS
         else:
             raise RuntimeError(f"Invalid dataset/s name! `{dataset_names}`")
 

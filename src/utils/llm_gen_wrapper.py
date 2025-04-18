@@ -18,9 +18,9 @@ from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
 # Custom libraries
+import config
 from config import (
-    MODEL_INFO, ALL_CEB_DATASETS, OPEN_ENDED_DATASETS, CLOSE_ENDED_DATASETS, ALL_FMT_DATASETS, ALL_DE_DATASETS,
-    DIR_GENERATIONS, DIR_MODELS,
+    MODEL_INFO, DIR_GENERATIONS, DIR_MODELS,
     SYSTEM_PROMPT_MAP, FMT_USER_KEY, FMT_ASSISTANT_KEY,
 )
 from src.utils import json_utils, llm_gen_utils
@@ -45,15 +45,17 @@ multiprocessing.set_start_method('spawn')
 NUM_WORKERS = 8
 
 # Default configuration parameters
+IS_CUDA_AVAILABLE = torch.cuda.is_available()
 DEFAULT_CONFIG = {
     "model_provider": "vllm",
     # Local model loading
-    "num_gpus": 1,
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-    # "dtype": None,              # "bfloat16",
-    "max_num_seqs": 16,         # Maximum number of concurrent requests
-    "gpu_memory_utilization": 0.95,
+    "num_gpus": 1 if IS_CUDA_AVAILABLE else 0,
+    "device": "cuda" if IS_CUDA_AVAILABLE else "cpu",
+    # "dtype": None,                # "bfloat16",
+    "max_num_seqs": 16,             # Maximum number of concurrent requests
+    "gpu_memory_utilization": 0.85,
     "enable_chunked_prefill": True,
+    "enforce_eager": False,
     "debug": False,
     # Generation parameters
     "use_chat_template": False,
@@ -63,18 +65,41 @@ DEFAULT_CONFIG = {
     "max_new_tokens": 512,      # Maximum output size
 }
 
+# LLM Config arguments to pass directly to vLLM
+VLLM_PASS_KWARGS = [
+    "max_model_len", "dtype", "gpu_memory_utilization", "max_num_seqs",
+    "enable_chunked_prefill", "enforce_eager",
+]
+
+# Mapping of LLM Config to vLLM arguments
+VLLM_RENAME_KWARGS = {
+    "num_gpus": "tensor_parallel_size",
+}
+
+# Batch size to pass multiple inputs
+BATCH_SIZE = 16
+
 
 ################################################################################
 #                                   Classes                                    #
 ################################################################################
 class LLMGeneration:
+    """
+    LLMGeneration class.
+
+    Note
+    ----
+    Wrapper over vLLM with options for `logprobs`, `generate`, or `chat`.
+    Implements functionality for inference on CEB-type datasets
+    """
 
     def __init__(
             self,
-            data_path,
-            dataset_name,
             model_path_or_name,
+            data_path=None,
+            dataset_name=None,
             system_prompt_type="no_sys_prompt",
+            default_config=None,
             **overwrite_config,
         ):
         """
@@ -82,14 +107,16 @@ class LLMGeneration:
 
         Parameters
         ----------
+        model_path_or_name : str
+            Model name, or path to HuggingFace model
         data_path : str
             Path to the dataset.
         dataset_name : str
-            Name of the dataset.
-        model_path_or_name : str
-            Model name, or path to HuggingFace model
+            Name of the dataset, if performing inference for specific dataset/s
         system_prompt_type : str, optional
             Type of system prompt to use
+        default_config : dict
+            Default hyperparameters, by default DEFAULT_CONFIG
         **overwrite_config : Any
             Keyword arguments, which includes:
             model_provider : str
@@ -106,13 +133,18 @@ class LLMGeneration:
         """
         # Check that dataset is valid
         dataset_names = []
-        self.dataset_collection = "ceb"
-        if dataset_name == "all_ceb":
-            dataset_names.extend(ALL_CEB_DATASETS)
+        self.dataset_collection = None
+        if dataset_name is None:
+            LOGGER.info("[LLMGeneration] Using class as a vLLM wrapper!")
+        elif dataset_name == "all_ceb":
+            self.dataset_collection = "ceb"
+            dataset_names.extend(config.ALL_CEB_DATASETS)
         elif dataset_name == "all_ceb_open_ended":
-            dataset_names.extend(OPEN_ENDED_DATASETS)
+            self.dataset_collection = "ceb"
+            dataset_names.extend(config.CEB_OPEN_ENDED_DATASETS)
         elif dataset_name == "all_ceb_close_ended":
-            dataset_names.extend(CLOSE_ENDED_DATASETS)
+            self.dataset_collection = "ceb"
+            dataset_names.extend(config.CEB_CLOSE_ENDED_DATASETS)
         elif dataset_name == "all_fmt":
             self.dataset_collection = "fmt"
             # Overwrite parameters to faithfully follow FMT-Bench paper
@@ -121,15 +153,18 @@ class LLMGeneration:
             # NOTE: This is functionally equivalent to temperature = 0, but is kept for consistency
             overwrite_config["temperature"] = 0.7
             overwrite_config["top_k"] = 1
-            dataset_names.extend(ALL_FMT_DATASETS)
-        elif dataset_name == "de":
-            self.dataset_collection = "de"
-            dataset_names = ALL_DE_DATASETS
-            LOGGER.info("Overwriting parameters for DiscrimEval close-ended datasets (temperature=1, chat template=False)")
+            dataset_names.extend(config.ALL_FMT_DATASETS)
+        elif dataset_name == "all_gen":
+            LOGGER.info("Overwriting parameters for generative datasets (top_k=1)")
+            overwrite_config["top_k"] = 1
+            dataset_names.extend(config.ALL_GEN_DATASETS)
+        elif dataset_name == "all_discrim":
+            self.dataset_collection = "all_discrim"
+            dataset_names = config.ALL_DISCRIM_DATASETS
+            LOGGER.info("Overwriting parameters for discriminative datasets (temperature=1)")
             overwrite_config["temperature"] = 1
-            overwrite_config["use_chat_template"] = False
         else:
-            assert dataset_name in ALL_CEB_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{ALL_CEB_DATASETS}`"
+            assert dataset_name in config.ALL_CEB_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{config.ALL_CEB_DATASETS}`"
             dataset_names.append(dataset_name)
 
         # Path to dataset
@@ -144,7 +179,8 @@ class LLMGeneration:
         self.system_prompt = None
 
         # Store configuration
-        self.llm_config = DEFAULT_CONFIG.copy()
+        default_config = default_config or DEFAULT_CONFIG
+        self.llm_config = default_config.copy()
         self.llm_config.update(**overwrite_config)
 
         # Get the model name according to the model path, or vice versa
@@ -198,20 +234,20 @@ class LLMGeneration:
 
             # If multiple GPUs, enforce eager to save as much memory as possible
             if self.llm_config["num_gpus"] > 1:
-                additional_llm_kwargs["enforce_eager"] = True
+                self.llm_config["enforce_eager"] = True
+
+            # If the model is Phi, disable sliding window attention
+            if "phi" in self.model_path.lower() or "ministral" in self.model_path.lower() or "mistral" in self.model_path.lower():
+                additional_llm_kwargs["disable_sliding_window"] = True
+                self.llm_config["enforce_eager"] = True
+            if "gemma" in self.model_path.lower():
+                self.llm_config["enforce_eager"] = True
 
             try:
-                config_to_kwargs = {
-                    "num_gpus": "tensor_parallel_size",
-                    "max_model_len": "max_model_len",
-                    "dtype": "dtype",
-                    "gpu_memory_utilization": "gpu_memory_utilization",
-                    "max_num_seqs": "max_num_seqs",
-                    "enable_chunked_prefill": "enable_chunked_prefill",
-                }
                 config_kwargs = {
-                    config_to_kwargs[k]: v for k,v in self.llm_config.items()
-                    if k in config_to_kwargs and v is not None
+                    VLLM_RENAME_KWARGS.get(k, k): v for k,v in self.llm_config.items()
+                    if (k in VLLM_RENAME_KWARGS and v is not None) or
+                        k in VLLM_PASS_KWARGS
                 }
                 self.vllm = LLM(
                     model=self.model_path,
@@ -405,8 +441,9 @@ class LLMGeneration:
         }
 
         # Get average probability for the choice
+        tokenizer = self.vllm.get_tokenizer()
         prompt_logprobs = response[0].prompt_logprobs
-        ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs)
+        ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs, tokenizer)
         return ret
 
 
@@ -455,13 +492,14 @@ class LLMGeneration:
 
         # Extract results
         accum_ret = []
+        tokenizer = self.vllm.get_tokenizer()
         for curr_response in responses:
             curr_ret = {
                 "res": choice,
             }
             # Get average probability for the choice
             prompt_logprobs = curr_response.prompt_logprobs
-            curr_ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs)
+            curr_ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs, tokenizer)
             accum_ret.append(curr_ret)
 
         return accum_ret
@@ -740,9 +778,9 @@ class LLMGeneration:
 
 
     ############################################################################
-    #                            CEB Functions                                 #
+    #     Functions for Benchmarks (Single-Turn Discriminative/Generative)     #
     ############################################################################
-    def process_row_ceb(self, row, index, temperature, key_name="prompt"):
+    def process_row_single_turn(self, row, index, temperature, key_name="prompt"):
         """
         Process a single row of input data, generating a response using the
         current model if the "res" key doesn't exist or its value is empty.
@@ -788,13 +826,13 @@ class LLMGeneration:
             row["res_probs"] = [round(prob, 4) for prob in normalized_probs]
         except Exception:
             # Print error message if there"s an issue during processing
-            LOGGER.error(f"[process_row_ceb] Exception occured!")
+            LOGGER.error(f"[process_row_single_turn] Exception occured!")
             tb = traceback.format_exc()
             LOGGER.error(tb)
             row["num_attempts"] += 1
 
 
-    def process_rows_ceb(self, rows, temperature, key_name="prompt"):
+    def process_rows_single_turn(self, rows, temperature, key_name="prompt"):
         """
         Process a list of input data rows, generating responses using the
         current model if the "res" key doesn't exist or its value is empty.
@@ -834,7 +872,7 @@ class LLMGeneration:
             # CASE 0: If choices differ per row, revert to unbatched processing
             if revert_to_single:
                 for idx, row in enumerate(filtered_rows):
-                    self.process_row_ceb(row, index=idx, temperature=temperature, key_name=key_name)
+                    self.process_row_single_turn(row, index=idx, temperature=temperature, key_name=key_name)
                 return
 
             # Prepare prompts
@@ -885,7 +923,7 @@ class LLMGeneration:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(filtered_rows)) as executor:
                 futures = [
                     executor.submit(
-                            self.process_row_ceb,
+                            self.process_row_single_turn,
                             row=row,
                             index=idx,
                             temperature=temperature,
@@ -903,7 +941,7 @@ class LLMGeneration:
         return
 
 
-    def process_file_ceb(self, input_path, output_path, file_config=None, prompt_key="prompt"):
+    def process_file_single_turn(self, input_path, output_path, file_config=None, prompt_key="prompt"):
         """
         Processes a file containing multiple data points for text generation.
 
@@ -930,14 +968,6 @@ class LLMGeneration:
             LOGGER.info(f"Loading data from {input_path}")
             saved_data = json_utils.load_json(input_path)
 
-        # If there are options, ensure they're only two choices at most
-        for row in saved_data:
-            if "choices" in row:
-                assert len(row["choices"]) == 2, (
-                    f"Found row with more than two choices in `{input_path}`\n"
-                    f"Choices: {row['choices']}"
-                )
-
         # Early return, if all rows are done
         if all([bool(row.get("res")) for row in saved_data]):
             LOGGER.info("Already done, returning early!")
@@ -947,7 +977,7 @@ class LLMGeneration:
         lock = threading.Lock()
 
         # Process the input data in groups
-        batch_size = 32 if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
+        batch_size = BATCH_SIZE if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
 
         # Add number of attempts to each row
         MAX_ATTEMPTS = 3
@@ -971,7 +1001,7 @@ class LLMGeneration:
                 break
 
             # Process the grouped rows
-            self.process_rows_ceb(grouped_rows, temperature, prompt_key)
+            self.process_rows_single_turn(grouped_rows, temperature, prompt_key)
 
             # Save the updated saved data to the output file
             json_utils.save_json(saved_data, output_path, lock=lock)
@@ -983,9 +1013,9 @@ class LLMGeneration:
 
 
     ############################################################################
-    #                        FairMT-Bench Functions                            #
+    #              Functions for Benchmarks (Multi-Turn Generative)            #
     ############################################################################
-    def process_row_fmt(self, row, index, temperature):
+    def process_row_multi_turn(self, row, index, temperature):
         """
         Move 1 conversation along by one step (e.g., 1->2 or 3->4)
 
@@ -1034,7 +1064,7 @@ class LLMGeneration:
             return
         except Exception as e:
             # Print error message if there"s an issue during processing
-            LOGGER.error(f"[process_row_fmt] Exception occured!")
+            LOGGER.error(f"[process_row_multi_turn] Exception occured!")
             tb = traceback.format_exc()
             LOGGER.error(tb)
             row["num_attempts"] += 1
@@ -1123,7 +1153,7 @@ class LLMGeneration:
         return
 
 
-    def process_file_fmt(self, input_path, output_path, file_config=None):
+    def process_file_multi_turn(self, input_path, output_path, file_config=None):
         """
         Performs inference for a single json file in the FairMT-Bench.
 
@@ -1158,7 +1188,7 @@ class LLMGeneration:
         lock = threading.Lock()
 
         # Process the input data in groups
-        batch_size = 32 if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
+        batch_size = BATCH_SIZE if (self.llm_config["model_provider"] == "vllm") else NUM_WORKERS
 
         # Add number of attempts to each row
         MAX_ATTEMPTS = 3
@@ -1215,19 +1245,22 @@ class LLMGeneration:
 
         # Temporarilly overwrite parameters, if CEB and closed-ended
         orig_llm_config = self.llm_config.copy()
-        if self.dataset_collection == "ceb" and dataset_name in CLOSE_ENDED_DATASETS:
+        if self.dataset_collection == "all_discrim" and dataset_name == "DiscrimEval":
             # Overwrite parameters for close-ended datasets
-            LOGGER.info("Overwriting parameters for CEB close-ended datasets (temperature=1, chat template=True)")
+            LOGGER.info("Overwriting parameters for DiscrimEval (temperature=1, chat template=False)")
+            self.llm_config["temperature"] = 1
+            self.llm_config["use_chat_template"] = False
+        elif self.dataset_collection == "all_discrim" or (self.dataset_collection == "ceb" and dataset_name in config.CEB_CLOSE_ENDED_DATASETS):
+            # Overwrite parameters for close-ended datasets
+            LOGGER.info("Overwriting parameters for close-ended datasets (temperature=1, chat template=True)")
             self.llm_config["temperature"] = 1
             self.llm_config["use_chat_template"] = True
 
-        # Specify function to process each file based on dataset collection
-        collection_to_proc_func = {
-            "ceb": self.process_file_ceb,
-            "fmt": self.process_file_fmt,
-            "de": self.process_file_ceb,    # NOTE: using choices implemented for CEB
-        }
-        process_file_func = collection_to_proc_func[self.dataset_collection]
+        # Specify function to process each file based on dataset
+        process_file_func = self.process_file_single_turn
+        # SPECIAL CASE: FMT10K needs custom flow
+        if dataset_name.startswith("FMT10K"):
+            process_file_func = self.process_file_multi_turn
 
         # Assign dataset-specific system prompt
         self.system_prompt = SYSTEM_PROMPT_MAP[self.system_prompt_type]
@@ -1380,11 +1413,15 @@ def apply_chat_template_vllm(llm_engine, prompt, system_prompt=None):
     messages.append({'role': 'user', 'content': prompt})
 
     # Apply chat template, stored on the tokenizer
-    formatted_prompt = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    try:
+        formatted_prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    except:
+        LOGGER.error("Chat template not stored on tokenizer! Defaulting to newlines instead")
+        formatted_prompt = construct_chat_template(messages)
 
     return formatted_prompt
 
@@ -1447,6 +1484,40 @@ def apply_chat_template_fastchat(model_path, prompt):
     return conv.get_prompt()
 
 
+def construct_chat_template(messages):
+    """
+    As a fallback, construct chat template from messages.
+
+    Parameters
+    ----------
+    messages : list of dict
+        List of messages
+    """
+    prompt = ""
+
+    for message in messages:
+        # 1. System Prompt
+        if message["role"] == "system":
+            prompt += message["content"]
+            continue
+
+        # Add two lines, if it's any other rolee
+        if prompt:
+            prompt += "\n\n"
+
+        # 2. User prompt
+        role_to_str = {
+            "user": "User",
+            "assistant": "Assistant"
+        }
+        prompt += role_to_str[message["role"]] + ": " + message["content"]
+
+    # End with Assistant again
+    if prompt:
+        prompt += "\n\n"
+    prompt += "Assistant: "
+
+
 def compute_prob(vllm_logprobs):
     """
     Compute normalized probability of generated text
@@ -1470,7 +1541,7 @@ def compute_prob(vllm_logprobs):
         return None
 
 
-def extract_choice_logprobs(choice, prompt_logprobs):
+def extract_choice_logprobs(choice, prompt_logprobs, tokenizer):
     """
     Extract log probabilities for tokens added to the original prompt.
 
@@ -1481,6 +1552,8 @@ def extract_choice_logprobs(choice, prompt_logprobs):
     prompt_logprobs : list of dict
         Output of output.prompt_logprobs. A list, where each item corresponds
         to each token in the prompt.
+    tokenizer : AutoTokenizer
+        LLM's Tokenizer. Used to decode generated tokens
     
     Returns:
     Dict containing log probabilities of the added tokens
@@ -1496,8 +1569,10 @@ def extract_choice_logprobs(choice, prompt_logprobs):
     num_prompt_tokens = len(prompt_logprobs)
     for token in prompt_logprobs[::-1]:
         # Find the token with the highest probability (rank 1)
-        chosen_token = list(token.values())[0]
-        reconst_choice = chosen_token.decoded_token + reconst_choice
+        token_id = list(token.keys())[0]
+        decoded_token = tokenizer.decode([token_id])
+        reconst_choice = decoded_token + reconst_choice
+        
         num_prompt_tokens -= 1
 
         # Stop if we've reconstructed the original prompt. Or if we're already too far

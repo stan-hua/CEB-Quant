@@ -216,7 +216,6 @@ def score_open_ended_responses(
     # Compute metrics
     return metric_func(**metric_func_kwargs)
 
-
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
