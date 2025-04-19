@@ -231,34 +231,70 @@ def prepare_bbq_dataset():
     """
     # Process each subset separately
     subsets = [
-        "Age", "Disability_status", "Gender_identity", "Nationality",
-        "Physical_appearance", "Race_ethnicity", "Race_x_SES", "Race_x_gender",
-        "Religion", "SES", "Sexual_orientation",
+        "age", "disability_status", "gender_identity", "nationality",
+        "physical_appearance", "race_ethnicity", "race_x_ses", "race_x_gender",
+        "religion", "ses", "sexual_orientation",
     ]
+    unknown_options = [
+        "unknown", "cannot be determined", "can't be determined", "not answerable",
+        "not known", "not enough info", "not enough information", "cannot answer",
+        "can't answer", "undetermined"
+    ]
+    ds = load_dataset("Elfsong/BBQ")
     for subset in subsets:
-        ds = load_dataset("heegyu/bbq", subset)
-        data = list(ds["test"])
+        print(f"Processing subset: `{subset}`")
+        data = list(ds[subset])
         clean_data = []
-        subset_str = subset.lower()
+        num_skipped = 0
         for idx, row in enumerate(data):
+            # Skipping all cases where the biased group is undefined (-1)
+            if row["target_label"] == -1:
+                num_skipped += 1
+                print(f"Skipping row with undefined biased group! {num_skipped} / {len(data)}")
+                continue
+            # Identify labels
+            labels = [None, None, None]
+            # CASE 1: Ambiguous context. Answer label is the unknown choice
+            if row["context_condition"] == "ambig":
+                unbiased_idx = 3 - row["answer_label"] - row["target_label"]
+                # NOTE: The target label is the stereotyped group
+                labels[row["target_label"]] = "stereotyped"
+                labels[row["answer_label"]] = "unknown"
+                labels[unbiased_idx] = "anti-stereotyped"
+            # CASE 2: Disambiguated context. Answer is either the stereotyped/anti-stereotyped group
+            else:
+                # NOTE: The answer label is unbiased (given the context)
+                labels[row["target_label"]] = "stereotyped"
+                unknown_idx = None
+                for i in range(3):
+                    if row[f"ans{i}"].lower() in unknown_options:
+                        unknown_idx = i
+                        break
+                assert unknown_idx is not None, f"Unknown option not found! \nRow: {row}"
+                labels[unknown_idx] = "unknown"
+                # Replace missing with unbiased
+                labels = [x or "anti-stereotyped" for x in labels]
+            # Prepare row
             curr_row = {
-                "idx": f"BBQ/{subset_str}/{idx}",
+                "idx": f"BBQ/{subset}/{idx}",
                 "question_idx": row["question_index"],
                 "example_id": row["example_id"],
                 "question_polarity": row["question_polarity"],
                 "context_condition": row["context_condition"],
-                "social_axis": subset_str,
+                "social_axis": subset,
                 "subcategory": row["additional_metadata"]["subcategory"],
                 "stereotyped_groups": row["additional_metadata"]["stereotyped_groups"],
                 "prompt": row["context"] + "\n\n" + row["question"],
                 "choices": [row["ans0"], row["ans1"], row["ans2"]],
-                "target": row["label"] + 1,
+                "label": labels,
+                "answer_label": row["answer_label"] + 1,
+                "target_label": row["target_label"] + 1,
             }
             clean_data.append(curr_row)
         # Save
         save_dir = os.path.join(config.DIR_DISCRIM_DATA, "BBQ")
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"{subset_str}.json")
+        save_path = os.path.join(save_dir, f"{subset}.json")
         json_utils.save_json(clean_data, save_path)
 
 
