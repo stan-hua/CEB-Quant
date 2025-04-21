@@ -15,7 +15,6 @@ import urllib.request
 # Non-standard libraries
 import pandas as pd
 from datasets import load_dataset
-from glob import glob
 
 # Custom libraries
 import config
@@ -50,6 +49,9 @@ BIAS_LENS_URL = "https://raw.githubusercontent.com/LLMBias/BiasLens/refs/heads/m
 
 # Bias Lens Categories
 BIAS_LENS_CATEGORIES = ["ability", "age", "body", "character", "culture", "gender", "occupations", "race", "religion", "social", "victim"]
+
+# FairMT Bench
+FMT10K_URL = "https://raw.githubusercontent.com/FanZT6/FairMT-bench/refs/heads/main/FairMT_10K/{bias_type}/Interference_Misinformation/prompt_{social_axis}.json"
 
 
 ################################################################################
@@ -252,28 +254,20 @@ def prepare_bbq_dataset():
                 num_skipped += 1
                 print(f"Skipping row with undefined biased group! {num_skipped} / {len(data)}")
                 continue
-            # Identify labels
-            labels = [None, None, None]
+            # Identify unknown index
+            unknown_label = None
             # CASE 1: Ambiguous context. Answer label is the unknown choice
             if row["context_condition"] == "ambig":
-                unbiased_idx = 3 - row["answer_label"] - row["target_label"]
-                # NOTE: The target label is the stereotyped group
-                labels[row["target_label"]] = "stereotyped"
-                labels[row["answer_label"]] = "unknown"
-                labels[unbiased_idx] = "anti-stereotyped"
+                unknown_label = row["answer_label"]
             # CASE 2: Disambiguated context. Answer is either the stereotyped/anti-stereotyped group
             else:
                 # NOTE: The answer label is unbiased (given the context)
-                labels[row["target_label"]] = "stereotyped"
-                unknown_idx = None
+                unknown_label = None
                 for i in range(3):
                     if row[f"ans{i}"].lower() in unknown_options:
-                        unknown_idx = i
+                        unknown_label = i
                         break
-                assert unknown_idx is not None, f"Unknown option not found! \nRow: {row}"
-                labels[unknown_idx] = "unknown"
-                # Replace missing with unbiased
-                labels = [x or "anti-stereotyped" for x in labels]
+            assert unknown_label is not None, f"Unknown option not found! \nRow: {row}"
             # Prepare row
             curr_row = {
                 "idx": f"BBQ/{subset}/{idx}",
@@ -286,7 +280,7 @@ def prepare_bbq_dataset():
                 "stereotyped_groups": row["additional_metadata"]["stereotyped_groups"],
                 "prompt": row["context"] + "\n\n" + row["question"],
                 "choices": [row["ans0"], row["ans1"], row["ans2"]],
-                "label": labels,
+                "unknown_label": unknown_label + 1,
                 "answer_label": row["answer_label"] + 1,
                 "target_label": row["target_label"] + 1,
             }
@@ -599,8 +593,34 @@ def prepare_do_not_answer_dataset():
         json_utils.save_json(accum_data, save_path)
 
 
-def identify_bias_type():
-    pass
+def prepare_fmt10k_dataset():
+    """
+    Prepare FMT10K dataset
+    """
+    bias_type_to_dataset_name = {
+        "Stereotype": "FMT10K-IM-S",
+        "Toxicity": "FMT10K-IM-T",
+    }
+
+    for bias_type, dataset_name in bias_type_to_dataset_name.items():
+        # Create directory
+        save_dir = os.path.join(config.DIR_GEN_DATA, dataset_name)
+        os.makedirs(save_dir, exist_ok=True)
+        # Get social axes
+        social_axes = config.DATASETS_TO_SOCIAL_AXIS[dataset_name]
+        # Save data for each social axis
+        for social_axis in social_axes:
+            # Load data
+            df_data = pd.read_json(FMT10K_URL.format(bias_type=bias_type, social_axis=social_axis))
+            cols = df_data.columns.tolist()
+            df_data["idx"] = df_data.index.map(lambda x: f"{dataset_name}/{social_axis}/{x}")
+            df_data["social_axis"] = social_axis
+            cols = ["idx", "social_axis"] + cols
+            df_data = df_data[cols]
+            data = df_data.to_dict("records")
+            # Save
+            save_path = os.path.join(save_dir, f"{social_axis}.json")
+            json_utils.save_json(data, save_path)
 
 
 ################################################################################
