@@ -1,6 +1,6 @@
 [
     {
-        "idx": "StereoSet/Intrasentence/0",
+        "idx": "StereoSet/Intrasentence/gender/0",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -17,7 +17,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/1",
+        "idx": "StereoSet/Intrasentence/gender/1",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -34,7 +34,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/2",
+        "idx": "StereoSet/Intrasentence/gender/2",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -51,7 +51,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/3",
+        "idx": "StereoSet/Intrasentence/gender/3",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -68,7 +68,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/4",
+        "idx": "StereoSet/Intrasentence/gender/4",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -85,7 +85,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/5",
+        "idx": "StereoSet/Intrasentence/gender/5",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -102,7 +102,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/6",
+        "idx": "StereoSet/Intrasentence/gender/6",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -119,7 +119,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/7",
+        "idx": "StereoSet/Intrasentence/gender/7",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -136,7 +136,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/8",
+        "idx": "StereoSet/Intrasentence/gender/8",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -153,7 +153,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/9",
+        "idx": "StereoSet/Intrasentence/gender/9",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -170,7 +170,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/10",
+        "idx": "StereoSet/Intrasentence/gender/10",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -187,7 +187,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/11",
+        "idx": "StereoSet/Intrasentence/gender/11",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -204,7 +204,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/12",
+        "idx": "StereoSet/Intrasentence/gender/12",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -221,7 +221,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/13",
+        "idx": "StereoSet/Intrasentence/gender/13",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -238,7 +238,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/14",
+        "idx": "StereoSet/Intrasentence/gender/14",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -255,7 +255,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/15",
+        "idx": "StereoSet/Intrasentence/gender/15",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -272,7 +272,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/16",
+        "idx": "StereoSet/Intrasentence/gender/16",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -289,7 +289,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/17",
+        "idx": "StereoSet/Intrasentence/gender/17",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -306,7 +306,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/18",
+        "idx": "StereoSet/Intrasentence/gender/18",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -323,7 +323,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/19",
+        "idx": "StereoSet/Intrasentence/gender/19",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -340,7 +340,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/20",
+        "idx": "StereoSet/Intrasentence/gender/20",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -357,7 +357,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/21",
+        "idx": "StereoSet/Intrasentence/gender/21",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -374,7 +374,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/22",
+        "idx": "StereoSet/Intrasentence/gender/22",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -391,7 +391,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/23",
+        "idx": "StereoSet/Intrasentence/gender/23",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -408,7 +408,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/24",
+        "idx": "StereoSet/Intrasentence/gender/24",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -425,7 +425,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/25",
+        "idx": "StereoSet/Intrasentence/gender/25",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -442,7 +442,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/26",
+        "idx": "StereoSet/Intrasentence/gender/26",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -459,7 +459,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/27",
+        "idx": "StereoSet/Intrasentence/gender/27",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -476,7 +476,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/28",
+        "idx": "StereoSet/Intrasentence/gender/28",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -493,7 +493,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/29",
+        "idx": "StereoSet/Intrasentence/gender/29",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -510,7 +510,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/30",
+        "idx": "StereoSet/Intrasentence/gender/30",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -527,7 +527,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/31",
+        "idx": "StereoSet/Intrasentence/gender/31",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -544,7 +544,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/32",
+        "idx": "StereoSet/Intrasentence/gender/32",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -561,7 +561,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/33",
+        "idx": "StereoSet/Intrasentence/gender/33",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -578,7 +578,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/34",
+        "idx": "StereoSet/Intrasentence/gender/34",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -595,7 +595,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/35",
+        "idx": "StereoSet/Intrasentence/gender/35",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -612,7 +612,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/36",
+        "idx": "StereoSet/Intrasentence/gender/36",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -629,7 +629,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/37",
+        "idx": "StereoSet/Intrasentence/gender/37",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -646,7 +646,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/38",
+        "idx": "StereoSet/Intrasentence/gender/38",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -663,7 +663,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/39",
+        "idx": "StereoSet/Intrasentence/gender/39",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -680,7 +680,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/40",
+        "idx": "StereoSet/Intrasentence/gender/40",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -697,7 +697,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/41",
+        "idx": "StereoSet/Intrasentence/gender/41",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -714,7 +714,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/42",
+        "idx": "StereoSet/Intrasentence/gender/42",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -731,7 +731,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/43",
+        "idx": "StereoSet/Intrasentence/gender/43",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -748,7 +748,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/44",
+        "idx": "StereoSet/Intrasentence/gender/44",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -765,7 +765,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/45",
+        "idx": "StereoSet/Intrasentence/gender/45",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -782,7 +782,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/46",
+        "idx": "StereoSet/Intrasentence/gender/46",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -799,7 +799,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/47",
+        "idx": "StereoSet/Intrasentence/gender/47",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -816,7 +816,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/48",
+        "idx": "StereoSet/Intrasentence/gender/48",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -833,7 +833,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/49",
+        "idx": "StereoSet/Intrasentence/gender/49",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -850,7 +850,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/50",
+        "idx": "StereoSet/Intrasentence/gender/50",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -867,7 +867,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/51",
+        "idx": "StereoSet/Intrasentence/gender/51",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -884,7 +884,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/52",
+        "idx": "StereoSet/Intrasentence/gender/52",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -901,7 +901,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/53",
+        "idx": "StereoSet/Intrasentence/gender/53",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -918,7 +918,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/54",
+        "idx": "StereoSet/Intrasentence/gender/54",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -935,7 +935,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/55",
+        "idx": "StereoSet/Intrasentence/gender/55",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -952,7 +952,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/56",
+        "idx": "StereoSet/Intrasentence/gender/56",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -969,7 +969,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/57",
+        "idx": "StereoSet/Intrasentence/gender/57",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -986,7 +986,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/58",
+        "idx": "StereoSet/Intrasentence/gender/58",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -1003,7 +1003,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/59",
+        "idx": "StereoSet/Intrasentence/gender/59",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1020,7 +1020,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/60",
+        "idx": "StereoSet/Intrasentence/gender/60",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -1037,7 +1037,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/61",
+        "idx": "StereoSet/Intrasentence/gender/61",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -1054,7 +1054,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/62",
+        "idx": "StereoSet/Intrasentence/gender/62",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1071,7 +1071,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/63",
+        "idx": "StereoSet/Intrasentence/gender/63",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1088,7 +1088,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/64",
+        "idx": "StereoSet/Intrasentence/gender/64",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolgirl",
@@ -1105,7 +1105,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/65",
+        "idx": "StereoSet/Intrasentence/gender/65",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -1122,7 +1122,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/66",
+        "idx": "StereoSet/Intrasentence/gender/66",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1139,7 +1139,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/67",
+        "idx": "StereoSet/Intrasentence/gender/67",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1156,7 +1156,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/68",
+        "idx": "StereoSet/Intrasentence/gender/68",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1173,7 +1173,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/69",
+        "idx": "StereoSet/Intrasentence/gender/69",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "herself",
@@ -1190,7 +1190,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/70",
+        "idx": "StereoSet/Intrasentence/gender/70",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mother",
@@ -1207,7 +1207,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/71",
+        "idx": "StereoSet/Intrasentence/gender/71",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1224,7 +1224,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/72",
+        "idx": "StereoSet/Intrasentence/gender/72",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -1241,7 +1241,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/73",
+        "idx": "StereoSet/Intrasentence/gender/73",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1258,7 +1258,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/74",
+        "idx": "StereoSet/Intrasentence/gender/74",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -1275,7 +1275,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/75",
+        "idx": "StereoSet/Intrasentence/gender/75",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1292,7 +1292,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/76",
+        "idx": "StereoSet/Intrasentence/gender/76",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1309,7 +1309,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/77",
+        "idx": "StereoSet/Intrasentence/gender/77",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -1326,7 +1326,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/78",
+        "idx": "StereoSet/Intrasentence/gender/78",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1343,7 +1343,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/79",
+        "idx": "StereoSet/Intrasentence/gender/79",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1360,7 +1360,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/80",
+        "idx": "StereoSet/Intrasentence/gender/80",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1377,7 +1377,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/81",
+        "idx": "StereoSet/Intrasentence/gender/81",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1394,7 +1394,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/82",
+        "idx": "StereoSet/Intrasentence/gender/82",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1411,7 +1411,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/83",
+        "idx": "StereoSet/Intrasentence/gender/83",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1428,7 +1428,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/84",
+        "idx": "StereoSet/Intrasentence/gender/84",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1445,7 +1445,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/85",
+        "idx": "StereoSet/Intrasentence/gender/85",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1462,7 +1462,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/86",
+        "idx": "StereoSet/Intrasentence/gender/86",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -1479,7 +1479,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/87",
+        "idx": "StereoSet/Intrasentence/gender/87",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1496,7 +1496,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/88",
+        "idx": "StereoSet/Intrasentence/gender/88",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1513,7 +1513,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/89",
+        "idx": "StereoSet/Intrasentence/gender/89",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1530,7 +1530,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/90",
+        "idx": "StereoSet/Intrasentence/gender/90",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1547,7 +1547,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/91",
+        "idx": "StereoSet/Intrasentence/gender/91",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -1564,7 +1564,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/92",
+        "idx": "StereoSet/Intrasentence/gender/92",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -1581,7 +1581,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/93",
+        "idx": "StereoSet/Intrasentence/gender/93",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1598,7 +1598,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/94",
+        "idx": "StereoSet/Intrasentence/gender/94",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1615,7 +1615,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/95",
+        "idx": "StereoSet/Intrasentence/gender/95",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -1632,7 +1632,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/96",
+        "idx": "StereoSet/Intrasentence/gender/96",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1649,7 +1649,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/97",
+        "idx": "StereoSet/Intrasentence/gender/97",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1666,7 +1666,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/98",
+        "idx": "StereoSet/Intrasentence/gender/98",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1683,7 +1683,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/99",
+        "idx": "StereoSet/Intrasentence/gender/99",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1700,7 +1700,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/100",
+        "idx": "StereoSet/Intrasentence/gender/100",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1717,7 +1717,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/101",
+        "idx": "StereoSet/Intrasentence/gender/101",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -1734,7 +1734,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/102",
+        "idx": "StereoSet/Intrasentence/gender/102",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -1751,7 +1751,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/103",
+        "idx": "StereoSet/Intrasentence/gender/103",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1768,7 +1768,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/104",
+        "idx": "StereoSet/Intrasentence/gender/104",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1785,7 +1785,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/105",
+        "idx": "StereoSet/Intrasentence/gender/105",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1802,7 +1802,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/106",
+        "idx": "StereoSet/Intrasentence/gender/106",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1819,7 +1819,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/107",
+        "idx": "StereoSet/Intrasentence/gender/107",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -1836,7 +1836,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/108",
+        "idx": "StereoSet/Intrasentence/gender/108",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -1853,7 +1853,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/109",
+        "idx": "StereoSet/Intrasentence/gender/109",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1870,7 +1870,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/110",
+        "idx": "StereoSet/Intrasentence/gender/110",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -1887,7 +1887,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/111",
+        "idx": "StereoSet/Intrasentence/gender/111",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1904,7 +1904,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/112",
+        "idx": "StereoSet/Intrasentence/gender/112",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1921,7 +1921,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/113",
+        "idx": "StereoSet/Intrasentence/gender/113",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -1938,7 +1938,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/114",
+        "idx": "StereoSet/Intrasentence/gender/114",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1955,7 +1955,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/115",
+        "idx": "StereoSet/Intrasentence/gender/115",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -1972,7 +1972,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/116",
+        "idx": "StereoSet/Intrasentence/gender/116",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -1989,7 +1989,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/117",
+        "idx": "StereoSet/Intrasentence/gender/117",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2006,7 +2006,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/118",
+        "idx": "StereoSet/Intrasentence/gender/118",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2023,7 +2023,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/119",
+        "idx": "StereoSet/Intrasentence/gender/119",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2040,7 +2040,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/120",
+        "idx": "StereoSet/Intrasentence/gender/120",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2057,7 +2057,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/121",
+        "idx": "StereoSet/Intrasentence/gender/121",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2074,7 +2074,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/122",
+        "idx": "StereoSet/Intrasentence/gender/122",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2091,7 +2091,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/123",
+        "idx": "StereoSet/Intrasentence/gender/123",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2108,7 +2108,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/124",
+        "idx": "StereoSet/Intrasentence/gender/124",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2125,7 +2125,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/125",
+        "idx": "StereoSet/Intrasentence/gender/125",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2142,7 +2142,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/126",
+        "idx": "StereoSet/Intrasentence/gender/126",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2159,7 +2159,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/127",
+        "idx": "StereoSet/Intrasentence/gender/127",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2176,7 +2176,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/128",
+        "idx": "StereoSet/Intrasentence/gender/128",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2193,7 +2193,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/129",
+        "idx": "StereoSet/Intrasentence/gender/129",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2210,7 +2210,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/130",
+        "idx": "StereoSet/Intrasentence/gender/130",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -2227,7 +2227,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/131",
+        "idx": "StereoSet/Intrasentence/gender/131",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -2244,7 +2244,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/132",
+        "idx": "StereoSet/Intrasentence/gender/132",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2261,7 +2261,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/133",
+        "idx": "StereoSet/Intrasentence/gender/133",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2278,7 +2278,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/134",
+        "idx": "StereoSet/Intrasentence/gender/134",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2295,7 +2295,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/135",
+        "idx": "StereoSet/Intrasentence/gender/135",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2312,7 +2312,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/136",
+        "idx": "StereoSet/Intrasentence/gender/136",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2329,7 +2329,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/137",
+        "idx": "StereoSet/Intrasentence/gender/137",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2346,7 +2346,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/138",
+        "idx": "StereoSet/Intrasentence/gender/138",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2363,7 +2363,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/139",
+        "idx": "StereoSet/Intrasentence/gender/139",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2380,7 +2380,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/140",
+        "idx": "StereoSet/Intrasentence/gender/140",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2397,7 +2397,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/141",
+        "idx": "StereoSet/Intrasentence/gender/141",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -2414,7 +2414,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/142",
+        "idx": "StereoSet/Intrasentence/gender/142",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2431,7 +2431,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/143",
+        "idx": "StereoSet/Intrasentence/gender/143",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2448,7 +2448,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/144",
+        "idx": "StereoSet/Intrasentence/gender/144",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2465,7 +2465,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/145",
+        "idx": "StereoSet/Intrasentence/gender/145",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2482,7 +2482,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/146",
+        "idx": "StereoSet/Intrasentence/gender/146",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2499,7 +2499,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/147",
+        "idx": "StereoSet/Intrasentence/gender/147",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2516,7 +2516,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/148",
+        "idx": "StereoSet/Intrasentence/gender/148",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2533,7 +2533,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/149",
+        "idx": "StereoSet/Intrasentence/gender/149",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2550,7 +2550,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/150",
+        "idx": "StereoSet/Intrasentence/gender/150",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2567,7 +2567,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/151",
+        "idx": "StereoSet/Intrasentence/gender/151",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2584,7 +2584,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/152",
+        "idx": "StereoSet/Intrasentence/gender/152",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2601,7 +2601,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/153",
+        "idx": "StereoSet/Intrasentence/gender/153",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2618,7 +2618,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/154",
+        "idx": "StereoSet/Intrasentence/gender/154",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2635,7 +2635,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/155",
+        "idx": "StereoSet/Intrasentence/gender/155",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2652,7 +2652,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/156",
+        "idx": "StereoSet/Intrasentence/gender/156",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2669,7 +2669,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/157",
+        "idx": "StereoSet/Intrasentence/gender/157",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2686,7 +2686,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/158",
+        "idx": "StereoSet/Intrasentence/gender/158",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2703,7 +2703,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/159",
+        "idx": "StereoSet/Intrasentence/gender/159",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2720,7 +2720,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/160",
+        "idx": "StereoSet/Intrasentence/gender/160",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -2737,7 +2737,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/161",
+        "idx": "StereoSet/Intrasentence/gender/161",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2754,7 +2754,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/162",
+        "idx": "StereoSet/Intrasentence/gender/162",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2771,7 +2771,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/163",
+        "idx": "StereoSet/Intrasentence/gender/163",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2788,7 +2788,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/164",
+        "idx": "StereoSet/Intrasentence/gender/164",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2805,7 +2805,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/165",
+        "idx": "StereoSet/Intrasentence/gender/165",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2822,7 +2822,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/166",
+        "idx": "StereoSet/Intrasentence/gender/166",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2839,7 +2839,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/167",
+        "idx": "StereoSet/Intrasentence/gender/167",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -2856,7 +2856,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/168",
+        "idx": "StereoSet/Intrasentence/gender/168",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2873,7 +2873,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/169",
+        "idx": "StereoSet/Intrasentence/gender/169",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -2890,7 +2890,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/170",
+        "idx": "StereoSet/Intrasentence/gender/170",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2907,7 +2907,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/171",
+        "idx": "StereoSet/Intrasentence/gender/171",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -2924,7 +2924,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/172",
+        "idx": "StereoSet/Intrasentence/gender/172",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -2941,7 +2941,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/173",
+        "idx": "StereoSet/Intrasentence/gender/173",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -2958,7 +2958,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/174",
+        "idx": "StereoSet/Intrasentence/gender/174",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -2975,7 +2975,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/175",
+        "idx": "StereoSet/Intrasentence/gender/175",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -2992,7 +2992,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/176",
+        "idx": "StereoSet/Intrasentence/gender/176",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3009,7 +3009,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/177",
+        "idx": "StereoSet/Intrasentence/gender/177",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3026,7 +3026,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/178",
+        "idx": "StereoSet/Intrasentence/gender/178",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3043,7 +3043,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/179",
+        "idx": "StereoSet/Intrasentence/gender/179",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3060,7 +3060,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/180",
+        "idx": "StereoSet/Intrasentence/gender/180",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3077,7 +3077,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/181",
+        "idx": "StereoSet/Intrasentence/gender/181",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3094,7 +3094,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/182",
+        "idx": "StereoSet/Intrasentence/gender/182",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3111,7 +3111,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/183",
+        "idx": "StereoSet/Intrasentence/gender/183",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3128,7 +3128,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/184",
+        "idx": "StereoSet/Intrasentence/gender/184",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3145,7 +3145,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/185",
+        "idx": "StereoSet/Intrasentence/gender/185",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3162,7 +3162,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/186",
+        "idx": "StereoSet/Intrasentence/gender/186",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3179,7 +3179,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/187",
+        "idx": "StereoSet/Intrasentence/gender/187",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3196,7 +3196,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/188",
+        "idx": "StereoSet/Intrasentence/gender/188",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3213,7 +3213,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/189",
+        "idx": "StereoSet/Intrasentence/gender/189",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -3230,7 +3230,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/190",
+        "idx": "StereoSet/Intrasentence/gender/190",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3247,7 +3247,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/191",
+        "idx": "StereoSet/Intrasentence/gender/191",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3264,7 +3264,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/192",
+        "idx": "StereoSet/Intrasentence/gender/192",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3281,7 +3281,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/193",
+        "idx": "StereoSet/Intrasentence/gender/193",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3298,7 +3298,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/194",
+        "idx": "StereoSet/Intrasentence/gender/194",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -3315,7 +3315,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/195",
+        "idx": "StereoSet/Intrasentence/gender/195",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3332,7 +3332,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/196",
+        "idx": "StereoSet/Intrasentence/gender/196",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3349,7 +3349,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/197",
+        "idx": "StereoSet/Intrasentence/gender/197",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3366,7 +3366,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/198",
+        "idx": "StereoSet/Intrasentence/gender/198",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3383,7 +3383,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/199",
+        "idx": "StereoSet/Intrasentence/gender/199",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3400,7 +3400,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/200",
+        "idx": "StereoSet/Intrasentence/gender/200",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -3417,7 +3417,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/201",
+        "idx": "StereoSet/Intrasentence/gender/201",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3434,7 +3434,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/202",
+        "idx": "StereoSet/Intrasentence/gender/202",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3451,7 +3451,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/203",
+        "idx": "StereoSet/Intrasentence/gender/203",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3468,7 +3468,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/204",
+        "idx": "StereoSet/Intrasentence/gender/204",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3485,7 +3485,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/205",
+        "idx": "StereoSet/Intrasentence/gender/205",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3502,7 +3502,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/206",
+        "idx": "StereoSet/Intrasentence/gender/206",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3519,7 +3519,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/207",
+        "idx": "StereoSet/Intrasentence/gender/207",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3536,7 +3536,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/208",
+        "idx": "StereoSet/Intrasentence/gender/208",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -3553,7 +3553,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/209",
+        "idx": "StereoSet/Intrasentence/gender/209",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3570,7 +3570,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/210",
+        "idx": "StereoSet/Intrasentence/gender/210",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3587,7 +3587,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/211",
+        "idx": "StereoSet/Intrasentence/gender/211",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3604,7 +3604,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/212",
+        "idx": "StereoSet/Intrasentence/gender/212",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3621,7 +3621,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/213",
+        "idx": "StereoSet/Intrasentence/gender/213",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3638,7 +3638,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/214",
+        "idx": "StereoSet/Intrasentence/gender/214",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3655,7 +3655,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/215",
+        "idx": "StereoSet/Intrasentence/gender/215",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3672,7 +3672,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/216",
+        "idx": "StereoSet/Intrasentence/gender/216",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3689,7 +3689,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/217",
+        "idx": "StereoSet/Intrasentence/gender/217",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3706,7 +3706,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/218",
+        "idx": "StereoSet/Intrasentence/gender/218",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3723,7 +3723,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/219",
+        "idx": "StereoSet/Intrasentence/gender/219",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3740,7 +3740,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/220",
+        "idx": "StereoSet/Intrasentence/gender/220",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3757,7 +3757,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/221",
+        "idx": "StereoSet/Intrasentence/gender/221",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3774,7 +3774,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/222",
+        "idx": "StereoSet/Intrasentence/gender/222",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3791,7 +3791,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/223",
+        "idx": "StereoSet/Intrasentence/gender/223",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3808,7 +3808,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/224",
+        "idx": "StereoSet/Intrasentence/gender/224",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3825,7 +3825,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/225",
+        "idx": "StereoSet/Intrasentence/gender/225",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3842,7 +3842,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/226",
+        "idx": "StereoSet/Intrasentence/gender/226",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3859,7 +3859,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/227",
+        "idx": "StereoSet/Intrasentence/gender/227",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3876,7 +3876,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/228",
+        "idx": "StereoSet/Intrasentence/gender/228",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3893,7 +3893,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/229",
+        "idx": "StereoSet/Intrasentence/gender/229",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -3910,7 +3910,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/230",
+        "idx": "StereoSet/Intrasentence/gender/230",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -3927,7 +3927,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/231",
+        "idx": "StereoSet/Intrasentence/gender/231",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -3944,7 +3944,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/232",
+        "idx": "StereoSet/Intrasentence/gender/232",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -3961,7 +3961,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/233",
+        "idx": "StereoSet/Intrasentence/gender/233",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -3978,7 +3978,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/234",
+        "idx": "StereoSet/Intrasentence/gender/234",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "himself",
@@ -3995,7 +3995,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/235",
+        "idx": "StereoSet/Intrasentence/gender/235",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -4012,7 +4012,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/236",
+        "idx": "StereoSet/Intrasentence/gender/236",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -4029,7 +4029,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/237",
+        "idx": "StereoSet/Intrasentence/gender/237",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -4046,7 +4046,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/238",
+        "idx": "StereoSet/Intrasentence/gender/238",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -4063,7 +4063,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/239",
+        "idx": "StereoSet/Intrasentence/gender/239",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -4080,7 +4080,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/240",
+        "idx": "StereoSet/Intrasentence/gender/240",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -4097,7 +4097,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/241",
+        "idx": "StereoSet/Intrasentence/gender/241",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -4114,7 +4114,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/242",
+        "idx": "StereoSet/Intrasentence/gender/242",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -4131,7 +4131,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/243",
+        "idx": "StereoSet/Intrasentence/gender/243",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -4148,7 +4148,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/244",
+        "idx": "StereoSet/Intrasentence/gender/244",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -4165,7 +4165,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/245",
+        "idx": "StereoSet/Intrasentence/gender/245",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -4182,7 +4182,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/246",
+        "idx": "StereoSet/Intrasentence/gender/246",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "grandfather",
@@ -4199,7 +4199,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/247",
+        "idx": "StereoSet/Intrasentence/gender/247",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -4216,7 +4216,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/248",
+        "idx": "StereoSet/Intrasentence/gender/248",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "schoolboy",
@@ -4233,7 +4233,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/249",
+        "idx": "StereoSet/Intrasentence/gender/249",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",
@@ -4250,7 +4250,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/250",
+        "idx": "StereoSet/Intrasentence/gender/250",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "sister",
@@ -4267,7 +4267,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/251",
+        "idx": "StereoSet/Intrasentence/gender/251",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "male",
@@ -4284,7 +4284,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/252",
+        "idx": "StereoSet/Intrasentence/gender/252",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -4301,7 +4301,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/253",
+        "idx": "StereoSet/Intrasentence/gender/253",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "mommy",
@@ -4318,7 +4318,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intrasentence/254",
+        "idx": "StereoSet/Intrasentence/gender/254",
         "task": "intrasentence",
         "axis": "gender",
         "descriptor": "gentlemen",

@@ -1,6 +1,6 @@
 [
     {
-        "idx": "StereoSet/Intersentence/0",
+        "idx": "StereoSet/Intersentence/religion/0",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -17,7 +17,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/1",
+        "idx": "StereoSet/Intersentence/religion/1",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -34,7 +34,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/2",
+        "idx": "StereoSet/Intersentence/religion/2",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -51,7 +51,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/3",
+        "idx": "StereoSet/Intersentence/religion/3",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -68,7 +68,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/4",
+        "idx": "StereoSet/Intersentence/religion/4",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -85,7 +85,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/5",
+        "idx": "StereoSet/Intersentence/religion/5",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -102,7 +102,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/6",
+        "idx": "StereoSet/Intersentence/religion/6",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -119,7 +119,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/7",
+        "idx": "StereoSet/Intersentence/religion/7",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -136,7 +136,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/8",
+        "idx": "StereoSet/Intersentence/religion/8",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -153,7 +153,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/9",
+        "idx": "StereoSet/Intersentence/religion/9",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -170,7 +170,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/10",
+        "idx": "StereoSet/Intersentence/religion/10",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -187,7 +187,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/11",
+        "idx": "StereoSet/Intersentence/religion/11",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -204,7 +204,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/12",
+        "idx": "StereoSet/Intersentence/religion/12",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -221,7 +221,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/13",
+        "idx": "StereoSet/Intersentence/religion/13",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -238,7 +238,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/14",
+        "idx": "StereoSet/Intersentence/religion/14",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -255,7 +255,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/15",
+        "idx": "StereoSet/Intersentence/religion/15",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -272,7 +272,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/16",
+        "idx": "StereoSet/Intersentence/religion/16",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -289,7 +289,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/17",
+        "idx": "StereoSet/Intersentence/religion/17",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -306,7 +306,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/18",
+        "idx": "StereoSet/Intersentence/religion/18",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -323,7 +323,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/19",
+        "idx": "StereoSet/Intersentence/religion/19",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -340,7 +340,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/20",
+        "idx": "StereoSet/Intersentence/religion/20",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -357,7 +357,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/21",
+        "idx": "StereoSet/Intersentence/religion/21",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -374,7 +374,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/22",
+        "idx": "StereoSet/Intersentence/religion/22",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -391,7 +391,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/23",
+        "idx": "StereoSet/Intersentence/religion/23",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -408,7 +408,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/24",
+        "idx": "StereoSet/Intersentence/religion/24",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -425,7 +425,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/25",
+        "idx": "StereoSet/Intersentence/religion/25",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -442,7 +442,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/26",
+        "idx": "StereoSet/Intersentence/religion/26",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -459,7 +459,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/27",
+        "idx": "StereoSet/Intersentence/religion/27",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -476,7 +476,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/28",
+        "idx": "StereoSet/Intersentence/religion/28",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -493,7 +493,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/29",
+        "idx": "StereoSet/Intersentence/religion/29",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -510,7 +510,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/30",
+        "idx": "StereoSet/Intersentence/religion/30",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -527,7 +527,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/31",
+        "idx": "StereoSet/Intersentence/religion/31",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -544,7 +544,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/32",
+        "idx": "StereoSet/Intersentence/religion/32",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -561,7 +561,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/33",
+        "idx": "StereoSet/Intersentence/religion/33",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -578,7 +578,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/34",
+        "idx": "StereoSet/Intersentence/religion/34",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -595,7 +595,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/35",
+        "idx": "StereoSet/Intersentence/religion/35",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -612,7 +612,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/36",
+        "idx": "StereoSet/Intersentence/religion/36",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -629,7 +629,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/37",
+        "idx": "StereoSet/Intersentence/religion/37",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -646,7 +646,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/38",
+        "idx": "StereoSet/Intersentence/religion/38",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -663,7 +663,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/39",
+        "idx": "StereoSet/Intersentence/religion/39",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -680,7 +680,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/40",
+        "idx": "StereoSet/Intersentence/religion/40",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -697,7 +697,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/41",
+        "idx": "StereoSet/Intersentence/religion/41",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -714,7 +714,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/42",
+        "idx": "StereoSet/Intersentence/religion/42",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -731,7 +731,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/43",
+        "idx": "StereoSet/Intersentence/religion/43",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -748,7 +748,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/44",
+        "idx": "StereoSet/Intersentence/religion/44",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -765,7 +765,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/45",
+        "idx": "StereoSet/Intersentence/religion/45",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -782,7 +782,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/46",
+        "idx": "StereoSet/Intersentence/religion/46",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -799,7 +799,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/47",
+        "idx": "StereoSet/Intersentence/religion/47",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -816,7 +816,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/48",
+        "idx": "StereoSet/Intersentence/religion/48",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -833,7 +833,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/49",
+        "idx": "StereoSet/Intersentence/religion/49",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -850,7 +850,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/50",
+        "idx": "StereoSet/Intersentence/religion/50",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -867,7 +867,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/51",
+        "idx": "StereoSet/Intersentence/religion/51",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -884,7 +884,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/52",
+        "idx": "StereoSet/Intersentence/religion/52",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -901,7 +901,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/53",
+        "idx": "StereoSet/Intersentence/religion/53",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -918,7 +918,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/54",
+        "idx": "StereoSet/Intersentence/religion/54",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -935,7 +935,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/55",
+        "idx": "StereoSet/Intersentence/religion/55",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -952,7 +952,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/56",
+        "idx": "StereoSet/Intersentence/religion/56",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -969,7 +969,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/57",
+        "idx": "StereoSet/Intersentence/religion/57",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -986,7 +986,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/58",
+        "idx": "StereoSet/Intersentence/religion/58",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -1003,7 +1003,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/59",
+        "idx": "StereoSet/Intersentence/religion/59",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1020,7 +1020,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/60",
+        "idx": "StereoSet/Intersentence/religion/60",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -1037,7 +1037,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/61",
+        "idx": "StereoSet/Intersentence/religion/61",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1054,7 +1054,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/62",
+        "idx": "StereoSet/Intersentence/religion/62",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1071,7 +1071,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/63",
+        "idx": "StereoSet/Intersentence/religion/63",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1088,7 +1088,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/64",
+        "idx": "StereoSet/Intersentence/religion/64",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1105,7 +1105,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/65",
+        "idx": "StereoSet/Intersentence/religion/65",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1122,7 +1122,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/66",
+        "idx": "StereoSet/Intersentence/religion/66",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1139,7 +1139,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/67",
+        "idx": "StereoSet/Intersentence/religion/67",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1156,7 +1156,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/68",
+        "idx": "StereoSet/Intersentence/religion/68",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1173,7 +1173,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/69",
+        "idx": "StereoSet/Intersentence/religion/69",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1190,7 +1190,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/70",
+        "idx": "StereoSet/Intersentence/religion/70",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -1207,7 +1207,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/71",
+        "idx": "StereoSet/Intersentence/religion/71",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Bible",
@@ -1224,7 +1224,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/72",
+        "idx": "StereoSet/Intersentence/religion/72",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1241,7 +1241,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/73",
+        "idx": "StereoSet/Intersentence/religion/73",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
@@ -1258,7 +1258,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/74",
+        "idx": "StereoSet/Intersentence/religion/74",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1275,7 +1275,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/75",
+        "idx": "StereoSet/Intersentence/religion/75",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1292,7 +1292,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/76",
+        "idx": "StereoSet/Intersentence/religion/76",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Muslim",
@@ -1309,7 +1309,7 @@
         ]
     },
     {
-        "idx": "StereoSet/Intersentence/77",
+        "idx": "StereoSet/Intersentence/religion/77",
         "task": "intersentence",
         "axis": "religion",
         "descriptor": "Brahmin",
