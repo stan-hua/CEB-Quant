@@ -117,7 +117,7 @@ def score_open_ended_responses(
         valid_data = evaluator.evaluate(
             valid_data,
             task=f"rta-{instruction_type}",
-            progress_filename="rta_progress.json",
+            save_fname="rta_progress.json",
             llm_response_col="rta",
         )
 
@@ -215,6 +215,7 @@ def score_open_ended_responses(
 
     # Compute metrics
     return metric_func(**metric_func_kwargs)
+
 
 ################################################################################
 #                               Helper Functions                               #

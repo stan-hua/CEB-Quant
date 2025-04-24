@@ -2,8 +2,7 @@
 import logging
 
 # Custom libraries
-from src.task import eval_utils
-from src.utils import chatgpt_eval, judge_evaluator, metric_utils
+from src.utils import chatgpt_eval, eval_utils, judge_evaluator, metric_utils
 
 
 ################################################################################

@@ -8,8 +8,7 @@ Description: Performs fairness evaluation for the FairMT-Bench.
 import logging
 
 # Custom libraries
-from src.task import eval_utils
-from src.utils import chatgpt_eval, metric_utils
+from src.utils import chatgpt_eval, eval_utils, metric_utils
 
 
 ################################################################################

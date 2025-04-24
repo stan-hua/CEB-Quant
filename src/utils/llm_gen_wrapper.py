@@ -1,7 +1,6 @@
 # Standard libraries
 import concurrent
 import glob
-import multiprocessing
 import logging
 import os
 import threading
@@ -33,9 +32,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Setup logger
 LOGGER = logging.getLogger(__name__)
-
-# Configure multiprocessing; to avoid vLLM issues with multi-threading
-multiprocessing.set_start_method('spawn')
 
 
 ################################################################################
@@ -1516,6 +1512,7 @@ def construct_chat_template(messages):
     if prompt:
         prompt += "\n\n"
     prompt += "Assistant: "
+    return prompt
 
 
 def compute_prob(vllm_logprobs):

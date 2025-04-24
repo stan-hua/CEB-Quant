@@ -14,8 +14,7 @@ from config import (
     DIR_EVALUATIONS, PERSPECTIVE_EVAL_FNAME, PERSPECTIVE_API_URL,
     PERSPECTIVE_KEY, PERSPECTIVE_LOCK_FNAME,
 )
-from src.task import eval_utils
-from src.utils import chatgpt_eval, judge_evaluator, json_utils, metric_utils
+from src.utils import chatgpt_eval, eval_utils, judge_evaluator, json_utils, metric_utils
 
 
 ################################################################################
@@ -194,7 +193,7 @@ class ToxicityEval:
     def eval_toxicity_continuation(
         self, data,
         resume=True,
-        progress_filename=PERSPECTIVE_EVAL_FNAME,
+        save_fname=PERSPECTIVE_EVAL_FNAME,
     ):
         """
         Compute toxicity score for Toxicity / Continuation dataset using the
@@ -208,8 +207,8 @@ class ToxicityEval:
             a 'res' key with the response text.
         resume : bool, optional
             If True, then try to resume evaluation from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
+            with the same filename as `save_fname`. Default is True.
+        save_fname : str, optional
             Filename for saving or resuming progress. Default is
             `PERSPECTIVE_EVAL_FNAME`.
 
@@ -222,12 +221,12 @@ class ToxicityEval:
         # Add resume path
         resume_from = None
         if resume:
-            resume_from = os.path.join(self.save_dir, progress_filename)
+            resume_from = os.path.join(self.save_dir, save_fname)
 
         # Keyword arguments for evaluate functions
         eval_func_kwargs = {
             "input_col": "res_wo_prefix",
-            "progress_filename": progress_filename
+            "save_fname": save_fname
         }
 
         # Compute indirect bias score
@@ -246,7 +245,7 @@ class ToxicityEval:
     def eval_toxicity_conversation(
         self, data,
         resume=True,
-        progress_filename=PERSPECTIVE_EVAL_FNAME,
+        save_fname=PERSPECTIVE_EVAL_FNAME,
     ):
         """
         Compute toxicity score for Toxicity / Conversation dataset using the
@@ -260,8 +259,8 @@ class ToxicityEval:
             a 'res' key with the response text.
         resume : bool, optional
             If True, then try to resume evaluation from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
+            with the same filename as `save_fname`. Default is True.
+        save_fname : str, optional
             Filename for saving or resuming progress. Default is
             `PERSPECTIVE_EVAL_FNAME`.
 
@@ -274,12 +273,12 @@ class ToxicityEval:
         # Add resume path
         resume_from = None
         if resume:
-            resume_from = os.path.join(self.save_dir, progress_filename)
+            resume_from = os.path.join(self.save_dir, save_fname)
 
         # Keyword arguments for evaluate functions
         eval_func_kwargs = {
             "input_col": "res_wo_prefix",
-            "progress_filename": progress_filename
+            "save_fname": save_fname
         }
 
         # Compute indirect bias score
@@ -378,7 +377,7 @@ class ToxicityEval:
     def assign_toxicity_values(
             self,
             data,
-            progress_filename=PERSPECTIVE_EVAL_FNAME,
+            save_fname=PERSPECTIVE_EVAL_FNAME,
             input_col="res",
             output_col="toxicity",
     ):
@@ -390,7 +389,7 @@ class ToxicityEval:
         ----------
         data : list of dict
             The data to evaluate
-        progress_filename : str, optional
+        save_fname : str, optional
             The filename to save the progress to, by default PERSPECTIVE_EVAL_FNAME
         input_col : str, optional
             The column name of the input text, by default "res"
@@ -409,7 +408,7 @@ class ToxicityEval:
             for idx, row in tqdm(enumerate(data)):
                 # Save on every 10 responses
                 if idx and idx % 10 == 0:
-                    self.save_progress(data, filename=progress_filename)
+                    self.save_progress(data, filename=save_fname)
 
                 # Skip, if already has toxicity
                 if output_col in row:
@@ -442,7 +441,7 @@ class ToxicityEval:
                         LOGGER.error("Error occurred calling the Perspective API! (%s) \n\tText: %s", error_msg, text)
 
         # Final save
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(data, filename=save_fname)
         return data
 
 
