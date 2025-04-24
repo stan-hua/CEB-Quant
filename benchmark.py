@@ -1,5 +1,5 @@
 """
-ceb_benchmark.py
+benchmark.py
 
 Description: Contains high-level functions for the CEB benchmark to:
     (i) Perform inference (text generation) using specified LLMs for each CEB dataset
@@ -24,6 +24,7 @@ stored under `./save_data/llm_evaluations/chatgpt/...`
 # Standard libraries
 import concurrent.futures
 import json
+import multiprocessing
 import logging
 import os
 import re
@@ -44,9 +45,10 @@ from tqdm import tqdm
 
 # Custom libraries
 import config
-from src.task.stereotype_eval import StereotypeEval
-from src.task.toxicity_eval import ToxicityEval
 from src.utils import json_utils, metric_utils
+from src.utils.judge_evaluator import OpenTextEvaluator
+from src.utils.stereotype_eval import StereotypeEval
+from src.utils.toxicity_eval import ToxicityEval
 
 
 ################################################################################
@@ -310,7 +312,7 @@ class CEBBenchmark:
         if os.path.exists(config.PERSPECTIVE_LOCK_FNAME):
             LOGGER.warning(
                 f"Perspective API lock file exists! `{config.PERSPECTIVE_LOCK_FNAME}`"
-                "\nPlease delete if you're not running multiple of `ceb_benchmark.py` at once!"
+                "\nPlease delete if you're not running multiple of `benchmark.py` at once!"
                 " This may be a result from a previously cancelled run."
             )
 
@@ -543,14 +545,7 @@ def ceb_generate(
     from src.utils.llm_gen_wrapper import LLMGeneration
 
     # Choose data path based on dataset collection
-    if "ceb" in dataset_name.lower():
-        data_path = config.DIR_CEB_DATA
-    elif "all_discrim" in dataset_name.lower():
-        data_path = config.DIR_DISCRIM_DATA
-    elif "all_gen" in dataset_name.lower() or "fmt" in dataset_name.lower():
-        data_path = config.DIR_GEN_DATA
-    else:
-        raise ValueError(f"Couldn't infer dataset collection from name: `{dataset_name}`")
+    data_path = get_dataset_directory(dataset_name)
 
     # Shared keyword arguments
     shared_kwargs = {
@@ -1107,6 +1102,102 @@ def ceb_compute_judge_correlation(bin_chatgpt_scores=False):
 ################################################################################
 #                   Dataset / Social Axis - Level Processing                   #
 ################################################################################
+def bias_eval_dataset_collection(model_name, collection_name="all_open", **kwargs):
+    """
+    Perform bias evaluation for a model on all datasets in the collection
+
+    Parameters
+    ----------
+    model_name : str
+        Name of model (directory)
+    collection_name : str, optional
+        Name of collection, by default "all"
+    """
+    dataset_names = config.COLLECTION_TO_DATASETS[collection_name]
+    for dataset_name in dataset_names:
+        bias_eval_dataset(model_name, dataset_name, **kwargs)
+
+
+def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT_TYPE, **kwargs):
+    """
+    Perform evaluation on an open-ended dataset for bias
+    """
+    # Ensure dataset is open-ended
+    if dataset_name not in config.COLLECTION_TO_DATASETS["all_open"]:
+        raise RuntimeError(f"Model `{model_name}` / Dataset `{dataset_name}` is not an open-ended dataset! No need for bias evaluation.")
+
+    # Specify path to model generation directory
+    dir_model_gen = os.path.join(config.DIR_GENERATIONS, system_prompt_type, model_name)
+    dir_dataset = os.path.join(dir_model_gen, dataset_name)
+
+    # Ensure dataset exists
+    if not os.path.exists(dir_dataset):
+        raise RuntimeError(f"Model `{model_name}` / Dataset `{dataset_name}` results are not yet generated!")
+
+    # Ensure files exist
+    exist_files = os.path.listdir(dir_dataset)
+    expected_files = get_expected_dataset_files(dataset_name)
+    missing_files = sorted(set(expected_files) - set(exist_files))
+    if missing_files:
+        raise RuntimeError(
+            f"Model `{model_name}` / Dataset `{dataset_name}` results are not "
+            f"yet generated! Missing files: \n\t{missing_files}"
+        )
+
+    # Evaluate each JSON one by one
+    for json_path in glob(os.path.join(dir_dataset, "*.json")):
+        bias_process_json(dataset_name, json_path, **kwargs)
+
+
+def bias_process_json(dataset_name, json_path):
+    """
+    Evaluate the following dataset for bias across all prompts and
+    social axes.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset
+    json_path : str
+        Path to the JSON file containing the prompt information
+
+    Returns
+    -------
+    dset_to_axis_to_metrics : dict
+        A dictionary mapping from dataset name to social axis to stereotype
+        metrics
+    """
+    social_axis = extract_social_axis(json_path)
+    LOGGER.info(f"Beginning Evaluation / `{dataset_name}` / `{social_axis}`...")
+
+    # Determine prompt column
+    prompt_col = "prompt"
+    if dataset_name.startswith("FMT10K"):
+        prompt_col = "4-turn Conv Response"
+
+    # Raise error, if file doesn't exist
+    if not os.path.exists(json_path):
+        raise RuntimeError(f"Generation JSON file `{json_path}` does not exist!")
+
+    # Load inferred data
+    infer_data = json_utils.load_json(json_path)
+
+    # Evaluate for specific stereotype
+    evaluator = OpenTextEvaluator(
+        save_dir=os.path.dirname(json_path),
+        save_fname=os.path.basename(json_path),
+    )
+    try:
+        evaluator.evaluate(infer_data, prompt_col=prompt_col)
+    except Exception as error_msg:
+        LOGGER.info(f"Error occurred while adding evaluation metrics to Dataset: {dataset_name}\n\tError: {error_msg}")
+        LOGGER.error(traceback.format_exc())
+        return None
+
+    LOGGER.info(f"Beginning Evaluation / `{dataset_name}` / `{social_axis}`...DONE")
+    return dset_to_axis_to_metrics
+
+
 def stereotype_process_json(class_attrs, dataset_name, json_path):
     """
     Evaluate the following dataset for stereotypes across all prompts and
@@ -1128,7 +1219,7 @@ def stereotype_process_json(class_attrs, dataset_name, json_path):
         metrics
     """
     saved_eval_dir = class_attrs["saved_eval_dir"]
-    dset_stereotype_metrics = class_attrs["dset_stereotype_metrics"]
+    dset_stereotype_metrics = class_attrs.get("dset_stereotype_metrics", {})
     openai_model = class_attrs["openai_model"]
     evaluator_choice = class_attrs["evaluator_choice"]
     eval_prompt_ver = class_attrs["eval_prompt_ver"]
@@ -1627,6 +1718,44 @@ def extract_model_metadata_from_name(model_name):
 ################################################################################
 #                              Plotting Functions                              #
 ################################################################################
+def get_dataset_directory(dataset_name):
+    """
+    Retrieve the directory path for a given dataset name.
+
+    Parameters
+    ----------
+    dataset_name : str
+        The name of the dataset
+
+    Returns
+    -------
+    str
+        The directory path corresponding to the dataset name.
+    """
+    for dataset_names, dir_data in config.DATASET_TO_DIR.items():
+        if dataset_name in dataset_names:
+            return dir_data
+    raise RuntimeError(f"Failed to find dataset directory for `{dataset_name}`!")
+
+
+def get_expected_dataset_files(dataset_name):
+    """
+    Retrieve the expected dataset files for a given dataset name.
+
+    Parameters
+    ----------
+    dataset_name : str
+        The name of the dataset
+
+    Returns
+    -------
+    list
+        A list of expected dataset files for the given dataset name.
+    """
+    dir_data = get_dataset_directory(dataset_name)
+    return os.path.listdir(dir_data)
+
+
 def plot_entropy_scaled_fairness_metric():
     """
     Plot a heatmap of the scaled fairness metric (DP or EO) as a function of the
@@ -1692,10 +1821,13 @@ def plot_entropy_scaled_fairness_metric():
 ################################################################################
 #                                User Interface                                #
 ################################################################################
-if __name__ == "__main__":
+if __name__ == "__main__":\
+    # Configure multiprocessing; to avoid vLLM issues with multi-threading
+    multiprocessing.set_start_method('spawn')
     Fire({
-        "generate": ceb_generate,
-        "evaluate": ceb_evaluate,
+        "bias_evaluate": bias_eval_dataset_collection,
+        "ceb_generate": ceb_generate,
+        "ceb_evaluate": ceb_evaluate,
         "compare": ceb_compare_multiple,
         "format_comparisons": ceb_concatenate_comparisons,
         "find_unfinished": ceb_find_unfinished,
