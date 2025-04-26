@@ -1,8 +1,8 @@
 #!/bin/bash -l
-#SBATCH --job-name=cclosed_generate                    # Job name
-#SBATCH -o slurm/logs/slurm-run_cclosed-%j.out
+#SBATCH --job-name=run_all                    # Job name
+#SBATCH -o slurm/logs/slurm-run_all-%j.out
 #SBATCH --nodes=1                         # Number of nodes
-#SBATCH --gres=gpu:NVIDIA_L40S:1
+#SBATCH --gres=gpu:NVIDIA_H100_NVL:1
 #--qos=gpu_deadline_q
 # --reservation=stan_gpu
 #--nodelist=cn527                         # Number of nodes
@@ -10,15 +10,16 @@
 # --gres=gpu:NVIDIA_H100_NVL:1
 # --gres=gpu:NVIDIA_H100_80GB_HBM3:2
 #SBATCH --cpus-per-task=8                 # Number of CPU cores per TASK
-#SBATCH --mem=16GB
+#SBATCH --mem=32GB
 #SBATCH --tmp=8GB
-#SBATCH --time=28:00:00
+#SBATCH --time=32:00:00
 # --begin=now+10hours
 
 # If you want to do it in the terminal,
 # salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_L40S:1 --cpus-per-task=2 --mem=16G --tmp 8GB
 # salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_NVL:1 --cpus-per-task=2 --mem=16G --tmp 8GB
 # salloc --qos=gpu_deadline_q --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_80GB_HBM3:1 --cpus-per-task=1 --mem=16G --tmp 8GB
+# salloc --nodes=1 --cpus-per-task=8 --mem=32G
 # srun (command)
 
 
@@ -39,6 +40,9 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 # Configure PyTorch to avoid defragmentation
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+# Override maximum model length (issue for Phi3)
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+
 ################################################################################
 #                                 Choose Model                                 #
 ################################################################################
@@ -47,7 +51,7 @@ HF_ID="stan-hua"
 
 # Models to generate for
 MODEL_NAMES=(
-    # # 2.0. LLaMA 3.2 1B model
+    # # # 2.0. LLaMA 3.2 1B model
     # llama3.2-1b
     # hf-llama3.2-1b-aqlm-pv-2bit-2x8
     # llama3.2-1b-instruct
@@ -88,7 +92,7 @@ MODEL_NAMES=(
     # hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8
     # hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16
 
-    # # 2.3. LLaMA 3.1 70B model
+    # # # 2.3. LLaMA 3.1 70B model
     # llama3.1-70b
     # llama3.1-70b-instruct
     # llama3.1-70b-instruct-lc-rtn-w4a16
@@ -99,59 +103,57 @@ MODEL_NAMES=(
     # llama3.1-70b-instruct-lc-rtn-w8a16
     # nm-llama3.1-70b-instruct-gptq-w4a16
     # hf-llama3.1-70b-instruct-awq-int4
-    # # hf-llama3.1-70b-instruct-vptq-2bit
-    # # hf-llama3.1-70b-instruct-vptq-1.75bit
     
-    # # Mistral 7B
-    # mistral-v0.3-7b
-    # mistral-v0.3-7b-instruct
+    # # # Mistral 7B
+    # # mistral-v0.3-7b
+    # # mistral-v0.3-7b-instruct
 
-    # # # 2.4 Ministral 8B
-    # ministral-8b-instruct
-    # ministral-8b-instruct-lc-rtn-w4a16
-    # ministral-8b-instruct-lc-smooth-rtn-w4a16
-    # ministral-8b-instruct-lc-rtn-w8a8
-    # ministral-8b-instruct-lc-smooth-rtn-w8a8
-    # ministral-8b-instruct-lc-rtn-w8a16
-    # ministral-8b-instruct-lc-gptq-w4a16
-    # ministral-8b-instruct-lc-smooth-gptq-w4a16
-    # ministral-8b-instruct-awq-w4a16
+    # # 2.4 Ministral 8B
+    ministral-8b-instruct
+    ministral-8b-instruct-lc-rtn-w4a16
+    ministral-8b-instruct-lc-smooth-rtn-w4a16
+    ministral-8b-instruct-lc-rtn-w8a8
+    ministral-8b-instruct-lc-smooth-rtn-w8a8
+    ministral-8b-instruct-lc-rtn-w8a16
+    ministral-8b-instruct-lc-gptq-w4a16
+    ministral-8b-instruct-lc-smooth-gptq-w4a16
+    ministral-8b-instruct-awq-w4a16
 
-    # # 2.5 Mistral Small 22B
-    # mistral-small-22b-instruct
-    # mistral-small-22b-instruct-lc-rtn-w4a16
-    # mistral-small-22b-instruct-lc-smooth-rtn-w4a16
-    # mistral-small-22b-instruct-lc-rtn-w8a8
-    # mistral-small-22b-instruct-lc-smooth-rtn-w8a8
-    # mistral-small-22b-instruct-lc-rtn-w8a16
-    # mistral-small-22b-instruct-lc-gptq-w4a16
-    # mistral-small-22b-instruct-lc-smooth-gptq-w4a16
-    # mistral-small-22b-instruct-awq-w4a16
+    # 2.5 Mistral Small 22B
+    mistral-small-22b-instruct
+    mistral-small-22b-instruct-lc-rtn-w4a16
+    mistral-small-22b-instruct-lc-smooth-rtn-w4a16
+    mistral-small-22b-instruct-lc-rtn-w8a8
+    mistral-small-22b-instruct-lc-smooth-rtn-w8a8
+    mistral-small-22b-instruct-lc-rtn-w8a16
+    mistral-small-22b-instruct-lc-gptq-w4a16
+    mistral-small-22b-instruct-lc-smooth-gptq-w4a16
+    mistral-small-22b-instruct-awq-w4a16
 
-    # # # 2.6. Qwen2 7B
-    # qwen2-7b
-    # qwen2-7b-instruct
-    # qwen2-7b-instruct-lc-rtn-w4a16
-    # qwen2-7b-instruct-lc-smooth-rtn-w4a16
-    # qwen2-7b-instruct-lc-rtn-w8a8
-    # qwen2-7b-instruct-lc-smooth-rtn-w8a8
-    # qwen2-7b-instruct-lc-rtn-w8a16
-    # hf-qwen2-7b-instruct-awq-w4a16
-    # hf-qwen2-7b-instruct-gptq-w4a16
-    # hf-qwen2-7b-instruct-gptq-w8a16
+    # # 2.6. Qwen2 7B
+    qwen2-7b
+    qwen2-7b-instruct
+    qwen2-7b-instruct-lc-rtn-w4a16
+    qwen2-7b-instruct-lc-smooth-rtn-w4a16
+    qwen2-7b-instruct-lc-rtn-w8a8
+    qwen2-7b-instruct-lc-smooth-rtn-w8a8
+    qwen2-7b-instruct-lc-rtn-w8a16
+    hf-qwen2-7b-instruct-awq-w4a16
+    hf-qwen2-7b-instruct-gptq-w4a16
+    hf-qwen2-7b-instruct-gptq-w8a16
 
     # # 2.7. Qwen2 72B
-    # qwen2-72b
-    # qwen2-72b-instruct
-    # qwen2-72b-instruct-lc-rtn-w4a16
-    # qwen2-72b-instruct-lc-smooth-rtn-w4a16
-    # qwen2-72b-instruct-lc-rtn-w8a8
-    # qwen2-72b-instruct-lc-smooth-rtn-w8a8
-    # qwen2-72b-instruct-lc-rtn-w8a16
-    # hf-qwen2-72b-instruct-gptq-w4a16
-    # hf-qwen2-72b-instruct-awq-w4a16
-    # hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16
-    # hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16
+    qwen2-72b
+    qwen2-72b-instruct
+    qwen2-72b-instruct-lc-rtn-w4a16
+    qwen2-72b-instruct-lc-smooth-rtn-w4a16
+    qwen2-72b-instruct-lc-rtn-w8a8
+    qwen2-72b-instruct-lc-smooth-rtn-w8a8
+    qwen2-72b-instruct-lc-rtn-w8a16
+    hf-qwen2-72b-instruct-gptq-w4a16
+    hf-qwen2-72b-instruct-awq-w4a16
+    hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16
+    hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16
 
     # # # 2.8. Qwen2.5 0.5B
     # qwen2.5-0.5b
@@ -231,7 +233,7 @@ MODEL_NAMES=(
     # qwen2.5-32b-instruct-lc-rtn-w8a16
     # qwen2.5-32b-instruct-lc-smooth-rtn-w8a16
 
-    # # Qwen2.5 72B
+    # # # Qwen2.5 72B
     # qwen2.5-72b
     # qwen2.5-72b-instruct
     # qwen2.5-72b-instruct-awq-w4a16
@@ -241,8 +243,8 @@ MODEL_NAMES=(
     # qwen2.5-72b-instruct-lc-smooth-rtn-w4a16
     # qwen2.5-72b-instruct-lc-rtn-w8a8
     # qwen2.5-72b-instruct-lc-smooth-rtn-w8a8
-    # # qwen2.5-72b-instruct-lc-rtn-w8a16
-    # # qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
+    # qwen2.5-72b-instruct-lc-rtn-w8a16
+    # qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
 
     # # # Phi3 8B
     # phi3-3.8b-instruct
@@ -319,8 +321,8 @@ CHAT_FLAGS=(
 # Number of GPUS
 NUM_GPUS=1
 
-# Datasets to infer on ("all_ceb", "all_ceb_open_ended", "all_ceb_close_ended", "all_fmt", "de")
-DATASET_NAME="all_ceb_close_ended"
+# Datasets to infer on
+DATASET_NAME="all"
 
 # System prompt type ("no_sys_prompt", "really_1x", "really_2x", "really_3x", "really_4x")
 export SYSTEM_PROMPT_TYPE="no_sys_prompt"
@@ -336,16 +338,16 @@ echo $port
 # 1. Regular models
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
     for CHAT_FLAG in "${CHAT_FLAGS[@]}"; do
-        python -m ceb_benchmark generate ${MODEL_NAME} --use_chat_template $CHAT_FLAG --num_gpus $NUM_GPUS --dataset_name $DATASET_NAME;
+        python -m benchmark generate ${MODEL_NAME} --use_chat_template $CHAT_FLAG --num_gpus $NUM_GPUS --dataset_name $DATASET_NAME;
     done
 done
 
 # # 2. QuIP# models
 # for MODEL_NAME in "${QUIP_MODELS[@]}"; do
-#     python -m ceb_benchmark generate ${MODEL_NAME};
+#     python -m benchmark generate ${MODEL_NAME};
 # done
 
 # # 3. VPTQ models
 # for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
-#     python -m ceb_benchmark generate ${MODEL_NAME} --model_provider "vptq";
+#     python -m benchmark generate ${MODEL_NAME} --model_provider "vptq";
 # done

@@ -44,10 +44,10 @@ STEREOTYPE_DATASETS = [f"CEB-{test}-S" for test in TEST_TYPES] + [
     "CEB-Adult",
     "CEB-Credit",
 
-    "CEB-RB-Recognition",
-    "CEB-WB-Recognition",
-    "CEB-CP-Recognition",
-    "CEB-SS-Recognition",
+    # "CEB-RB-Recognition",
+    # "CEB-WB-Recognition",
+    # "CEB-CP-Recognition",
+    # "CEB-SS-Recognition",
 ]
 # Names of Toxicity Datasets
 TOXICITY_DATASETS = [f"CEB-{test}-T" for test in TEST_TYPES] + [
@@ -60,10 +60,10 @@ ALL_CEB_DATASETS = STEREOTYPE_DATASETS + TOXICITY_DATASETS
 BIAS_TO_TASK_TYPE_TO_DATASETS = {
     "stereotype": {
         "direct": [f"CEB-{test}-S" for test in ["Recognition", "Selection"]] + [
-            "CEB-RB-Recognition",
-            "CEB-WB-Recognition",
-            "CEB-CP-Recognition",
-            "CEB-SS-Recognition",
+            # "CEB-RB-Recognition",
+            # "CEB-WB-Recognition",
+            # "CEB-CP-Recognition",
+            # "CEB-SS-Recognition",
         ],
         "indirect": [f"CEB-{test}-S" for test in ["Continuation", "Conversation"]] + [
             "CEB-Adult",
@@ -86,8 +86,7 @@ CEB_OPEN_ENDED_DATASETS = [
 # Close ended generation datasets
 CEB_CLOSE_ENDED_DATASETS = BIAS_TO_TASK_TYPE_TO_DATASETS["stereotype"]["direct"] + BIAS_TO_TASK_TYPE_TO_DATASETS["toxicity"]["direct"]
 
-# TODO: Add 
-# All discriminative datasets
+# All (non-CEB) discriminative datasets
 ALL_DISCRIM_DATASETS = [
     "DiscrimEval",
     "StereoSet-Intrasentence", "StereoSet-Intersentence",
@@ -97,7 +96,7 @@ ALL_DISCRIM_DATASETS = [
     "BiasLens-YesNo", "BiasLens-Choices",
 ]
 
-# All generative datasets
+# All (non-CEB) generative datasets
 ALL_GEN_DATASETS = [
     "FMT10K-IM-S",
     "FMT10K-IM-T",
@@ -106,6 +105,21 @@ ALL_GEN_DATASETS = [
     "DoNotAnswer-S",
     "DoNotAnswer-T",
 ]
+
+# Collection to datasets
+COLLECTION_TO_DATASETS = {
+    "all": CEB_OPEN_ENDED_DATASETS + ALL_GEN_DATASETS + CEB_CLOSE_ENDED_DATASETS + ALL_DISCRIM_DATASETS,
+    "all_open": CEB_OPEN_ENDED_DATASETS + ALL_GEN_DATASETS,
+    "all_closed": CEB_CLOSE_ENDED_DATASETS + ALL_DISCRIM_DATASETS,
+    # Non-CEB close-ended
+    "all_discrim": ALL_DISCRIM_DATASETS,
+    # Non-CEB open-ended
+    "all_gen": ALL_GEN_DATASETS,
+    # CEB
+    "all_ceb": CEB_CLOSE_ENDED_DATASETS + CEB_OPEN_ENDED_DATASETS,
+    "ceb_open": CEB_OPEN_ENDED_DATASETS,
+    "ceb_closed": CEB_CLOSE_ENDED_DATASETS,
+}
 
 
 # Datasets to Social Axis
@@ -135,101 +149,33 @@ DATASETS_TO_SOCIAL_AXIS = {
     "CEB-WB-Recognition": ["winobias"],
 
     # DiscrimEval
-    "DiscrimEval": ["explicit"],
-}
+    "DiscrimEval": ["explicit", "implicit"],
+    # BBQ
+    "BBQ": [
+        'age', 'disability_status', 'gender_identity', 'nationality',
+        'physical_appearance', 'race_ethnicity', 'race_x_gender', 'race_x_ses',
+        'religion', 'ses', 'sexual_orientation'
+    ],
+    # BiasLens
+    "BiasLens-Choices": [
+        'ability', 'age', 'body', 'character', 'culture', 'gender',
+        'occupations', 'race', 'religion', 'social', 'victim'
+    ],
+    "BiasLens-YesNo": [
+        'ability', 'age', 'body', 'character', 'culture', 'gender',
+        'occupations', 'race', 'religion', 'social', 'victim'
+    ],
+    # IAT
+    "IAT": ['age', 'gender', 'health', 'race', 'religion'],
+    # SocialStigmaQA
+    "SocialStigmaQA": ["yes_no"],
+    # StereoSet
+    "StereoSet-Intersentence": ['gender', 'profession', 'race', 'religion'],
+    "StereoSet-Intrasentence": ['gender', 'profession', 'race', 'religion'],
 
-# Styles for highlighting significant differences
-STYLE_EQUIVALENT = "background-color: #fad49d"
-STYLE_BETTER = "background-color: #89c489"
-STYLE_WORSE = "background-color: #d49390"
-STYLE_BETTER_AND_WORSE = "background-color: #e1fcfc"
-
-# Define anchor models for certain metric comparisons
-ANCHOR_MODELS = {
-    "base_vs_instruct": [
-        "llama3.2-1b",
-        "llama3.2-3b",
-        "llama3.1-8b",
-        "llama3.1-70b",
-        "mistral-v0.3-7b",
-        "qwen2-7b",
-        # TODO: Uncomment after generating
-        # "qwen2-72b",
-    ],
-    "nonchat_vs_chat": [
-        "llama3.2-1b-instruct",
-        "llama3.2-3b-instruct",
-        "llama3.1-8b-instruct",
-        "llama3.1-70b-instruct",
-        "mistral-v0.3-7b-instruct",
-        "ministral-8b-instruct",
-        "mistral-small-22b-instruct",
-        "qwen2-7b-instruct",
-        # TODO: Uncomment after generating
-        # "qwen2-72b-instruct",
-
-        # Quantized Models
-        "hf-llama3.1-8b-instruct-aqlm-pv-2bit-2x8",
-        "hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16",
-        "hf-llama3.1-70b-instruct-aqlm-pv-2bit-1x16",
-    ],
-    "rtn_at_different_bits": [
-        "llama3.2-1b-instruct",
-        "llama3.2-3b-instruct",
-        "llama3.1-8b-instruct",
-        "llama3.1-70b-instruct",
-        "ministral-8b-instruct",
-        "mistral-small-22b-instruct",
-        "qwen2-7b-instruct",
-        # TODO: Uncomment after generating
-        # "qwen2-72b-instruct",
-    ],
-    "w4a16_quantizers": [
-        "llama3.2-1b-instruct",
-        "llama3.2-3b-instruct",
-        "llama3.1-8b-instruct",
-        "llama3.1-70b-instruct",
-        "ministral-8b-instruct",
-        "mistral-small-22b-instruct",
-        "qwen2-7b-instruct",
-        # "qwen2-72b-instruct",
-    ],
-    "sub_w4_quantizers": [
-        "llama3.2-1b",
-        "llama3.2-1b-instruct",
-        "llama3.2-3b",
-        "llama3.2-3b-instruct",
-        "llama3.1-8b-instruct",
-        "llama3.1-70b-instruct",
-        # "qwen2-72b-instruct",
-    ],
-    "outlier_smoothing": [
-        "llama3.2-1b-instruct-lc-rtn-w4a16",
-        "llama3.2-1b-instruct-lc-rtn-w8a8",
-        "llama3.2-3b-instruct-lc-rtn-w4a16",
-        "llama3.2-3b-instruct-lc-rtn-w8a8",
-        "llama3.1-8b-instruct-lc-rtn-w4a16",
-        "llama3.1-8b-instruct-lc-rtn-w8a8",
-        # TODO: Consider uncommenting
-        # "llama3.1-8b-instruct-lc-rtn-w8a16",
-        "llama3.1-70b-instruct-lc-rtn-w4a16",
-        "llama3.1-70b-instruct-lc-rtn-w8a8",
-        "ministral-8b-instruct-lc-rtn-w4a16",
-        "ministral-8b-instruct-lc-rtn-w8a8",
-        "mistral-small-22b-instruct-lc-rtn-w4a16",
-        "mistral-small-22b-instruct-lc-rtn-w8a8",
-        "qwen2-7b-instruct-lc-rtn-w4a16",
-        "qwen2-7b-instruct-lc-rtn-w8a8",
-
-        "llama3.2-1b-instruct-lc-gptq-w4a16",
-        "llama3.2-3b-instruct-lc-gptq-w4a16",
-        "nm-llama3.1-8b-instruct-gptq-w4a16",
-        "ministral-8b-instruct-lc-gptq-w4a16",
-        "mistral-small-22b-instruct-lc-gptq-w4a16",
-        # "nm-llama3.1-8b-instruct-gptq-w8a8",
-        # "nm-llama3.1-8b-instruct-gptq-w8a16",
-    ],
-    "kv_cache_quantizer": ["llama3.1-70b-instruct"],
+    # FairMT Bench
+    "FMT10K-IM-S": ["age", "appearance", "disable", "gender", "race", "religion"],
+    "FMT10K-IM-T": ["disable", "gender", "race", "religion"],
 }
 
 
@@ -273,8 +219,6 @@ assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 
 # Path to CEB datasets directory
 DIR_CEB_DATA = os.path.join(DIR_PROJECT, "ceb_dataset")
-# Path to FairMT10K datasets directory
-DIR_FMT10K_DATA = os.path.join(DIR_PROJECT, "fmt10k_dataset")
 # Path to generative datasets directory (excluding CEB)
 DIR_GEN_DATA = os.path.join(DIR_PROJECT, "gen_datasets")
 # Path to discriminative datasets directory
@@ -300,6 +244,12 @@ DIR_WILDGUARD_HARMFUL = os.path.join(DIR_WILDGUARD, "harmful_detection")
 DIR_WILDGUARD_RTA = os.path.join(DIR_WILDGUARD, "rta_comparison")
 DIR_WILDGUARD_RESULTS = os.path.join(DIR_WILDGUARD, "results")
 
+# Mapping of dataset names to directory mapping
+DATASET_TO_DIR = {
+    tuple(ALL_CEB_DATASETS): DIR_CEB_DATA,
+    tuple(ALL_GEN_DATASETS): DIR_GEN_DATA,
+    tuple(ALL_DISCRIM_DATASETS): DIR_DISCRIM_DATA,
+}
 
 ################################################################################
 #                                Online Models                                 #
@@ -342,6 +292,8 @@ MODEL_INFO = {
 
     # Mapping of model name/path to shorthand
     "model_path_to_name": {
+        "meta-llama/Llama-Guard-3-8B": "meta-llama/Llama-Guard-3-8B",
+
         ########################################################################
         #                               LLaMA 2                                #
         ########################################################################

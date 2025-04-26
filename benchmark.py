@@ -516,7 +516,7 @@ class CEBBenchmark:
 ################################################################################
 #                                  Functions                                   #
 ################################################################################
-def ceb_generate(
+def generate(
         model_path_or_name,
         dataset_name="all_ceb",
         model_provider="vllm",
@@ -572,9 +572,9 @@ def ceb_generate(
     llm_gen = LLMGeneration(**shared_kwargs)
 
     # Perform inference
-    LOGGER.info(f"[CEB Generate] Performing inference for {model_path_or_name}...")
+    LOGGER.info(f"[Generate] Performing inference for {model_path_or_name}...")
     llm_gen.infer_dataset()
-    LOGGER.info(f"[CEB Generate] Performing inference for {model_path_or_name}...DONE")
+    LOGGER.info(f"[Generate] Performing inference for {model_path_or_name}...DONE")
 
 
 def ceb_evaluate(
@@ -1102,25 +1102,38 @@ def ceb_compute_judge_correlation(bin_chatgpt_scores=False):
 ################################################################################
 #                   Dataset / Social Axis - Level Processing                   #
 ################################################################################
-def bias_eval_dataset_collection(model_name, collection_name="all_open", **kwargs):
+def bias_eval_dataset_collection(model_name, collection_name="all_open", **eval_kwargs):
     """
     Perform bias evaluation for a model on all datasets in the collection
 
     Parameters
     ----------
     model_name : str
-        Name of model (directory)
+        Name of model
     collection_name : str, optional
         Name of collection, by default "all"
+    **eval_kwargs : Any
+        Keyword arguments for `OpenTextEvaluator.evaluate`
     """
     dataset_names = config.COLLECTION_TO_DATASETS[collection_name]
     for dataset_name in dataset_names:
-        bias_eval_dataset(model_name, dataset_name, **kwargs)
+        bias_eval_dataset(model_name, dataset_name, **eval_kwargs)
 
 
-def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT_TYPE, **kwargs):
+def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT_TYPE, **eval_kwargs):
     """
     Perform evaluation on an open-ended dataset for bias
+
+    Parameters
+    ----------
+    model_name : str
+        Name of model (defined in `config.py`)
+    dataset_name : str
+        Name of dataset
+    system_prompt_type : str
+        System prompt type
+    **eval_kwargs : Any
+        Keyword arguments for `OpenTextEvaluator.evaluate`
     """
     # Ensure dataset is open-ended
     if dataset_name not in config.COLLECTION_TO_DATASETS["all_open"]:
@@ -1135,7 +1148,7 @@ def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT
         raise RuntimeError(f"Model `{model_name}` / Dataset `{dataset_name}` results are not yet generated!")
 
     # Ensure files exist
-    exist_files = os.path.listdir(dir_dataset)
+    exist_files = os.listdir(dir_dataset)
     expected_files = get_expected_dataset_files(dataset_name)
     missing_files = sorted(set(expected_files) - set(exist_files))
     if missing_files:
@@ -1145,11 +1158,13 @@ def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT
         )
 
     # Evaluate each JSON one by one
+    LOGGER.info(f"Evaluating Model: `{model_name}` | Dataset: `{dataset_name}`...")
     for json_path in glob(os.path.join(dir_dataset, "*.json")):
-        bias_process_json(dataset_name, json_path, **kwargs)
+        bias_process_json(dataset_name, json_path, **eval_kwargs)
+    LOGGER.info(f"Evaluating Model: `{model_name}` | Dataset: `{dataset_name}`...DONE")
 
 
-def bias_process_json(dataset_name, json_path):
+def bias_process_json(dataset_name, json_path, **eval_kwargs):
     """
     Evaluate the following dataset for bias across all prompts and
     social axes.
@@ -1160,20 +1175,18 @@ def bias_process_json(dataset_name, json_path):
         Name of the dataset
     json_path : str
         Path to the JSON file containing the prompt information
-
-    Returns
-    -------
-    dset_to_axis_to_metrics : dict
-        A dictionary mapping from dataset name to social axis to stereotype
-        metrics
+    **eval_kwargs : Any
+        Keyword arguments for `OpenTextEvaluator.evaluate`
     """
     social_axis = extract_social_axis(json_path)
-    LOGGER.info(f"Beginning Evaluation / `{dataset_name}` / `{social_axis}`...")
+    LOGGER.info(f"[`{dataset_name}`] Evaluating `{social_axis}`...")
 
     # Determine prompt column
-    prompt_col = "prompt"
+    judge_kwargs = {}
     if dataset_name.startswith("FMT10K"):
-        prompt_col = "4-turn Conv Response"
+        judge_kwargs["prompt_col"] = "4-turn Conv"
+        judge_kwargs["llm_input_col"] = "4-turn Conv Response"
+    judge_kwargs.update(eval_kwargs)
 
     # Raise error, if file doesn't exist
     if not os.path.exists(json_path):
@@ -1188,14 +1201,13 @@ def bias_process_json(dataset_name, json_path):
         save_fname=os.path.basename(json_path),
     )
     try:
-        evaluator.evaluate(infer_data, prompt_col=prompt_col)
+        evaluator.evaluate(infer_data, **judge_kwargs)
     except Exception as error_msg:
         LOGGER.info(f"Error occurred while adding evaluation metrics to Dataset: {dataset_name}\n\tError: {error_msg}")
         LOGGER.error(traceback.format_exc())
         return None
 
-    LOGGER.info(f"Beginning Evaluation / `{dataset_name}` / `{social_axis}`...DONE")
-    return dset_to_axis_to_metrics
+    LOGGER.info(f"[`{dataset_name}`] Evaluating `{social_axis}`...DONE")
 
 
 def stereotype_process_json(class_attrs, dataset_name, json_path):
@@ -1753,7 +1765,12 @@ def get_expected_dataset_files(dataset_name):
         A list of expected dataset files for the given dataset name.
     """
     dir_data = get_dataset_directory(dataset_name)
-    return os.path.listdir(dir_data)
+    dir_dataset = os.path.join(dir_data, dataset_name)
+    fnames = [
+        fname for fname in os.listdir(dir_dataset)
+        if os.path.isfile(os.path.join(dir_dataset, fname))
+    ]
+    return fnames
 
 
 def plot_entropy_scaled_fairness_metric():
@@ -1826,7 +1843,7 @@ if __name__ == "__main__":\
     multiprocessing.set_start_method('spawn')
     Fire({
         "bias_evaluate": bias_eval_dataset_collection,
-        "ceb_generate": ceb_generate,
+        "generate": generate,
         "ceb_evaluate": ceb_evaluate,
         "compare": ceb_compare_multiple,
         "format_comparisons": ceb_concatenate_comparisons,

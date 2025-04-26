@@ -18,7 +18,8 @@ from prometheus_eval.prompts import SCORE_RUBRIC_TEMPLATE
 
 # Custom libraries
 import config
-from src.utils import json_utils
+from src.utils import json_utils, text_eval_utils
+from src.utils.llm_gen_wrapper import LLMGeneration
 
 
 ################################################################################
@@ -29,10 +30,11 @@ LOGGER = logging.getLogger(__name__)
 # Set vLLM multi-processing to spawn to fix the issue: https://github.com/vllm-project/vllm/issues/6152
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
-# Default Prometheus model for evaluation
+# Default judge model paths
 PROMETHEUS_MODEL = "prometheus-eval/prometheus-7b-v2.0"
 # PROMETHEUS_MODEL = "prometheus-eval/prometheus-bgb-8x7b-v2.0"
 ATLA_MODEL = "AtlaAI/Selene-1-Mini-Llama-3.1-8B"
+LLAMA_MODEL = "meta-llama/Llama-Guard-3-8B"
 
 # Default save name
 DEFAULT_SAVE_FNAME = "{judge}_autoeval.json"
@@ -105,10 +107,10 @@ class OpenJudgeEvaluator:
         self.judge = None
 
         # Default keys
-        self.prompt_key = "prompt"
+        self.prompt_col = "prompt"
         self.llm_input_col = "res"
         self.llm_response_col = "eval_res"
-        self.default_filename = DEFAULT_SAVE_FNAME.format(judge=judge_choice)
+        self.save_fname = DEFAULT_SAVE_FNAME.format(judge=judge_choice)
 
         # Default model based on judge choice
         if self.model_path is None:
@@ -144,7 +146,7 @@ class OpenJudgeEvaluator:
             data: Data to be saved.
             filename (str): Name of the file for saving the data.
         """
-        filename = filename or self.default_filename
+        filename = filename or self.save_fname
         os.makedirs(self.save_dir, exist_ok=True)
         save_path = os.path.join(self.save_dir, filename)
         json_utils.save_json(data, save_path, **save_kwargs)
@@ -153,8 +155,8 @@ class OpenJudgeEvaluator:
     def evaluate(
         self, data, task,
         resume=True,
-        progress_filename=None,
-        prompt_key="prompt",
+        save_fname=None,
+        prompt_col="prompt",
         llm_input_col="res",
         llm_response_col="eval_res",
     ):
@@ -170,10 +172,10 @@ class OpenJudgeEvaluator:
             Name of the task to evaluate.
         resume : bool, optional
             If True, then try to resume evaluation from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
+            with the same filename as `save_fname`. Default is True.
+        save_fname : str, optional
             Filename for saving or resuming progress.
-        prompt_key : str, optional
+        prompt_col : str, optional
             Key containing initial prompt that was used to generate response
         llm_input_col : str, optional
             Key to LLM response from initial prompt to evaluate. Overwrites "res"
@@ -186,10 +188,10 @@ class OpenJudgeEvaluator:
         list
             The evaluated data.
         """
-        progress_filename = progress_filename or self.default_filename
+        save_fname = save_fname or self.save_fname
 
         # Modify keys
-        self.prompt_key = prompt_key or self.prompt_key
+        self.prompt_col = prompt_col or self.prompt_col
         self.llm_input_col = llm_input_col or self.llm_input_col
         self.llm_response_col = llm_response_col or self.llm_response_col
 
@@ -197,13 +199,13 @@ class OpenJudgeEvaluator:
         if not data:
             LOGGER.warning("No data provided for evaluation!")
             # Save empty JSON list in the folder
-            self.save_progress([], filename=progress_filename)
+            self.save_progress([], filename=save_fname)
             return []
 
         # If specified, resume from previous evaluation
         if resume:
-            load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_key)
+            load_path = os.path.join(self.save_dir, save_fname)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_col=prompt_col)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
@@ -218,7 +220,7 @@ class OpenJudgeEvaluator:
 
         # Save progress
         self.perform_eval(unevaluated_data, task)
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(data, filename=save_fname)
 
         return data
 
@@ -270,7 +272,7 @@ class OpenJudgeEvaluator:
         rubric_data = task_to_rubric[task]
 
         # Get initial instructions and their LLM responses
-        instructions = [row[self.prompt_key] for row in data]
+        instructions = [row[self.prompt_col] for row in data]
         responses = [row[self.llm_input_col] for row in data]
 
         # Modify rubric string to be targeted towards the social group
@@ -305,6 +307,192 @@ class OpenJudgeEvaluator:
         for idx, row in enumerate(data):
             row[self.llm_response_col] = f"Score: {fairness_scores[idx]}\n\nFeedback: ```{feedbacks[idx]}```"
 
+
+class OpenTextEvaluator:
+    """
+    OpenTextEvaluator class.
+
+    Note
+    ----
+    Wraps about LLaMAGuard and other metrics
+    """
+
+    def __init__(self, model_path=LLAMA_MODEL, save_dir=None, save_fname=None):
+        """
+        Initialize the OpenTextEvaluator class.
+
+        Parameters
+        ----------
+        model_path : str, optional
+            HuggingFace path to model to be used for evaluation
+        save_dir : str, optional
+            The directory to save evaluation results. Defaults to a directory
+            within config.DIR_EVALUATIONS based on the model name.
+        save_fname : str, optional
+            Filename to save within save directory
+        """
+        assert save_dir, "Please pass a valid `save_dir` to save evaluation results!"
+        self.save_dir = save_dir
+        self.model_path = model_path
+        # Lazy load LLM, on first call
+        self.judge = None
+        # Judge vLLM arguments
+        self.vllm_kwargs = {
+            "temperature": 0,           # NOTE: Force determinism
+            "max_new_tokens": 100,      # NOTE: Not many output tokens needed
+            "enforce_eager": False,
+        }
+
+        # Default keys
+        self.prompt_col = "prompt"
+        self.llm_input_col = "res"                      # initial LLM response
+        self.llm_response_col = "eval_res_llama"        # judge LLM response
+        self.save_fname = save_fname or DEFAULT_SAVE_FNAME.format(judge="llama_guard")
+
+
+    def load_judge(self):
+        """
+        Load LLaMA Guard LLM
+        """
+        if self.judge is None:
+            self.judge = LLMGeneration(model_path_or_name=self.model_path, **self.vllm_kwargs)
+
+
+    def save_progress(self, data, filename=None, **save_kwargs):
+        """
+        Save evaluation progress to a JSON file.
+
+        Args:
+            data: Data to be saved.
+            filename (str): Name of the file for saving the data.
+        """
+        filename = filename or self.save_fname
+        os.makedirs(self.save_dir, exist_ok=True)
+        save_path = os.path.join(self.save_dir, filename)
+        json_utils.save_json(data, save_path, **save_kwargs)
+
+
+    def evaluate(
+        self, data,
+        save_fname=None,
+        prompt_col=None,
+        llm_input_col=None,
+        llm_response_col=None,
+    ):
+        """
+        Evaluate a dataset using an open judge LLM.
+
+        Parameters
+        ----------
+        data : list of dict
+            Each dict contains a LLM-generated response to a unique prompt to
+            evaluate
+        save_fname : str, optional
+            Filename for saving or resuming progress.
+        prompt_col : str, optional
+            Key containing initial prompt that was used to generate response
+        llm_input_col : str, optional
+            Key to LLM response from initial prompt to evaluate. Overwrites "res"
+            in config.config prompts
+        llm_response_col : str, optional
+            Key to store the judge LLM's response.
+
+        Returns
+        -------
+        list
+            The evaluated data.
+        """
+        save_fname = save_fname or self.save_fname
+
+        # Modify keys
+        self.prompt_col = prompt_col or self.prompt_col
+        self.llm_input_col = llm_input_col or self.llm_input_col
+        self.llm_response_col = llm_response_col or self.llm_response_col
+
+        # Early return, if no data provided
+        if not data:
+            raise RuntimeError("No data provided for evaluation!")
+
+        # Perform input sanitization
+        assert isinstance(data, list), f"Data must be a list. data={data}"
+        assert data, "Data provided is empty!"
+
+        # 1. LLaMA evaluations
+        unevaluated_data = [row for row in data if not row.get(self.llm_response_col)]
+        if unevaluated_data:
+            self.perform_llama_eval(unevaluated_data)
+            self.save_progress(data, filename=save_fname)
+
+        # 2. Various text bias evaluations
+        unevaluated_data = [row for row in data if row.get("toxicity") is None]
+        if unevaluated_data:
+            self.perform_text_eval(unevaluated_data)
+            self.save_progress(data, filename=save_fname)
+
+        return data
+
+
+    def perform_llama_eval(self, data):
+        """
+        Parameters
+        ----------
+        data : list of dict, optional
+            Each dict is a question to be evaluated
+        """
+        # Early return, if no data
+        if not data:
+            return
+
+        self.load_judge()
+
+        # Convert each row into conversation format
+        conversations = []
+        for row in data:
+            conversations.append([
+                {"role": "user", "content": row[self.prompt_col]},
+                {"role": "assistant", "content": row[self.llm_input_col]},
+            ])
+
+        # LLaMA Guard evaluate prompt & response
+        eval_responses = self.judge.vllm_chat_multiple(conversations)
+
+        # Store responses
+        for idx, eval_res in enumerate(eval_responses):
+            row = data[idx]
+            row[self.llm_response_col] = eval_res["res"]
+
+
+    def perform_text_eval(self, data):
+        """
+        Evaluate text using a sweep of bias metrics.
+
+        Parameters
+        ----------
+        data : list of dict, optional
+            Each dict is a question to be evaluated
+        """
+        # Early return, if no data
+        if not data:
+            return
+
+        # Try batched evaluation
+        try:
+            prompts = [row[self.prompt_col] for row in data]
+            responses = [row[self.llm_input_col] for row in data]
+            eval_responses = text_eval_utils.compute_metrics_batch(prompts, responses)
+            for idx, eval_res in enumerate(eval_responses):
+                if not eval_res:
+                    continue
+                row = data[idx]
+                row.update(eval_res)
+        # If fails, fallback to single row processing
+        except Exception as error_msg:
+            LOGGER.error(f"Batched text evaluation failed! Error: {error_msg}")
+            for row in data:
+                row.update(text_eval_utils.compute_metrics(
+                    prompt=row[self.prompt_col],
+                    response=row[self.llm_input_col],
+                ))
 
 ################################################################################
 #                               Helper Functions                               #

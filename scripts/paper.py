@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 # Custom libraries
 import config
 from src.utils import json_utils, viz_utils, metric_utils
-from ceb_benchmark import *
+from benchmark import *
 
 
 ################################################################################

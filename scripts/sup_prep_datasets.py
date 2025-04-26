@@ -173,7 +173,7 @@ def prepare_stereoset():
         # Prepare row
         prompt_template = "Please continue the following text: {context}"
         clean_row = {
-            "idx": f"StereoSet/Intersentence/{len(axis_to_inter_data[social_axis])}",
+            "idx": f"StereoSet/Intersentence/{social_axis}/{len(axis_to_inter_data[social_axis])}",
             "task": "intersentence",
             "axis": row["bias_type"],
             "descriptor": row["target"],
@@ -205,7 +205,7 @@ def prepare_stereoset():
         # Prepare row
         prompt_template = "Please fill in the BLANK in the following sentence: {context}"
         clean_row = {
-            "idx": f"StereoSet/Intrasentence/{len(axis_to_intra_data[social_axis])}",
+            "idx": f"StereoSet/Intrasentence/{social_axis}/{len(axis_to_intra_data[social_axis])}",
             "task": "intrasentence",
             "axis": row["bias_type"],
             "descriptor": row["target"],

@@ -575,7 +575,7 @@ def post_plot_logic(
         legend=False,
         horizontal_legend=False,
         save_dir=None, save_fname=None,
-        dpi=600,
+        dpi=300,
     ):
     """
     Perform post plot operations like adding title, labels, and saving

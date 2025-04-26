@@ -129,38 +129,13 @@ class LLMGeneration:
         """
         # Check that dataset is valid
         dataset_names = []
-        self.dataset_collection = None
         if dataset_name is None:
             LOGGER.info("[LLMGeneration] Using class as a vLLM wrapper!")
-        elif dataset_name == "all_ceb":
-            self.dataset_collection = "ceb"
-            dataset_names.extend(config.ALL_CEB_DATASETS)
-        elif dataset_name == "all_ceb_open_ended":
-            self.dataset_collection = "ceb"
-            dataset_names.extend(config.CEB_OPEN_ENDED_DATASETS)
-        elif dataset_name == "all_ceb_close_ended":
-            self.dataset_collection = "ceb"
-            dataset_names.extend(config.CEB_CLOSE_ENDED_DATASETS)
-        elif dataset_name == "all_fmt":
-            self.dataset_collection = "fmt"
-            # Overwrite parameters to faithfully follow FMT-Bench paper
-            LOGGER.info("Overwriting parameters to faithfully follow FMT-Bench paper (temperature=0.7, top_k=1)")
-            overwrite_config["max_new_tokens"] = 150
-            # NOTE: This is functionally equivalent to temperature = 0, but is kept for consistency
-            overwrite_config["temperature"] = 0.7
-            overwrite_config["top_k"] = 1
-            dataset_names.extend(config.ALL_FMT_DATASETS)
-        elif dataset_name == "all_gen":
-            LOGGER.info("Overwriting parameters for generative datasets (top_k=1)")
-            overwrite_config["top_k"] = 1
-            dataset_names.extend(config.ALL_GEN_DATASETS)
-        elif dataset_name == "all_discrim":
-            self.dataset_collection = "all_discrim"
-            dataset_names = config.ALL_DISCRIM_DATASETS
-            LOGGER.info("Overwriting parameters for discriminative datasets (temperature=1)")
-            overwrite_config["temperature"] = 1
+        elif dataset_name in config.COLLECTION_TO_DATASETS:
+            dataset_names = config.COLLECTION_TO_DATASETS[dataset_name]
         else:
-            assert dataset_name in config.ALL_CEB_DATASETS, f"Dataset name `{dataset_name}` is invalid! Must be one of `{config.ALL_CEB_DATASETS}`"
+            all_datasets = config.COLLECTION_TO_DATASETS["all"]
+            assert dataset_name in all_datasets, f"Dataset name `{dataset_name}` is invalid! Must be one of `{all_datasets}`"
             dataset_names.append(dataset_name)
 
         # Path to dataset
@@ -937,7 +912,7 @@ class LLMGeneration:
         return
 
 
-    def process_file_single_turn(self, input_path, output_path, file_config=None, prompt_key="prompt"):
+    def process_file_single_turn(self, input_path, output_path, file_config=None, prompt_col="prompt"):
         """
         Processes a file containing multiple data points for text generation.
 
@@ -945,7 +920,7 @@ class LLMGeneration:
             input_path (str): Path to the input data file.
             output_path (str): Path where the processed data will be saved.
             file_config (dict): Configuration settings for file processing.
-            prompt_key (str): The key in the dictionary where the prompt is located.
+            prompt_col (str): The key in the dictionary where the prompt is located.
         """
         # INPUT: Sanitize file_config
         file_config = file_config or {}
@@ -997,7 +972,7 @@ class LLMGeneration:
                 break
 
             # Process the grouped rows
-            self.process_rows_single_turn(grouped_rows, temperature, prompt_key)
+            self.process_rows_single_turn(grouped_rows, temperature, prompt_col)
 
             # Save the updated saved data to the output file
             json_utils.save_json(saved_data, output_path, lock=lock)
@@ -1241,16 +1216,25 @@ class LLMGeneration:
 
         # Temporarilly overwrite parameters, if CEB and closed-ended
         orig_llm_config = self.llm_config.copy()
-        if self.dataset_collection == "all_discrim" and dataset_name == "DiscrimEval":
+        if dataset_name == "DiscrimEval":
             # Overwrite parameters for close-ended datasets
             LOGGER.info("Overwriting parameters for DiscrimEval (temperature=1, chat template=False)")
             self.llm_config["temperature"] = 1
             self.llm_config["use_chat_template"] = False
-        elif self.dataset_collection == "all_discrim" or (self.dataset_collection == "ceb" and dataset_name in config.CEB_CLOSE_ENDED_DATASETS):
+        elif dataset_name in config.COLLECTION_TO_DATASETS["all_closed"]:
             # Overwrite parameters for close-ended datasets
             LOGGER.info("Overwriting parameters for close-ended datasets (temperature=1, chat template=True)")
             self.llm_config["temperature"] = 1
             self.llm_config["use_chat_template"] = True
+        elif dataset_name.startswith("FMT10K"):
+            LOGGER.info("Overwriting parameters to faithfully follow FMT-Bench paper (temperature=0.7, top_k=1)")
+            self.llm_config["max_new_tokens"] = 150
+            self.llm_config["temperature"] = 0.7
+            self.llm_config["top_k"] = 1
+        elif dataset_name in config.COLLECTION_TO_DATASETS["all_open"]:
+            LOGGER.info("Overwriting parameters for generative datasets (temperature=1, top_k=1)")
+            self.llm_config["temperature"] = 1
+            self.llm_config["top_k"] = 1
 
         # Specify function to process each file based on dataset
         process_file_func = self.process_file_single_turn
@@ -1640,8 +1624,8 @@ def extract_conversation_till_turn(row, turn=4):
     accum_conv = []
     for curr_turn in range(0, turn+1):
         # 1. Add prompt
-        curr_prompt_key = FMT_USER_KEY.format(turn=curr_turn)
-        curr_prompt = row[curr_prompt_key]
+        curr_prompt_col = FMT_USER_KEY.format(turn=curr_turn)
+        curr_prompt = row[curr_prompt_col]
         accum_conv.append({
             "role": "user",
             "content": curr_prompt,

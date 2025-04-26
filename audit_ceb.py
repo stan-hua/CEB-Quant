@@ -72,7 +72,7 @@ class OpenAIHarmClassifier:
     def classify(
             self, data: list[dict[str, str]],
             save_dir: str,
-            orig_prompt_key: str = "prompt",
+            orig_prompt_col: str = "prompt",
             orig_response_key: str = "response"
         ) -> list[dict]:
         """
@@ -86,7 +86,7 @@ class OpenAIHarmClassifier:
                 - response: A hypothetical LLM response
         save_dir : str
             Directory to save results
-        orig_prompt_key : str (default: "prompt")
+        orig_prompt_col : str (default: "prompt")
             The key in each dict that contains the LLM prompt.
         orig_response_key : str (default: "response")
             The key in each dict that contains the LLM output response.
@@ -97,7 +97,7 @@ class OpenAIHarmClassifier:
             Updated `items` where each dict contains new keys
             - {model_name}_bias_analysis: The output of the model.
         """
-        prompt_key = "question_bias_prompt"
+        prompt_col = "question_bias_prompt"
         response_key = f"{self.model_name}_bias_analysis"
         progress_filename = f"{self.model_name}_eval.json"
 
@@ -106,17 +106,17 @@ class OpenAIHarmClassifier:
 
         # Prepare formatted prompts
         formatted_prompts = build_input_prompts(
-            data, orig_prompt_key, orig_response_key,
+            data, orig_prompt_col, orig_response_key,
             prompt_format=WILDGUARD_INPUT_FORMAT,
         )
         for idx, row in enumerate(data):
-            row[prompt_key] = formatted_prompts[idx]
+            row[prompt_col] = formatted_prompts[idx]
 
         # Generate responses
         eval_data = self.model.infer(
             data,
             progress_filename=progress_filename,
-            llm_input_col=prompt_key,
+            llm_input_col=prompt_col,
             llm_response_col=response_key,
         )
 
@@ -159,7 +159,7 @@ class GUSHarmClassifier:
     def classify(
             self, data: list[dict[str, str]],
             save_dir: str,
-            orig_prompt_key: str = "prompt",
+            orig_prompt_col: str = "prompt",
             orig_response_key: str = "response"
         ) -> list[dict]:
         """
@@ -173,7 +173,7 @@ class GUSHarmClassifier:
                 - response: A hypothetical LLM response
         save_dir : str
             Directory to save results
-        orig_prompt_key : str (default: "prompt")
+        orig_prompt_col : str (default: "prompt")
             The key in each dict that contains the LLM prompt.
         orig_response_key : str (default: "response")
             The key in each dict that contains the LLM output response.
@@ -611,7 +611,7 @@ def convert_wildguard_rta_to_table(json_data, model_name, dataset_name, social_a
     return df_rta
 
 
-def build_input_prompts(data, prompt_key="prompt", response_key="response",
+def build_input_prompts(data, prompt_col="prompt", response_key="response",
                         prompt_format=WILDGUARD_INPUT_FORMAT) -> list[str]:
     """
     Format a list of dicts containing prompts and responses into a list of strings
@@ -621,7 +621,7 @@ def build_input_prompts(data, prompt_key="prompt", response_key="response",
     ----------
     data : list of dict
         Each dict should contain "prompt" and (optionally) "response" keys.
-    prompt_key : str (default: "prompt")
+    prompt_col : str (default: "prompt")
         The key in each dict that contains the LLM prompt.
     response_key : str (default: "response")
         The key in each dict that contains the LLM output response.
@@ -640,7 +640,7 @@ def build_input_prompts(data, prompt_key="prompt", response_key="response",
         if response_key not in item:
             item[response_key] = ""
         formatted_prompt = prompt_format.format(
-            prompt=item[prompt_key], response=item[response_key]
+            prompt=item[prompt_col], response=item[response_key]
         )
         inputs.append(formatted_prompt)
     return inputs

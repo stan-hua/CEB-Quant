@@ -33,5 +33,5 @@ DSETS=(
     "CEB-Selection-*"
 )
 for DSET in "${DSETS[@]}"; do
-    python -m ceb_benchmark delete --dataset_regex $DSET --file_regex "*.json" --inference;
+    python -m benchmark delete --dataset_regex $DSET --file_regex "*.json" --inference;
 done

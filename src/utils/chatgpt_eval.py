@@ -171,7 +171,7 @@ class ChatGPTEvaluator:
         # If specified, resume from previous evaluation
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_col)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_col=prompt_col)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
@@ -305,7 +305,7 @@ class ChatGPTGenerator:
         # If specified, resume from previous inference
         if resume:
             load_path = os.path.join(self.save_dir, progress_filename)
-            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_key=prompt_col)
+            data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_col=prompt_col)
 
         # Perform input sanitization
         assert isinstance(data, list), f"Data must be a list. data={data}"
