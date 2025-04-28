@@ -1250,7 +1250,10 @@ class LLMGeneration:
         os.makedirs(result_dir, exist_ok=True)
 
         # Process each JSON file
+        if not self.data_path or not os.path.exists(os.path.join(self.data_path, dataset_name)):
+            self.data_path = get_dataset_directory(dataset_name)
         base_dir = os.path.join(self.data_path, dataset_name)
+        assert os.path.exists(base_dir), f"Dataset directory doesn't exist! `{base_dir}`"
         json_paths = list(set(glob.glob(os.path.join(base_dir, "*.json"))))
         assert json_paths, f"[LLMGeneration] Could not find data files for dataset `{dataset_name}`"
         for json_path in json_paths:
@@ -1273,10 +1276,6 @@ class LLMGeneration:
         retry_interval : int
             The time in seconds to wait before retrying.
         """
-        if not os.path.exists(self.data_path):
-            LOGGER.error(f"Dataset path {self.data_path} does not exist.")
-            return None
-
         # Iterate for each dataset
         for dataset in self.dataset_names:
             num_retries = 0
@@ -1298,6 +1297,33 @@ class LLMGeneration:
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
+def get_dataset_directory(dataset_name):
+    """
+    Retrieve the directory path for a given dataset name.
+
+    Parameters
+    ----------
+    dataset_name : str
+        The name of the dataset
+
+    Returns
+    -------
+    str
+        The directory path corresponding to the dataset name.
+    """
+    for dataset_names, dir_data in config.DATASET_TO_DIR.items():
+        if dataset_name in dataset_names:
+            return dir_data
+    
+    if dataset_name in config.COLLECTION_TO_DATASETS:
+        dataset_names = config.COLLECTION_TO_DATASETS[dataset_name]
+        dir_datas = set([config.DATASET_TO_DIR[name] for name in dataset_names])
+        if len(dir_datas) == 1:
+            return list(dir_datas)[0]
+
+    raise RuntimeError(f"Failed to find dataset directory for `{dataset_name}`!")
+
+
 def is_provider_online(model_provider):
     """
     Check if the model provider is an online provider.

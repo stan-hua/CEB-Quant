@@ -176,6 +176,8 @@ DATASETS_TO_SOCIAL_AXIS = {
     # FairMT Bench
     "FMT10K-IM-S": ["age", "appearance", "disable", "gender", "race", "religion"],
     "FMT10K-IM-T": ["disable", "gender", "race", "religion"],
+    "BOLD": ['gender', 'political_ideology', 'profession', 'race', 'religious_ideology'],
+    "BiasLens-GenWhy": ['ability', 'age', 'body', 'character', 'culture', 'gender', 'occupations', 'race', 'religion', 'social', 'victim'],
 }
 
 

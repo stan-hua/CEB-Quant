@@ -99,7 +99,7 @@ class OpenAIHarmClassifier:
         """
         prompt_col = "question_bias_prompt"
         response_key = f"{self.model_name}_bias_analysis"
-        progress_filename = f"{self.model_name}_eval.json"
+        save_fname = f"{self.model_name}_eval.json"
 
         # Update the save directory
         self.model.save_dir = save_dir
@@ -115,7 +115,7 @@ class OpenAIHarmClassifier:
         # Generate responses
         eval_data = self.model.infer(
             data,
-            progress_filename=progress_filename,
+            save_fname=save_fname,
             llm_input_col=prompt_col,
             llm_response_col=response_key,
         )
@@ -185,8 +185,8 @@ class GUSHarmClassifier:
             - {model_name}_bias_analysis: The output of the model.
         """
         response_key = f"{self.model_name}_bias_analysis"
-        progress_filename = f"{self.model_name}_eval.json"
-        save_path = os.path.join(save_dir, progress_filename)
+        save_fname = f"{self.model_name}_eval.json"
+        save_path = os.path.join(save_dir, save_fname)
 
         # If previous analysis exists, then use that
         if os.path.exists(save_path):

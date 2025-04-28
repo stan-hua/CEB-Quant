@@ -11,7 +11,7 @@ from transformers import pipeline, AutoModelForSequenceClassification, AutoToken
 import src.config as config
 from src.utils import json_utils
 
-PROGRESS_FILENAME = 'longformer_eval.json'
+save_fname = 'longformer_eval.json'
 
 # TODO: Refine this class for more general HF model evaluation
 
@@ -43,20 +43,20 @@ class HuggingFaceEvaluator:
         # Create save directory if it doesn't exist
         os.makedirs(self.save_dir, exist_ok=True)
 
-    def evaluate(self, data, resume=False, progress_filename=PROGRESS_FILENAME):
+    def evaluate(self, data, resume=False, save_fname=save_fname):
         """
         Evaluate a dataset using the loaded Hugging Face model.
 
         Args:
             data: List of data to be evaluated.
             resume (bool): Whether to resume from a saved progress file. Default is False.
-            progress_filename (str): Filename for saving or resuming progress.
+            save_fname (str): Filename for saving or resuming progress.
 
         Returns:
             List: The evaluated data.
         """
         if resume:
-            load_path = os.path.join(self.save_dir, progress_filename)
+            load_path = os.path.join(self.save_dir, save_fname)
             data = json_utils.update_with_existing_data(data, prev_path=load_path)
 
         assert isinstance(data, list), "Data must be a list."
@@ -68,11 +68,11 @@ class HuggingFaceEvaluator:
 
         evaluated_data = self._evaluate_batch(data)
 
-        json_utils.save_json(data, os.path.join(self.save_dir, progress_filename))
+        json_utils.save_json(data, os.path.join(self.save_dir, save_fname))
         return evaluated_data
 
 
-    def _evaluate_batch(self,data, batch_size=32, progress_filename=PROGRESS_FILENAME):
+    def _evaluate_batch(self,data, batch_size=32, save_fname=save_fname):
         results = []
         for i in tqdm(range(0, len(data), batch_size)):
             batch = data[i:i+batch_size]
@@ -90,7 +90,7 @@ class HuggingFaceEvaluator:
                     logging.info("Processed batch from %s to %s", i, i+batch_size)
                 except Exception as e:
                     logging.error("Error processing batch %s to %s: %s", i, i+batch_size, str(e))
-                    json_utils.save_json(data, os.path.join(self.save_dir, progress_filename))
+                    json_utils.save_json(data, os.path.join(self.save_dir, save_fname))
                     raise
             else:
                 results.extend(batch)

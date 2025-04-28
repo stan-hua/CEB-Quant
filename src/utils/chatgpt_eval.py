@@ -79,7 +79,7 @@ class ChatGPTEvaluator:
     def evaluate(
         self, data, task,
         resume=True,
-        progress_filename=EVAL_SAVE_FNAME,
+        save_fname=EVAL_SAVE_FNAME,
         llm_input_col="res",
         llm_response_col="eval_res",
         prompt_col="prompt",
@@ -98,8 +98,8 @@ class ChatGPTEvaluator:
             Name of the task to evaluate.
         resume : bool, optional
             If True, then try to resume evaluation from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
+            with the same filename as `save_fname`. Default is True.
+        save_fname : str, optional
             Filename for saving or resuming progress. Default is
             `eval_progress.json`.
         llm_input_col : str, optional
@@ -132,7 +132,7 @@ class ChatGPTEvaluator:
         def save_progress_callback(future):
             if future.exception() is not None:
                 LOGGER.error("An error occurred: %s", str(future.exception()))
-                self.save_progress(data, filename=progress_filename)
+                self.save_progress(data, filename=save_fname)
 
         def process_row(prompt, row):
             # Early return, if row is already processed
@@ -170,7 +170,7 @@ class ChatGPTEvaluator:
 
         # If specified, resume from previous evaluation
         if resume:
-            load_path = os.path.join(self.save_dir, progress_filename)
+            load_path = os.path.join(self.save_dir, save_fname)
             data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_col=prompt_col)
 
         # Perform input sanitization
@@ -191,13 +191,13 @@ class ChatGPTEvaluator:
                     future.add_done_callback(save_progress_callback)
                     progress_bar.update(1)
                     if idx % 10 == 0:
-                        self.save_progress(data, filename=progress_filename, lock=lock)
+                        self.save_progress(data, filename=save_fname, lock=lock)
 
             # Wait for all futures to complete
             concurrent.futures.wait(futures)
 
         # Save progress
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(data, filename=save_fname)
 
         return data
 
@@ -246,7 +246,7 @@ class ChatGPTGenerator:
 
     def infer(
         self, data,
-        resume=True, progress_filename=INFER_SAVE_FNAME,
+        resume=True, save_fname=INFER_SAVE_FNAME,
         llm_input_col="prompt", llm_response_col="res", prompt_col="prompt",
     ):
         """
@@ -259,8 +259,8 @@ class ChatGPTGenerator:
             inference on.
         resume : bool, optional
             If True, then try to resume inference from a saved progress file
-            with the same filename as `progress_filename`. Default is True.
-        progress_filename : str, optional
+            with the same filename as `save_fname`. Default is True.
+        save_fname : str, optional
             Filename for saving or resuming progress.
         llm_input_col : str, optional
             Key to prompt to perform inference on
@@ -277,7 +277,7 @@ class ChatGPTGenerator:
         def save_progress_callback(future):
             if future.exception() is not None:
                 LOGGER.error("An error occurred: %s", str(future.exception()))
-                self.save_progress(data, filename=progress_filename)
+                self.save_progress(data, filename=save_fname)
 
         def process_row(prompt, row):
             try:
@@ -304,7 +304,7 @@ class ChatGPTGenerator:
 
         # If specified, resume from previous inference
         if resume:
-            load_path = os.path.join(self.save_dir, progress_filename)
+            load_path = os.path.join(self.save_dir, save_fname)
             data = json_utils.update_with_existing_data(data, prev_path=load_path, prompt_col=prompt_col)
 
         # Perform input sanitization
@@ -322,13 +322,13 @@ class ChatGPTGenerator:
             for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                 future.add_done_callback(save_progress_callback)
                 if idx % 10 == 0:
-                    self.save_progress(data, filename=progress_filename, lock=lock)
+                    self.save_progress(data, filename=save_fname, lock=lock)
 
             # Wait for all futures to complete
             concurrent.futures.wait(futures)
 
         # Save progress
-        self.save_progress(data, filename=progress_filename)
+        self.save_progress(data, filename=save_fname)
 
         return data
 

@@ -544,9 +544,6 @@ def generate(
     # Late import to prevent slowdown
     from src.utils.llm_gen_wrapper import LLMGeneration
 
-    # Choose data path based on dataset collection
-    data_path = get_dataset_directory(dataset_name)
-
     # Shared keyword arguments
     shared_kwargs = {
         # Provided arguments
@@ -556,7 +553,6 @@ def generate(
         "use_chat_template": use_chat_template,
         "system_prompt_type": SYSTEM_PROMPT_TYPE,
         # Default arguments
-        "data_path": data_path,
         "repetition_penalty": 1.0,
         "max_new_tokens": 512,
         "debug": False,
@@ -1117,7 +1113,11 @@ def bias_eval_dataset_collection(model_name, collection_name="all_open", **eval_
     """
     dataset_names = config.COLLECTION_TO_DATASETS[collection_name]
     for dataset_name in dataset_names:
-        bias_eval_dataset(model_name, dataset_name, **eval_kwargs)
+        try:
+            bias_eval_dataset(model_name, dataset_name, **eval_kwargs)
+        except:
+            LOGGER.error(f"[{dataset_name}] Failed to perform bias evaluation with error:")
+            LOGGER.error(traceback.format_exc())
 
 
 def bias_eval_dataset(model_name, dataset_name, system_prompt_type=SYSTEM_PROMPT_TYPE, **eval_kwargs):
