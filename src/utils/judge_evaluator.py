@@ -8,6 +8,7 @@ Description: Uses Prometheus-Eval 2.0 / Atla as a judge to evaluate
 # Standard libraries
 import logging
 import os
+import traceback
 
 # Non-standard libraries
 import torch
@@ -15,6 +16,7 @@ from atla_eval import AtlaEval
 from prometheus_eval.vllm import VLLM
 from prometheus_eval import PrometheusEval
 from prometheus_eval.prompts import SCORE_RUBRIC_TEMPLATE
+from tqdm import tqdm
 
 # Custom libraries
 import config
@@ -56,6 +58,9 @@ if torch.cuda.is_available():
 
 # Get default prompt version
 JUDGE_PROMPT_VER = os.environ.get("JUDGE_PROMPT_VER", 2)
+
+# Cache judge
+JUDGE_CACHE = {}
 
 
 ################################################################################
@@ -355,7 +360,14 @@ class OpenTextEvaluator:
         Load LLaMA Guard LLM
         """
         if self.judge is None:
-            self.judge = LLMGeneration(model_path_or_name=self.model_path, **self.vllm_kwargs)
+            # Attempt to laod in cache
+            if self.model_path in JUDGE_CACHE:
+                self.judge = JUDGE_CACHE[self.model_path]
+            # Otherwise, load directly
+            else:
+                judge = LLMGeneration(model_path_or_name=self.model_path, **self.vllm_kwargs)
+                JUDGE_CACHE[self.model_path] = judge
+                self.judge = judge
 
 
     def save_progress(self, data, filename=None, **save_kwargs):
@@ -418,15 +430,27 @@ class OpenTextEvaluator:
         assert data, "Data provided is empty!"
 
         # 1. LLaMA evaluations
+        # NOTE: Only if a GPU is available
         unevaluated_data = [row for row in data if not row.get(self.llm_response_col)]
         if unevaluated_data:
-            self.perform_llama_eval(unevaluated_data)
-            self.save_progress(data, filename=save_fname)
+            if torch.cuda.is_available():
+                self.perform_llama_eval(unevaluated_data)
+                self.save_progress(data, filename=save_fname)
+            else:
+                LOGGER.warning("Skipping LLaMA-Guard safety evaluation, since no GPU is available!")
 
         # 2. Various text bias evaluations
-        unevaluated_data = [row for row in data if row.get("toxicity") is None]
-        if unevaluated_data:
-            self.perform_text_eval(unevaluated_data)
+        unevaluated_data = [row for row in data if "toxicity" not in row]
+        # NOTE: Only computing other text scores with CPU for now
+        if unevaluated_data and not torch.cuda.is_available():
+            self.perform_text_bias_eval(unevaluated_data)
+            self.save_progress(data, filename=save_fname)
+
+        # Text quality evaluations
+        unevaluated_data = [row for row in data if "lt-error_count" not in row]
+        # NOTE: Only computing other text scores with CPU for now
+        if unevaluated_data and not torch.cuda.is_available():
+            self.perform_text_quality_eval(unevaluated_data)
             self.save_progress(data, filename=save_fname)
 
         return data
@@ -441,7 +465,7 @@ class OpenTextEvaluator:
         """
         # Early return, if no data
         if not data:
-            return
+            return False
 
         self.load_judge()
 
@@ -461,8 +485,10 @@ class OpenTextEvaluator:
             row = data[idx]
             row[self.llm_response_col] = eval_res["res"]
 
+        return True
 
-    def perform_text_eval(self, data):
+
+    def perform_text_bias_eval(self, data):
         """
         Evaluate text using a sweep of bias metrics.
 
@@ -473,13 +499,22 @@ class OpenTextEvaluator:
         """
         # Early return, if no data
         if not data:
-            return
+            return False
 
-        # Try batched evaluation
+        # If no GPU exists, do serially
+        if not torch.cuda.is_available():
+            for row in tqdm(data):
+                row.update(text_eval_utils.compute_bias_metrics(
+                    prompt=row[self.prompt_col],
+                    response=row[self.llm_input_col],
+                ))
+            return True
+
+        # If GPU exists, try batched evaluation
         try:
             prompts = [row[self.prompt_col] for row in data]
             responses = [row[self.llm_input_col] for row in data]
-            eval_responses = text_eval_utils.compute_metrics_batch(prompts, responses)
+            eval_responses = text_eval_utils.compute_bias_metrics_batch(prompts, responses)
             for idx, eval_res in enumerate(eval_responses):
                 if not eval_res:
                     continue
@@ -489,10 +524,38 @@ class OpenTextEvaluator:
         except Exception as error_msg:
             LOGGER.error(f"Batched text evaluation failed! Error: {error_msg}")
             for row in data:
-                row.update(text_eval_utils.compute_metrics(
+                row.update(text_eval_utils.compute_bias_metrics(
                     prompt=row[self.prompt_col],
                     response=row[self.llm_input_col],
                 ))
+        return True
+
+
+    def perform_text_quality_eval(self, data):
+        """
+        Evaluate quality of text.
+
+        Parameters
+        ----------
+        data : list of dict, optional
+            Each dict is a question to be evaluated
+        """
+        # Early return, if no data
+        if not data:
+            return False
+
+        try:
+            for row in tqdm(data):
+                row.update(text_eval_utils.compute_quality_metrics(
+                    row[self.llm_input_col],
+                ))
+        except:
+            LOGGER.error(f"Text quality evaluation failed! Error trace:")
+            traceback.print_exc()
+            return False
+
+        return True
+
 
 ################################################################################
 #                               Helper Functions                               #
