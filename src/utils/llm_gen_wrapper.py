@@ -956,6 +956,7 @@ class LLMGeneration:
             row["num_attempts"] = 0
 
         # Perform inference in batches
+        batch_idx = 0
         while not all(bool(row.get("res")) for row in saved_data):
             curr_idx = 0
             grouped_rows = []
@@ -972,11 +973,13 @@ class LLMGeneration:
                 break
 
             # Process the grouped rows
+            batch_idx += 1
             self.process_rows_single_turn(grouped_rows, temperature, prompt_col)
 
-            # Save the updated saved data to the output file
-            json_utils.save_json(saved_data, output_path, lock=lock)
-            LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
+            # After every 10 batches, save the updated saved data to the output file
+            if batch_idx % 10 == 0:
+                json_utils.save_json(saved_data, output_path, lock=lock)
+                LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
 
         # Save the updated saved data to the output file
         json_utils.save_json(saved_data, output_path, lock=lock)
@@ -1167,6 +1170,7 @@ class LLMGeneration:
             row["num_attempts"] = 0
 
         # Perform inference in batches
+        batch_idx = 0
         while not all(is_conversation_done(row) for row in saved_data):
             curr_idx = 0
             grouped_rows = []
@@ -1183,11 +1187,13 @@ class LLMGeneration:
                 break
 
             # Process the grouped rows
+            batch_idx += 1
             self.process_rows_fmt(grouped_rows, temperature)
 
-            # Save the updated saved data to the output file
-            json_utils.save_json(saved_data, output_path, lock=lock)
-            LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
+            # For every 10 batches, save the updated saved data to the output file
+            if batch_idx % 10 == 0:
+                json_utils.save_json(saved_data, output_path, lock=lock)
+                LOGGER.debug(f"Processed {input_path} and saved results to {output_path}")
 
         # Save the updated saved data to the output file
         json_utils.save_json(saved_data, output_path, lock=lock)
