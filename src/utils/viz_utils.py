@@ -72,6 +72,7 @@ def catplot(
         bar_labels=None, exclude_bar_labels=False,
         palette=COLORS,
         plot_type="bar",
+        vertical_lines=None,
         figsize=None,
         title=None, title_size=None,
         xlabel=None,
@@ -110,6 +111,8 @@ def catplot(
         List of colors to use for the bars, by default None.
     plot_type : str, optional
         Type of plot to create, by default "bar".
+    vertical_lines : list, optional
+        List of x-axis values to draw vertical lines at, by default None.
     figsize : tuple, optional
         Tuple specifying the figure size, by default None.
     title : str, optional
@@ -229,6 +232,11 @@ def catplot(
                 print("Skipping labeling of error bar container...")
                 continue
             ax.bar_label(container, fmt=bar_label_fmt, size=12, weight="semibold", **bar_kwargs)
+
+    # If specified, add vertical lines
+    if vertical_lines:
+        for curr_x in vertical_lines:
+            ax.axvline(x=curr_x, color="black", linestyle="dashed", alpha=0.5)
 
     # Perform post-plot logic
     ax = post_plot_logic(
