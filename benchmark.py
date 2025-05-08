@@ -1702,6 +1702,12 @@ def extract_model_metadata_from_name(model_name):
     if accum_metadata["q_method"] == "awq":
         accum_metadata["w_bits"] = 4
     accum_metadata["smoothquant"] = False
+    # 3.1. Add full quantization method
+    accum_metadata["q_method_bits"] = None
+    accum_metadata["q_method_full"] = "Native"
+    if accum_metadata["q_method"]:
+        accum_metadata["q_method_bits"] = "W" + str(accum_metadata["w_bits"]) + "A" + str(accum_metadata["a_bits"])
+        accum_metadata["q_method_full"] = accum_metadata["q_method"].upper() + " " + accum_metadata["q_method_bits"] + (" SmoothQuant" if accum_metadata["smoothquant"] else "")
     if "-smooth-" in model_name:
         accum_metadata["smoothquant"] = True
     # 4. Check if the model is an instruct vs. non-instruct model
