@@ -1701,15 +1701,16 @@ def extract_model_metadata_from_name(model_name):
             accum_metadata["q_method"] = q_method
     if accum_metadata["q_method"] == "awq":
         accum_metadata["w_bits"] = 4
+    # Add smoothquant
     accum_metadata["smoothquant"] = False
+    if "-smooth-" in model_name:
+        accum_metadata["smoothquant"] = True
     # 3.1. Add full quantization method
     accum_metadata["q_method_bits"] = None
     accum_metadata["q_method_full"] = "Native"
     if accum_metadata["q_method"]:
         accum_metadata["q_method_bits"] = "W" + str(accum_metadata["w_bits"]) + "A" + str(accum_metadata["a_bits"])
-        accum_metadata["q_method_full"] = accum_metadata["q_method"].upper() + " " + accum_metadata["q_method_bits"] + (" SmoothQuant" if accum_metadata["smoothquant"] else "")
-    if "-smooth-" in model_name:
-        accum_metadata["smoothquant"] = True
+        accum_metadata["q_method_full"] = accum_metadata["q_method"].upper() + " " + accum_metadata["q_method_bits"] + (" + SQ" if accum_metadata["smoothquant"] else "")
     # 4. Check if the model is an instruct vs. non-instruct model
     accum_metadata["instruct_tuned"] = "instruct" in model_name
     # 5. Get parameter size (in B)

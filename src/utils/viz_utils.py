@@ -10,6 +10,7 @@ import os
 
 # Non-standard libraries
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import seaborn as sns
 from matplotlib import rc
@@ -207,7 +208,7 @@ def catplot(
         plot_func = plt.pie
     elif plot_type == "heatmap":
         plot_func = heatmap
-        remove_dict_keys(plot_kwargs, ["hue", "palette", "legend"])
+        remove_dict_keys(plot_kwargs, ["x", "y", "hue", "palette", "legend"])
 
     # Create figure
     if figsize is not None:
@@ -267,6 +268,7 @@ def numplot(
         horizontal_legend=False,
         save_dir=None,
         save_fname=None,
+        violin_kwargs=None,
         **extra_plot_kwargs,
     ):
     """
@@ -310,6 +312,8 @@ def numplot(
         Directory to save the plot, by default None.
     save_fname : str, optional
         Filename to save the plot, by default None.
+    violin_kwargs : dict, optional
+        Violin plot specific keyword arguments
     extra_plot_kwargs : dict, optional
         Additional keyword arguments to pass to the plot function, by default {}
 
@@ -327,7 +331,7 @@ def numplot(
     }
 
     # Raise error, if plot type is invalid
-    supported_types = ["box", "strip", "line", "scatter", "violin"]
+    supported_types = ["box", "strip", "line", "scatter", "violin", "displot"]
     if plot_type not in supported_types:
         raise ValueError(f"Invalid plot type: `{plot_type}`! See supported types: {supported_types}")
 
@@ -345,6 +349,8 @@ def numplot(
         plot_func = sns.scatterplot
     elif plot_type == "violin":
         plot_func = sns.violinplot
+    elif plot_type == "displot":
+        plot_func = sns.displot
 
     # Create figure
     if figsize is not None:
@@ -353,14 +359,44 @@ def numplot(
     # Create plot
     ax = plot_func(**plot_kwargs)
 
+    # If specified, add violin specific keyword arguments
+    if violin_kwargs:
+        if violin_kwargs.get("split_violin"):
+            arg_names = ["threshold", "flip_idx", "colors"]
+            split_kwargs = {k:v for k,v in violin_kwargs.items() if k in arg_names}
+            split_violin_by_threshold(ax, **split_kwargs)
+
     # If specified, add vertical lines
     if vertical_lines:
         for curr_x in vertical_lines:
             ax.axvline(x=curr_x, color="black", linestyle="dashed", alpha=0.5)
 
     # Perform post-plot logic
-    ax = post_plot_logic(
-        ax=ax,
+    # CASE 1: FacetGrid
+    if isinstance(ax, sns.axisgrid.FacetGrid):
+        axes = ax.axes.flat
+    # CASE 2: Individual axis
+    elif isinstance(ax, plt.Axes):
+        axes = [ax]
+    # CASE 3: List of axes
+    else:
+        axes = ax
+    assert axes, "Unexpected errpr! 1+ Axes should have been returned here"
+    assert isinstance(axes[0], plt.Axes), f"Invalid type of axis: `{type(axes[0])}`"
+
+    # Handle list of axes
+    # NOTE: In reality these are all on the same plot, so only change x-axis and ticks
+    if len(axes) > 1:
+        for curr_ax in axes[:-1]:
+            post_plot_logic(
+                ax=curr_ax,
+                x_lim=x_lim, y_lim=y_lim,
+                tick_params=tick_params
+            )
+
+    # Save plot
+    post_plot_logic(
+        ax=axes[-1],
         title=title, title_size=title_size,
         xlabel=xlabel, ylabel=ylabel,
         x_lim=x_lim, y_lim=y_lim,
@@ -526,52 +562,190 @@ def grouped_barplot_with_ci(
     return ax
 
 
-def heatmap(data, y, x, order=None, stat="proportion", **kwargs):
+def heatmap(data, cmap=None, xticktop=True, transition_kwargs=None, **kwargs):
     """
-    Generate a heatmap to visualize transition matrices.
+    Generate a heatmap. Optionally, create transition matrix using `transition_kwargs`.
 
     Parameters
     ----------
     data : pd.DataFrame
         The data frame containing the columns to be used for the heatmap.
-    y : str
-        The column name used for the heatmap's y-axis.
-    x : str
-        The column name used for the heatmap's x-axis.
-    order : list, optional
-        The specific order of categories for both axes, by default None.
-    stat : str, optional
+    cmap : str or matplotlib.colors.Colormap, optional
+        Matplotlib colormap
+    xticktop : bool, optional
+        If True, set x-axis ticks on top
+    transition_kwargs : dict, optional
+        Arguments to construct transition matrix from 2 columns
+        y : str
+            The column name used for the heatmap's y-axis.
+        x : str
+            The column name used for the heatmap's x-axis.
+        stat : str, optional
         The statistic to compute, either 'proportion' or 'count', by default "proportion".
+        order : list, optional
+            The specific order of categories for both axes, by default None.
     **kwargs : Any
         Keyword arguments to pass to `sns.heatmap`
-
-    Raises
-    ------
-    AssertionError
-        If the specified `stat` is not within ["proportion", "count"].
     """
+    # CASE 1: If y and x are provided, create a transition matrix
+    if transition_kwargs:
+        assert "x" in transition_kwargs and "y" in transition_kwargs
+        x = transition_kwargs["x"]
+        y = transition_kwargs["y"]
+        order = transition_kwargs.get("order", None)
+        stat = transition_kwargs.get("stat", "proportion")
+        assert stat in ["proportion", "count"], f"Invalid stat! {stat}"
+        normalize = stat == "proportion"
+        df_valid_transition = data[[y, x]].value_counts(normalize=normalize).reset_index()
+        transition_matrix = df_valid_transition.pivot(index=y, columns=x, values='proportion')
+        transition_matrix.columns = transition_matrix.columns.astype(str)
+        transition_matrix.index = transition_matrix.index.astype(str)
 
-    assert stat in ["proportion", "count"], f"Invalid stat! {stat}"
+        # Reorder rows and columns
+        if order:
+            order = np.array(order).astype(str)
+            transition_matrix = transition_matrix.loc[order].loc[:, order[::-1]]
+        # Round to percentage
+        transition_matrix = (100 * transition_matrix).round()
+    else:
+        transition_matrix = data
 
-    # Create transition matrix
-    normalize = stat == "proportion"
-    df_valid_transition = data[[y, x]].value_counts(normalize=normalize).reset_index()
-    transition_matrix = df_valid_transition.pivot(index=y, columns=x, values='proportion')
-    transition_matrix.columns = transition_matrix.columns.astype(str)
-    transition_matrix.index = transition_matrix.index.astype(str)
-
-    # Reorder rows and columns
-    if order:
-        order = np.array(order).astype(str)
-        transition_matrix = transition_matrix.loc[order].loc[:, order[::-1]]
-    # Round to percentage
-    transition_matrix = (100 * transition_matrix).round()
+    # Set colormap
+    cmap = cmap if cmap is not None else sns.light_palette("#C6D89E", as_cmap=True)
 
     # Create heatmap
-    cmap = sns.light_palette("#C6D89E", as_cmap=True)
-    ax = sns.heatmap(transition_matrix, annot=True, cmap=cmap, robust=True, cbar=False, **kwargs)
+    ax = sns.heatmap(transition_matrix, annot=True, cmap=cmap, robust=True, **kwargs)
+
+    # Set x-axis ticks, if specified
+    if xticktop:
+        ax = ax.xaxis.tick_top()
 
     return ax
+
+
+def spread_plot(
+        data, y, x,
+        order=None,
+        xlabel=None,
+        x_lim=None,
+        sharex=False,
+        title=None,
+        legend=False,
+        save_path=None,
+        dpi=300,
+    ):
+    """
+    Creates a bar plot visualization showing min/max spread around 0,
+    with each bar on its own number line.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The data frame containing the columns to be used for the plot.
+    y : str
+        The column name used for the y-axis labels (the y_vals) to group by
+    x : str
+        The column name for values to extract the min and max
+    order : list, optional
+        The specific order of y_vals for the y-axis, by default None.
+        If None, the order in the DataFrame is used.
+    xlabel : str, optional
+        Label for x-axis
+    x_lim : float, optional
+        Absolute limit for x-axis ticks
+    sharex : bool, optional
+        If True, share x-axis labels
+    title : str, optional
+        The title of the plot, by default "Min/Max Change Spread".
+    legend : bool, optional
+        If True, create legend
+    save_path : str, optional
+        Path to file to save the plot, by default None.
+    dpi : int, optional
+        DPI to save the plot at, by default 300
+
+    Returns
+    -------
+    plt.Figure
+        The Figure object for the plot.
+    """
+    # Validate input columns
+    if y not in data.columns or x not in data.columns:
+        raise ValueError("Specified columns not found in the DataFrame.")
+
+    # Define muted colors using seaborn's color_palette
+    muted_neg = "#6E82B5"
+    muted_pos = "#C78E72"
+
+    # Get y values
+    y_vals = order or data[y].unique().tolist()
+    num_y_vals = len(y_vals)
+
+    # Create a figure and a grid of subplots (each row is one item)
+    fig, axes = plt.subplots(num_y_vals, 1, sharex=sharex)
+
+    # Ensure axes is always an array, even for a single item
+    if num_y_vals == 1:
+        axes = [axes]
+
+    # Get maximum value if sharing x-axis
+    x_lim_global = x_lim
+    if sharex and not x_lim_global:
+        x_lim_global = 1.1 * max(abs(data[x].min()), abs(data[x].max()))
+
+    # Plot for each unique value of y
+    for i, y_val in enumerate(y_vals):
+        ax = axes[i]
+        curr_data = data[data[y] == y_val]
+        min_value = curr_data[x].min()
+        max_value = curr_data[x].max()
+        # Set x-axis limits
+        x_lim = x_lim_global if sharex else (1.1 * max(abs(min_value), abs(max_value)))
+        ax.set_xlim(-x_lim, x_lim)
+        # Plot the negative spread
+        ax.barh(0, np.abs(min_value), left=min_value, color=muted_neg)
+        # Plot the positive spread
+        ax.barh(0, max_value, left=0, color=muted_pos)
+        # Add the y value label as the ylabel
+        ax.set_ylabel(y_val, rotation=0, ha='right', va='center')
+        # Hide x-axis tick labels for other subplots, if sharing
+        if sharex and i < num_y_vals - 1:
+            ax.tick_params(labelbottom=False)
+            # Uncomment to remove the bottom spine too
+            # ax.spines['bottom'].set_visible(False)
+        # Remove y-axis ticks and labels
+        ax.set_yticks([])
+        # ax.yaxis.set_visible(False)
+        # Remove the "box" (spines) around the plot
+        ax.spines['top'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    # For the last subplot, add an x-axis label
+    if xlabel:
+        ax.set_xlabel(xlabel)
+
+    # Add a main title to the figure
+    if title:
+        fig.suptitle(title)
+
+    # Create legend, if specified
+    if legend:
+        red_patch = mpatches.Patch(color=muted_neg, label='Decrease')
+        green_patch = mpatches.Patch(color=muted_pos, label='Increase')
+        fig.legend(handles=[red_patch, green_patch], loc='upper right', bbox_to_anchor=(1, 1))
+
+    # Save if specified
+    if save_path:
+        save_dir = os.path.dirname(save_path)
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+        if not sharex:
+            plt.tight_layout(h_pad=0.1)
+        plt.savefig(save_path, bbox_inches="tight", dpi=dpi)
+        plt.clf()
+        plt.close()
+    return fig
 
 
 def post_plot_logic(
@@ -649,6 +823,7 @@ def post_plot_logic(
                 loc='upper center',
                 bbox_to_anchor=(0.5, -0.05),
                 ncol=len(ax.get_legend_handles_labels()[0]),
+                fontsize='x-small',
             )
         else:
             ax.legend(
@@ -673,6 +848,42 @@ def post_plot_logic(
 ################################################################################
 #                               Helper Functions                               #
 ################################################################################
+def split_violin_by_threshold(ax, threshold=0, flip_idx=None, colors=("#6E82B5", "#C78E72"), line=False):
+    """
+    Color violin plots to the left and right of a threshold.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes containing violin plot
+    threshold : float
+        Threshold value to split errors
+    flip_idx : list of int
+        Indexes for violins where colors should flip
+    line : bool
+        If True, add line at the threshold
+    """
+    # Color by error
+    colors = list(colors)
+    for idx, violin in enumerate(ax.collections):
+        vertices = violin.get_paths()[0].vertices
+        curr_colors = colors
+        if flip_idx and idx in flip_idx:
+            curr_colors = colors[::-1]
+
+        # Fill left side
+        left_side = vertices[vertices[:, 0] <= threshold]
+        ax.fill(left_side[:, 0], left_side[:, 1], color=curr_colors[0], alpha=0.8)
+
+        # Fill right side
+        right_side = vertices[vertices[:, 0] > threshold]
+        ax.fill(right_side[:, 0], right_side[:, 1], color=curr_colors[1], alpha=0.8)
+
+    # Add threshold line
+    if line:
+        ax.axvline(threshold, color="black", linestyle="--", linewidth=2)
+
+
 def remove_dict_keys(dictionary, keys):
     """
     Remove multiple keys from a dictionary.
