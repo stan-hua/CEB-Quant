@@ -373,10 +373,10 @@ class LLMGeneration:
         return generate_kwargs
 
 
-    def vllm_logprob_single(self, prompt, choice, **kwargs):
+    def vllm_geomprob_single(self, prompt, choice, **kwargs):
         """
-        Given a promt and choice of continuation, compute log probability of
-        provided continuation.
+        Given a promt and choice of continuation, compute geometric mean probability
+        of provided continuation tokens.
 
         Parameters
         ----------
@@ -414,11 +414,11 @@ class LLMGeneration:
         # Get average probability for the choice
         tokenizer = self.vllm.get_tokenizer()
         prompt_logprobs = response[0].prompt_logprobs
-        ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs, tokenizer)
+        ret["res_seq_prob"] = extract_choice_geom_prob(choice, prompt_logprobs, tokenizer)
         return ret
 
 
-    def vllm_logprob_multiple(self, prompts, choice, **kwargs):
+    def vllm_geomprob_multiple(self, prompts, choice, **kwargs):
         """
         Computes log probability for the same set choices between multiple prompts.
 
@@ -434,9 +434,9 @@ class LLMGeneration:
         Returns
         -------
         list of dict
-            List of generated responses.
+            List of generated probabilities.
         """
-        assert isinstance(choice, str), "Only one choice text is possible for `vllm_logprob_multiple()`!"
+        assert isinstance(choice, str), "Only one choice text is possible for `vllm_geomprob_multiple()`!"
         self.ensure_model_loaded()
 
         # Create vLLM arguments
@@ -470,7 +470,7 @@ class LLMGeneration:
             }
             # Get average probability for the choice
             prompt_logprobs = curr_response.prompt_logprobs
-            curr_ret["res_seq_prob"] = extract_choice_logprobs(choice, prompt_logprobs, tokenizer)
+            curr_ret["res_seq_prob"] = extract_choice_geom_prob(choice, prompt_logprobs, tokenizer)
             accum_ret.append(curr_ret)
 
         return accum_ret
@@ -610,7 +610,7 @@ class LLMGeneration:
     ############################################################################
     #                        Other Helper Functions                            #
     ############################################################################
-    def logprobs_single(self, prompt, choice, **kwargs):
+    def geomprob_single(self, prompt, choice, **kwargs):
         """
         Generates a response using a given model.
 
@@ -633,9 +633,9 @@ class LLMGeneration:
             # Get sequence probability for LLM response
             # CASE 1: vLLM
             if model_provider == "vllm":
-                ret = self.vllm_logprob_single(prompt, choice, **kwargs)
+                ret = self.vllm_geomprob_single(prompt, choice, **kwargs)
             else:
-                raise NotImplementedError(f"[logprobs_single] Model provider given `{model_provider}` is not yet supported!")
+                raise NotImplementedError(f"[geomprob_single] Model provider given `{model_provider}` is not yet supported!")
 
             # Check if the response is valid before returning
             if not ret["res"]:
@@ -788,7 +788,7 @@ class LLMGeneration:
             choices = row["choices"]
             choices_probs = []
             for choice in choices:
-                curr_response = self.logprobs_single(prompt, choice)
+                curr_response = self.geomprob_single(prompt, choice)
                 choices_probs.append(curr_response["res_seq_prob"])
 
             # Normalize probabilities and store choice with highest probability
@@ -871,7 +871,7 @@ class LLMGeneration:
             # NOTE: Store probability for each choice
             idx_to_probs = {}
             for choice in choices:
-                llm_responses = self.vllm_logprob_multiple(prompts, choice)
+                llm_responses = self.vllm_geomprob_multiple(prompts, choice)
 
                 # Store response for every choice
                 for idx, curr_response in enumerate(llm_responses):
@@ -1533,7 +1533,7 @@ def construct_chat_template(messages):
 
 def compute_prob(vllm_logprobs):
     """
-    Compute normalized probability of generated text
+    Compute geometric mean probability of tokens in choice
 
     Parameters
     ----------
@@ -1543,7 +1543,7 @@ def compute_prob(vllm_logprobs):
     Returns
     -------
     float
-        Normalized probability of generated text
+        Geometric mean probability of tokens in choice
     """
     try:
         curr_log_probs = [list(l.values())[0].logprob for l in vllm_logprobs]
@@ -1554,7 +1554,7 @@ def compute_prob(vllm_logprobs):
         return None
 
 
-def extract_choice_logprobs(choice, prompt_logprobs, tokenizer):
+def extract_choice_geom_prob(choice, prompt_logprobs, tokenizer):
     """
     Extract log probabilities for tokens added to the original prompt.
 
@@ -1568,8 +1568,10 @@ def extract_choice_logprobs(choice, prompt_logprobs, tokenizer):
     tokenizer : AutoTokenizer
         LLM's Tokenizer. Used to decode generated tokens
     
-    Returns:
-    Dict containing log probabilities of the added tokens
+    Returns
+    -------
+    float
+        Geometric mean probability of tokens in choice
     """
     # Remove first token, if it's None
     # NOTE: It normally corresponds to the conditional probability of the sequence before it
@@ -1614,6 +1616,7 @@ Reconstructed: `{reconst_choice}`
     # Compute sequence probability
     seq_prob = np.exp(avg_logprob)
 
+    # NOTE: This computes the geometric mean of the conditional mean of probabilities
     return seq_prob
 
 
