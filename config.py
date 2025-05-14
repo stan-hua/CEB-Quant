@@ -100,10 +100,10 @@ ALL_DISCRIM_DATASETS = [
 ALL_GEN_DATASETS = [
     "FMT10K-IM-S",
     "FMT10K-IM-T",
-    "BOLD",
-    "BiasLens-GenWhy",
     "DoNotAnswer-S",
     "DoNotAnswer-T",
+    "BiasLens-GenWhy",
+    "BOLD",
 ]
 
 # Collection to datasets
@@ -133,10 +133,6 @@ DATASETS_TO_SOCIAL_AXIS = {
         for task_type in ["Recognition", "Selection", "Continuation", "Conversation"]
         for bias_type in ["S", "T"]
     },
-
-    # FairMT-10K
-    "FMT10K-IM-S": ["age", "appearance", "disable", "gender", "race", "religion"],
-    "FMT10K-IM-T": ["disable", "gender", "race", "religion"],
 
     # NOTE: The following are exceptions and are just the filenames
     # Crow S Pairs
@@ -176,8 +172,13 @@ DATASETS_TO_SOCIAL_AXIS = {
     # FairMT Bench
     "FMT10K-IM-S": ["age", "appearance", "disable", "gender", "race", "religion"],
     "FMT10K-IM-T": ["disable", "gender", "race", "religion"],
+    # BOLD
     "BOLD": ['gender', 'political_ideology', 'profession', 'race', 'religious_ideology'],
+    # BiasLens
     "BiasLens-GenWhy": ['ability', 'age', 'body', 'character', 'culture', 'gender', 'occupations', 'race', 'religion', 'social', 'victim'],
+    # DoNotAnswer
+    "DoNotAnswer-S": ['appearance', 'disability', 'gender_sex', 'geographic', 'other_discrimination', 'race_ethnicity', 'religion'],
+    "DoNotAnswer-T": ['insult', 'other_toxicity'],
 }
 
 
@@ -239,12 +240,9 @@ DIR_COMPARISONS = os.path.join(DIR_SAVE_DATA, "metrics_comparisons")
 DIR_LM_EVAL = os.path.join(DIR_SAVE_DATA, "lm-eval")
 # Path to store local models
 DIR_MODELS = os.path.join(DIR_SAVE_DATA, "models")
+# Path to supplementary directory
+DIR_SUPPLEMENTARY = os.path.join(DIR_PROJECT, "supplementary")
 
-# Path to store WildGuard experiment results
-DIR_WILDGUARD = os.path.join(DIR_SAVE_DATA, "wildguard_experiments")
-DIR_WILDGUARD_HARMFUL = os.path.join(DIR_WILDGUARD, "harmful_detection")
-DIR_WILDGUARD_RTA = os.path.join(DIR_WILDGUARD, "rta_comparison")
-DIR_WILDGUARD_RESULTS = os.path.join(DIR_WILDGUARD, "results")
 
 # Mapping of dataset names to directory mapping
 DATASET_TO_DIR = {

@@ -211,7 +211,7 @@ class ChatGPTGenerator:
     Used to perform generation via the OpenAI Chat Completion API
     """
 
-    def __init__(self, model=DEFAULT_MODEL, save_dir=None):
+    def __init__(self, model=DEFAULT_MODEL, save_dir=None, **infer_kwargs):
         """
         Initialize the ChatGPTGenerator class.
 
@@ -226,6 +226,7 @@ class ChatGPTGenerator:
         self.model = model
         self.save_dir = save_dir or os.path.join(config.DIR_GENERATIONS, model)
         self.max_worker = config.MAX_WORKER_AUTOEVAL
+        self.infer_kwargs = infer_kwargs
 
 
     def save_progress(self, data, filename=INFER_SAVE_FNAME, **save_kwargs):
@@ -283,7 +284,7 @@ class ChatGPTGenerator:
             try:
                 if not row.get(llm_response_col):
                     LOGGER.info("Sending OpenAI Chat Completion Request...")
-                    llm_response = openai_chat_completion(prompt, model=self.model)
+                    llm_response = openai_chat_completion(prompt, model=self.model, **self.infer_kwargs)
                     row[llm_response_col] = llm_response
                     LOGGER.info("Sending OpenAI Chat Completion Request...Success!")
                 else:

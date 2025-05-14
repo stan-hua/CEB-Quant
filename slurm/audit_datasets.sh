@@ -1,10 +1,10 @@
 #!/bin/bash -l
-#SBATCH --job-name=ceb_wildguard                    # Job name
+#SBATCH --job-name=audit_datasets                    # Job name
 #SBATCH --nodes=1                         # Number of nodes
 #SBATCH --cpus-per-task=2                 # Number of CPU cores per TASK
-#SBATCH --mem=32GB
+#SBATCH --mem=8GB
 #SBATCH --tmp=8GB
-#SBATCH -o slurm/logs/slurm-%j.out
+#SBATCH -o slurm/logs/audit_datasets-%j.out
 #SBATCH --time=10:00:00
 
 # If you want to do it in the terminal,
@@ -31,8 +31,8 @@ export VLLM_WORKER_MULTIPROC_METHOD=spawn
 ################################################################################
 #                                  Run Model                                   #
 ################################################################################
-# 1. Refusal to Answer
-# python -m audit_ceb experiment_refusal_to_answer
+# 1. Classify harmfulness of prompts
+# python -m audit_ceb audit_open_datasets
 
-# 2. Stereotype Detection
-python -m audit_ceb experiment_harmful_prompt_detection
+# 2. Extract social group for datasets
+python -m audit_ceb extract_social_group

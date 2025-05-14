@@ -140,6 +140,10 @@ def update_with_existing_data(
     else:
         LOGGER.info("Size changed since previous save! Attempting to salvage saved progress.")
 
+    # If index column exists, use that to synchronize updates
+    if "idx" in new_data[0] and "idx" in prev_data[0]:
+        prompt_col = "idx"
+
     # Get mapping of prompt to prev. row
     prompt_to_old = {
         row[prompt_col]: row
