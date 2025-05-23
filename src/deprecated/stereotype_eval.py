@@ -2,7 +2,7 @@
 import logging
 
 # Custom libraries
-from src.utils import chatgpt_eval, eval_utils, judge_evaluator, metric_utils
+from src.utils import chatgpt_utils, eval_utils, judge_evaluator, metric_utils
 
 
 ################################################################################
@@ -48,7 +48,7 @@ class StereotypeEval:
         # CASE 1: ChatGPT evaluator
         if evaluator_choice == "chatgpt":
             eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
-            self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+            self.evaluator = chatgpt_utils.ChatGPTEvaluator(**kwargs)
         # CASE 2: Prometheus/Atla evaluator
         elif evaluator_choice in ["prometheus", "atla"]:
             eval_utils.pop_invalid_kwargs(kwargs, ["model_path", "prompt", "prompt_version", "save_dir", "judge_choice"])

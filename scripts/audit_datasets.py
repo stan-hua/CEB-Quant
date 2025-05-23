@@ -18,7 +18,7 @@ from fire import Fire
 # Custom libraries
 import config
 from src.utils.json_utils import load_json, save_json
-from src.utils.chatgpt_eval import ChatGPTGenerator
+from src.utils.chatgpt_utils import ChatGPTGenerator
 
 
 ################################################################################

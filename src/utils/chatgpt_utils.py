@@ -1,5 +1,5 @@
 """
-chatgpt_eval.py
+chatgpt_utils.py
 
 Description: Uses ChatGPT as a judge to evaluate stereotype/toxicity in
              LLM-generated text.

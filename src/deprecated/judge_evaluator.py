@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 # Custom libraries
 import config
-from src.utils import json_utils, chatgpt_eval, eval_utils, metric_utils
+from src.utils import json_utils, chatgpt_utils, eval_utils, metric_utils
 
 
 ################################################################################
@@ -374,7 +374,7 @@ class FMTBiasEval:
         # CASE 1: ChatGPT evaluator
         if evaluator_choice == "chatgpt":
             eval_utils.pop_invalid_kwargs(kwargs, ["model", "save_dir"])
-            self.evaluator = chatgpt_eval.ChatGPTEvaluator(**kwargs)
+            self.evaluator = chatgpt_utils.ChatGPTEvaluator(**kwargs)
         # CASE 2: Prometheus/Atla evaluator
         elif evaluator_choice in ["prometheus", "atla"]:
             raise NotImplementedError("Only ChatGPT evaluator is currently supported!")
