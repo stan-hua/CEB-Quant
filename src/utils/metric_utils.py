@@ -1,3 +1,9 @@
+"""
+metric_utils.py
+
+Descriptions: Contains mostly deprecated utility functions for metric computation
+"""
+
 
 # Standard libraries
 import logging
