@@ -190,7 +190,7 @@ class ChatGPTEvaluator:
                 for idx, future in enumerate(concurrent.futures.as_completed(futures)):
                     future.add_done_callback(save_progress_callback)
                     progress_bar.update(1)
-                    if idx % 10 == 0:
+                    if idx % 100 == 0:
                         self.save_progress(data, filename=save_fname, lock=lock)
 
             # Wait for all futures to complete
