@@ -44,10 +44,8 @@ rptree -d .
 │   └── logs/                   # Stores logs from SLURM jobs
 ├── src/
 │   ├── bin/                # Contains a script for renaming models in the command-line
-│   ├── data/               # Contains data code
-│   └── utils/              # Contains utility funcitons
-│       ├── data/
-│       └── misc/
+│   ├── utils/              # Contains important utility functions for running LLMs locally or through APIs
+│   └── deprecated/         # Contains deprecated code
 ├── scripts/                # Contains scripts to run
 └── config.py               # Contains global constants
 ```
