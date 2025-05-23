@@ -1,8 +1,7 @@
 """
 analysis.py
 
-Description: Used to perform ChatGPT evaluations for human annotations and on the
-             FairMT10K subset.
+Description: Used to reproduce analysis done in the paper
 """
 
 # Standard libraries

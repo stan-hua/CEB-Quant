@@ -1,7 +1,7 @@
 """
-sup_prep_datasets.py
+prep_datasets.py
 
-Description: Prepare datasets for supplementary (i.e., DiscrimEval)
+Description: Prepare datasets
 """
 
 # Standard libraries

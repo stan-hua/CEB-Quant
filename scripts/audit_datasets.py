@@ -1,8 +1,7 @@
 """
-audit_benchmark.py
+audit_datasets.py
 
-Description: Use GPT-4o and WildGuard to audit if CEB questions are actually
-             biased.
+Description: Use ChatGPT to extract harmfulness and social group of specific datasets
 """
 
 # Standard libraries
