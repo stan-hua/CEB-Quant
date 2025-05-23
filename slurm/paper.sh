@@ -2,8 +2,8 @@
 #SBATCH --job-name=paper                    # Job name
 # --gres=gpu:NVIDIA_L40S:1
 #SBATCH --nodes=1                         # Number of nodes
-#SBATCH --cpus-per-task=12                 # Number of CPU cores per TASK
-#SBATCH --mem=16GB
+#SBATCH --cpus-per-task=32                 # Number of CPU cores per TASK
+#SBATCH --mem=64GB
 #SBATCH -o slurm/logs/slurm-paper-%j.out
 #SBATCH --time=24:00:00
 # --begin=now+10minutes
@@ -30,11 +30,17 @@ echo $port
 # System prompt type ("no_sys_prompt", "really_1x", "really_2x", "really_3x", "really_4x")
 export SYSTEM_PROMPT_TYPE="no_sys_prompt"
 
+
 ################################################################################
-#                                  Evaluation                                  #
+#                          Discriminative Evaluation                           #
 ################################################################################
-DATASET_NAMES=(
-    "BBQ"
+DISCRIM_DATASET_NAMES=(
+    # "CEB-Recognition-S"
+    # "CEB-Recognition-T"
+    # "CEB-Adult"
+    # "CEB-Credit"
+    # "CEB-Jigsaw"
+    # "BBQ"
     # "BiasLens-Choices"
     # "BiasLens-YesNo"
     # "IAT"
@@ -43,9 +49,60 @@ DATASET_NAMES=(
     # "StereoSet-Intrasentence"
 )
 
-for DATASET_NAME in "${DATASET_NAMES[@]}"; do
+for DATASET_NAME in "${DISCRIM_DATASET_NAMES[@]}"; do
     srun python -m scripts.sup_evaluation analyze_discrim_dataset $DATASET_NAME;
 done
 
+
 # DiscrimEval
 # srun python -m scripts.sup_evaluation analyze_de
+
+################################################################################
+#                            Generative Evaluation                             #
+################################################################################
+GEN_DATASET_NAMES=(
+    # "CEB-Continuation-S"
+    # "CEB-Continuation-T"
+    # "CEB-Conversation-S"
+    # "CEB-Conversation-T"
+    # "FMT10K-IM-S"
+    # "FMT10K-IM-T"
+    # "BOLD"
+    # "BiasLens-GenWhy"
+    # "DoNotAnswer-S"
+    # "DoNotAnswer-T"
+)
+
+for DATASET_NAME in "${GEN_DATASET_NAMES[@]}"; do
+    # srun python -m scripts.sup_evaluation analyze_gen_dataset $DATASET_NAME;
+    srun python -m scripts.sup_evaluation load_open_sample_change_values $DATASET_NAME;
+done
+
+
+
+################################################################################
+#                                   Results                                    #
+################################################################################
+# # Figure 1. + Supp Table 1
+srun python -m scripts.sup_evaluation change_in_agg_metrics
+
+# # Table 1.
+srun python -m scripts.sup_evaluation change_in_response_flipping
+
+# # Figure 2
+srun python -m scripts.sup_evaluation change_in_probabilities
+
+# # Figure 3
+srun python -m scripts.sup_evaluation factors_related_to_response_flipping
+
+# Figure 3c
+srun python -m scripts.sup_evaluation change_in_response_by_social_group_bbq
+
+# Supp Table 2.
+srun python -m scripts.sup_evaluation changes_in_model_selection
+
+# Figure 4.
+srun python -m scripts.sup_evaluation change_in_text_patterns
+
+# Figure 5.
+srun python -m scripts.sup_evaluation change_in_text_bias
