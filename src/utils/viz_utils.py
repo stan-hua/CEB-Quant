@@ -250,6 +250,7 @@ def catplot(
         horizontal_legend=horizontal_legend,
         save_dir=save_dir, save_fname=save_fname,
     )
+    return ax
 
 
 def numplot(
@@ -395,7 +396,7 @@ def numplot(
             )
 
     # Save plot
-    post_plot_logic(
+    ax = post_plot_logic(
         ax=axes[-1],
         title=title, title_size=title_size,
         xlabel=xlabel, ylabel=ylabel,
@@ -405,6 +406,7 @@ def numplot(
         horizontal_legend=horizontal_legend,
         save_dir=save_dir, save_fname=save_fname,
     )
+    return ax
 
 
 def barplot_with_ci(data, x, y, yerr_low, yerr_high, ax=None,
