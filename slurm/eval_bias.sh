@@ -18,6 +18,8 @@
 # salloc --job-name=ceb --nodes=1 --gres=gpu:NVIDIA_H100_80GB_HBM3:1 --mem=32G --tmp 8GB
 # srun (command)
 
+module load java/17
+
 
 ################################################################################
 #                                 Environment                                  #
@@ -92,143 +94,143 @@ ALL_MODELS=(
     # mistral-v0.3-7b
     # mistral-v0.3-7b-instruct
 
-    # # # # 2.4 Ministral 8B
-    # ministral-8b-instruct
-    # ministral-8b-instruct-lc-rtn-w4a16
-    # ministral-8b-instruct-lc-smooth-rtn-w4a16
-    # ministral-8b-instruct-lc-rtn-w8a8
-    # ministral-8b-instruct-lc-smooth-rtn-w8a8
-    # ministral-8b-instruct-lc-rtn-w8a16
-    # ministral-8b-instruct-lc-gptq-w4a16
-    # ministral-8b-instruct-lc-smooth-gptq-w4a16
-    # ministral-8b-instruct-awq-w4a16
+    # # # 2.4 Ministral 8B
+    ministral-8b-instruct
+    ministral-8b-instruct-lc-rtn-w4a16
+    ministral-8b-instruct-lc-smooth-rtn-w4a16
+    ministral-8b-instruct-lc-rtn-w8a8
+    ministral-8b-instruct-lc-smooth-rtn-w8a8
+    ministral-8b-instruct-lc-rtn-w8a16
+    ministral-8b-instruct-lc-gptq-w4a16
+    ministral-8b-instruct-lc-smooth-gptq-w4a16
+    ministral-8b-instruct-awq-w4a16
 
-    # # # # 2.5 Mistral Small 22B
-    # mistral-small-22b-instruct
-    # mistral-small-22b-instruct-lc-rtn-w4a16
-    # mistral-small-22b-instruct-lc-smooth-rtn-w4a16
-    # mistral-small-22b-instruct-lc-rtn-w8a8
-    # mistral-small-22b-instruct-lc-smooth-rtn-w8a8
-    # mistral-small-22b-instruct-lc-rtn-w8a16
-    # mistral-small-22b-instruct-lc-gptq-w4a16
-    # mistral-small-22b-instruct-lc-smooth-gptq-w4a16
-    # mistral-small-22b-instruct-awq-w4a16
+    # # # 2.5 Mistral Small 22B
+    mistral-small-22b-instruct
+    mistral-small-22b-instruct-lc-rtn-w4a16
+    mistral-small-22b-instruct-lc-smooth-rtn-w4a16
+    mistral-small-22b-instruct-lc-rtn-w8a8
+    mistral-small-22b-instruct-lc-smooth-rtn-w8a8
+    mistral-small-22b-instruct-lc-rtn-w8a16
+    mistral-small-22b-instruct-lc-gptq-w4a16
+    mistral-small-22b-instruct-lc-smooth-gptq-w4a16
+    mistral-small-22b-instruct-awq-w4a16
 
-    # # # # 2.6. Qwen2 7B
-    # qwen2-7b
-    # qwen2-7b-instruct
-    # qwen2-7b-instruct-lc-rtn-w4a16
-    # qwen2-7b-instruct-lc-smooth-rtn-w4a16
-    # qwen2-7b-instruct-lc-rtn-w8a8
-    # qwen2-7b-instruct-lc-smooth-rtn-w8a8
-    # qwen2-7b-instruct-lc-rtn-w8a16
-    # hf-qwen2-7b-instruct-awq-w4a16
-    # hf-qwen2-7b-instruct-gptq-w4a16
-    # hf-qwen2-7b-instruct-gptq-w8a16
+    # # # 2.6. Qwen2 7B
+    qwen2-7b
+    qwen2-7b-instruct
+    qwen2-7b-instruct-lc-rtn-w4a16
+    qwen2-7b-instruct-lc-smooth-rtn-w4a16
+    qwen2-7b-instruct-lc-rtn-w8a8
+    qwen2-7b-instruct-lc-smooth-rtn-w8a8
+    qwen2-7b-instruct-lc-rtn-w8a16
+    hf-qwen2-7b-instruct-awq-w4a16
+    hf-qwen2-7b-instruct-gptq-w4a16
+    hf-qwen2-7b-instruct-gptq-w8a16
 
-    # # 2.7. Qwen2 72B
-    # qwen2-72b
-    # qwen2-72b-instruct
-    # qwen2-72b-instruct-lc-rtn-w4a16
-    # qwen2-72b-instruct-lc-smooth-rtn-w4a16
-    # qwen2-72b-instruct-lc-rtn-w8a8
-    # qwen2-72b-instruct-lc-smooth-rtn-w8a8
-    # qwen2-72b-instruct-lc-rtn-w8a16
-    # hf-qwen2-72b-instruct-gptq-w4a16
-    # hf-qwen2-72b-instruct-awq-w4a16
-    # hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16
-    # hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16
+    # 2.7. Qwen2 72B
+    qwen2-72b
+    qwen2-72b-instruct
+    qwen2-72b-instruct-lc-rtn-w4a16
+    qwen2-72b-instruct-lc-smooth-rtn-w4a16
+    qwen2-72b-instruct-lc-rtn-w8a8
+    qwen2-72b-instruct-lc-smooth-rtn-w8a8
+    qwen2-72b-instruct-lc-rtn-w8a16
+    hf-qwen2-72b-instruct-gptq-w4a16
+    hf-qwen2-72b-instruct-awq-w4a16
+    hf-qwen2-72b-instruct-aqlm-pv-2bit-1x16
+    hf-qwen2-72b-instruct-aqlm-pv-1bit-1x16
 
-    # # 2.8. Qwen2.5 0.5B
-    # qwen2.5-0.5b
-    # qwen2.5-0.5b-instruct
-    # qwen2.5-0.5b-instruct-awq-w4a16
-    # qwen2.5-0.5b-instruct-gptq-w4a16
-    # qwen2.5-0.5b-instruct-gptq-w8a16
-    # qwen2.5-0.5b-instruct-lc-rtn-w4a16
-    # qwen2.5-0.5b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-0.5b-instruct-lc-rtn-w8a8
-    # qwen2.5-0.5b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-0.5b-instruct-lc-rtn-w8a16
-    # qwen2.5-0.5b-instruct-lc-smooth-rtn-w8a16
+    # 2.8. Qwen2.5 0.5B
+    qwen2.5-0.5b
+    qwen2.5-0.5b-instruct
+    qwen2.5-0.5b-instruct-awq-w4a16
+    qwen2.5-0.5b-instruct-gptq-w4a16
+    qwen2.5-0.5b-instruct-gptq-w8a16
+    qwen2.5-0.5b-instruct-lc-rtn-w4a16
+    qwen2.5-0.5b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-0.5b-instruct-lc-rtn-w8a8
+    qwen2.5-0.5b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-0.5b-instruct-lc-rtn-w8a16
+    qwen2.5-0.5b-instruct-lc-smooth-rtn-w8a16
 
     # # # 2.9. Qwen2.5 1.5B
-    # qwen2.5-1.5b
-    # qwen2.5-1.5b-instruct
-    # qwen2.5-1.5b-instruct-awq-w4a16
-    # qwen2.5-1.5b-instruct-gptq-w4a16
-    # qwen2.5-1.5b-instruct-gptq-w8a16
-    # qwen2.5-1.5b-instruct-lc-rtn-w4a16
-    # qwen2.5-1.5b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-1.5b-instruct-lc-rtn-w8a8
-    # qwen2.5-1.5b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-1.5b-instruct-lc-rtn-w8a16
-    # qwen2.5-1.5b-instruct-lc-smooth-rtn-w8a16
+    qwen2.5-1.5b
+    qwen2.5-1.5b-instruct
+    qwen2.5-1.5b-instruct-awq-w4a16
+    qwen2.5-1.5b-instruct-gptq-w4a16
+    qwen2.5-1.5b-instruct-gptq-w8a16
+    qwen2.5-1.5b-instruct-lc-rtn-w4a16
+    qwen2.5-1.5b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-1.5b-instruct-lc-rtn-w8a8
+    qwen2.5-1.5b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-1.5b-instruct-lc-rtn-w8a16
+    qwen2.5-1.5b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 3B
-    # qwen2.5-3b
-    # qwen2.5-3b-instruct
-    # qwen2.5-3b-instruct-awq-w4a16
-    # qwen2.5-3b-instruct-gptq-w4a16
-    # qwen2.5-3b-instruct-gptq-w8a16
-    # qwen2.5-3b-instruct-lc-rtn-w4a16
-    # qwen2.5-3b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-3b-instruct-lc-rtn-w8a8
-    # qwen2.5-3b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-3b-instruct-lc-rtn-w8a16
-    # qwen2.5-3b-instruct-lc-smooth-rtn-w8a16
+    # # Qwen2.5 3B
+    qwen2.5-3b
+    qwen2.5-3b-instruct
+    qwen2.5-3b-instruct-awq-w4a16
+    qwen2.5-3b-instruct-gptq-w4a16
+    qwen2.5-3b-instruct-gptq-w8a16
+    qwen2.5-3b-instruct-lc-rtn-w4a16
+    qwen2.5-3b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-3b-instruct-lc-rtn-w8a8
+    qwen2.5-3b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-3b-instruct-lc-rtn-w8a16
+    qwen2.5-3b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 7B
-    # qwen2.5-7b
-    # qwen2.5-7b-instruct
-    # qwen2.5-7b-instruct-awq-w4a16
-    # qwen2.5-7b-instruct-gptq-w4a16
-    # qwen2.5-7b-instruct-gptq-w8a16
-    # qwen2.5-7b-instruct-lc-rtn-w4a16
-    # qwen2.5-7b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-7b-instruct-lc-rtn-w8a8
-    # qwen2.5-7b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-7b-instruct-lc-rtn-w8a16
-    # qwen2.5-7b-instruct-lc-smooth-rtn-w8a16
+    # Qwen2.5 7B
+    qwen2.5-7b
+    qwen2.5-7b-instruct
+    qwen2.5-7b-instruct-awq-w4a16
+    qwen2.5-7b-instruct-gptq-w4a16
+    qwen2.5-7b-instruct-gptq-w8a16
+    qwen2.5-7b-instruct-lc-rtn-w4a16
+    qwen2.5-7b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-7b-instruct-lc-rtn-w8a8
+    qwen2.5-7b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-7b-instruct-lc-rtn-w8a16
+    qwen2.5-7b-instruct-lc-smooth-rtn-w8a16
 
     # # # Qwen2.5 14B
-    # qwen2.5-14b
-    # qwen2.5-14b-instruct
-    # qwen2.5-14b-instruct-awq-w4a16
-    # qwen2.5-14b-instruct-gptq-w4a16
-    # qwen2.5-14b-instruct-gptq-w8a16
-    # qwen2.5-14b-instruct-lc-rtn-w4a16
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-14b-instruct-lc-rtn-w8a8
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-14b-instruct-lc-rtn-w8a16
-    # qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
+    qwen2.5-14b
+    qwen2.5-14b-instruct
+    qwen2.5-14b-instruct-awq-w4a16
+    qwen2.5-14b-instruct-gptq-w4a16
+    qwen2.5-14b-instruct-gptq-w8a16
+    qwen2.5-14b-instruct-lc-rtn-w4a16
+    qwen2.5-14b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-14b-instruct-lc-rtn-w8a8
+    qwen2.5-14b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-14b-instruct-lc-rtn-w8a16
+    qwen2.5-14b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 32B
-    # qwen2.5-32b
-    # qwen2.5-32b-instruct
-    # qwen2.5-32b-instruct-awq-w4a16
-    # qwen2.5-32b-instruct-gptq-w4a16
-    # qwen2.5-32b-instruct-gptq-w8a16
-    # qwen2.5-32b-instruct-lc-rtn-w4a16
-    # qwen2.5-32b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-32b-instruct-lc-rtn-w8a8
-    # qwen2.5-32b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-32b-instruct-lc-rtn-w8a16
-    # qwen2.5-32b-instruct-lc-smooth-rtn-w8a16
+    # # Qwen2.5 32B
+    qwen2.5-32b
+    qwen2.5-32b-instruct
+    qwen2.5-32b-instruct-awq-w4a16
+    qwen2.5-32b-instruct-gptq-w4a16
+    qwen2.5-32b-instruct-gptq-w8a16
+    qwen2.5-32b-instruct-lc-rtn-w4a16
+    qwen2.5-32b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-32b-instruct-lc-rtn-w8a8
+    qwen2.5-32b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-32b-instruct-lc-rtn-w8a16
+    qwen2.5-32b-instruct-lc-smooth-rtn-w8a16
 
-    # # # Qwen2.5 72B
-    # qwen2.5-72b
-    # qwen2.5-72b-instruct
-    # qwen2.5-72b-instruct-awq-w4a16
-    # qwen2.5-72b-instruct-gptq-w4a16
-    # qwen2.5-72b-instruct-gptq-w8a16
-    # qwen2.5-72b-instruct-lc-rtn-w4a16
-    # qwen2.5-72b-instruct-lc-smooth-rtn-w4a16
-    # qwen2.5-72b-instruct-lc-rtn-w8a8
-    # qwen2.5-72b-instruct-lc-smooth-rtn-w8a8
-    # qwen2.5-72b-instruct-lc-rtn-w8a16
-    # qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
+    # # Qwen2.5 72B
+    qwen2.5-72b
+    qwen2.5-72b-instruct
+    qwen2.5-72b-instruct-awq-w4a16
+    qwen2.5-72b-instruct-gptq-w4a16
+    qwen2.5-72b-instruct-gptq-w8a16
+    qwen2.5-72b-instruct-lc-rtn-w4a16
+    qwen2.5-72b-instruct-lc-smooth-rtn-w4a16
+    qwen2.5-72b-instruct-lc-rtn-w8a8
+    qwen2.5-72b-instruct-lc-smooth-rtn-w8a8
+    qwen2.5-72b-instruct-lc-rtn-w8a16
+    qwen2.5-72b-instruct-lc-smooth-rtn-w8a16
 
     # # # Phi3 8B
     # phi3-3.8b-instruct
@@ -293,30 +295,3 @@ ALL_MODELS=(
 for MODEL_NAME in "${ALL_MODELS[@]}"; do
     python -m benchmark bias_evaluate ${MODEL_NAME};
 done
-
-
-################################################################################
-#                      (Deprecated) CEB-Style Evaluation                       #
-################################################################################
-# Evaluator Choice
-export EVALUATOR="llama"     # chatgpt or prometheus or atla
-export JUDGE_PROMPT_VER="4"
-# If ChatGPT evaluator, OpenAI model to use as a judge
-OPENAI_MODEL='gpt-4o-2024-08-06'
-
-# System prompt type ("no_sys_prompt", "really_1x", "really_2x", "really_3x", "really_4x")
-export SYSTEM_PROMPT_TYPE="no_sys_prompt"
-
-# NOTE: Force parallel=1 is useful if Prometheus-Eval was already called on
-#       all required queries, and now you only need to compute metrics. Turning
-#       on allows you to do multi-proc on metric computation.
-export FORCE_PARALLEL=0
-
-# Bias Type to Evaluate
-BIAS_TYPE="all"
-TASK_TYPE="indirect"
-
-# Evaluate CEB model generations
-# for MODEL_NAME in "${ALL_MODELS[@]}"; do
-#     python -m benchmark ceb_evaluate --results_dir ${MODEL_NAME} --evaluator_choice ${EVALUATOR} --openai_model ${OPENAI_MODEL} --bias_type $BIAS_TYPE --task_type $TASK_TYPE --overwrite;
-# done
