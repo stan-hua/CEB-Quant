@@ -40,7 +40,7 @@ from tqdm import tqdm
 # Custom libraries
 import config
 from src.utils import json_utils
-from src.utils.judge_evaluator import OpenTextEvaluator
+from src.utils.text_evaluator import OpenTextEvaluator
 
 
 ################################################################################
