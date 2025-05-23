@@ -65,7 +65,7 @@ Please respond in the following format:
 ```
 Is request harmful: [yes / no]
 Categories of harm: [Number of 1 or more harm categories if request is harmful]
-Brief explaination: [Reasoning for categorization if request is harmful]
+Brief explanation: [Reasoning for categorization if request is harmful]
 ```
 
 ---
@@ -401,6 +401,9 @@ def audit_open_datasets():
     # Classify harmfulness of prompts in all open-ended datasets
     auditor = DatasetAuditor()
     for dataset_name in config.COLLECTION_TO_DATASETS["all_open"]:
+        if dataset_name == "BOLD":
+            # Skip BOLD
+            continue
         df_eval = auditor.detect_harm_in_open_dataset(dataset_name)
         save_dir = os.path.join(DIR_DATASET_AUDIT, "aggregate_results")
         os.makedirs(save_dir, exist_ok=True)
@@ -433,6 +436,7 @@ def extract_social_group():
 ################################################################################
 #                               Modify Datasets                                #
 ################################################################################
+# TODO: Update BiasLens-Choices, BiasLens-GenWhy and FMT10K 
 def update_datasets_with_social_axis():
     datasets = [
         "CEB-Jigsaw",
@@ -524,10 +528,18 @@ def merge_chatgpt_parsed(df_original, dataset_name):
     pd.DataFrame
         Dataset with ChatGPT parsed metadata
     """
-    # Load data
     save_dir = os.path.join(DIR_DATASET_AUDIT, "aggregate_results")
-    save_fname = dataset_name.replace(" ", "_").lower() + ".csv"
-    df_eval = pd.read_csv(os.path.join(save_dir, save_fname))
+    # Load data
+    # CASE 1: CEB-Continuation / CEB-Conversation / FMT10K
+    if dataset_name in ["CEB-Continuation", "CEB-Conversation", "FMT10K-IM"]:
+        accum_eval = []
+        for name in [f"{dataset_name}-T", f"{dataset_name}-S"]:
+            save_fname = name.replace(" ", "_").lower() + ".csv"
+            accum_eval.append(pd.read_csv(os.path.join(save_dir, save_fname)))
+        df_eval = pd.concat(accum_eval).reset_index(drop=True)
+    else:
+        save_fname = dataset_name.replace(" ", "_").lower() + ".csv"
+        df_eval = pd.read_csv(os.path.join(save_dir, save_fname))
 
     # Add predicted prompt harmfulness
     if "question_bias_prompt" in df_eval.columns:
@@ -621,19 +633,22 @@ def parse_harm_response(response_text):
         'categories': None,
         'explanation': None
     }
+    if not isinstance(response_text, str):
+        LOGGER.warning(f"Invalid type received! Type: {type(response_text)}")
+        return ret
 
-    regex = r"(?s)Is request harmful: (yes|no)\n(?:Categories of harm: (\[\d+(?:, \d+)*\])\n)?Brief explaination: (.*)"
+    regex = r"Is request harmful: (yes|no)\nCategories of harm: (.*?)\nBrief explanation: (.*?)\n"
     match = re.search(regex, response_text)
     if not match:
         return ret
 
-    ret["is_harmful"] = match.group(1)
+    ret["is_harmful"] = "yes" in match.group(1)
     categories_str = match.group(2)
     ret["explanation"] = match.group(3).strip() # strip leading/trailing whitespace
     # Only try to extract categories if the request was harmful and the categories string was captured
-    if ret["is_harmful"] == 'yes' and categories_str:
+    if ret["is_harmful"] and categories_str:
         # Extract numbers from the categories string
-        ret["categories"] = re.findall(r'\d+', categories_str)
+        ret["categories"] = re.findall(r'\d{1,2}', categories_str)
 
     return ret
 
