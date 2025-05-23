@@ -1,5 +1,8 @@
-# Adapted from https://github.com/HowieHwong/TrustLLM/blob/main/trustllm_pkg/trustllm/config.py
+"""
+config.py
 
+Descriptions: Contains global constants for everything needed in the project.
+"""
 import os
 
 
@@ -209,32 +212,32 @@ assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 # Path to datasets directory
 DIR_DATASETS = os.path.join(DIR_PROJECT, "datasets")
 # Path to CEB datasets directory
-DIR_CEB_DATA = os.path.join(DIR_PROJECT, "ceb_dataset")
+DIR_CEB_DATA = os.path.join(DIR_DATASETS, "ceb_datasets")
 # Path to generative (open) datasets directory (excluding CEB)
-DIR_GEN_DATA = os.path.join(DIR_PROJECT, "gen_datasets")
+DIR_OPEN_DATA = os.path.join(DIR_DATASETS, "open_datasets")
 # Path to discriminative (closed) datasets directory
-DIR_DISCRIM_DATA = os.path.join(DIR_PROJECT, "discrim_dataset")
+DIR_CLOSED_DATA = os.path.join(DIR_DATASETS, "closed_datasets")
 # Path to directory to save things
-DIR_SAVE_DATA = os.path.join(DIR_PROJECT, "save_data")
+DIR_SAVE_DATA = os.path.join(DIR_DATASETS, "save_data")
 # Path to LLM generations (to evaluate)
 DIR_GENERATIONS = os.path.join(DIR_SAVE_DATA, "llm_generations")
-# Path to saved GPT-4 evaluations
-DIR_EVALUATIONS = os.path.join(DIR_SAVE_DATA, "llm_evaluations")
 # Path to stored analysis
 DIR_ANALYSIS = os.path.join(DIR_SAVE_DATA, "analysis")
-# Path to store LM-eval metrics
-DIR_LM_EVAL = os.path.join(DIR_SAVE_DATA, "lm-eval")
 # Path to store local models
 DIR_MODELS = os.path.join(DIR_SAVE_DATA, "models")
+# NOTE: The following are deprecated
+# Path to saved evaluations
+DIR_EVALUATIONS = os.path.join(DIR_SAVE_DATA, "llm_evaluations")
+# Path to store LM-eval metrics
+DIR_LM_EVAL = os.path.join(DIR_SAVE_DATA, "lm-eval")
 # Path to supplementary directory
 DIR_SUPPLEMENTARY = os.path.join(DIR_PROJECT, "supplementary")
-
 
 # Mapping of dataset names to directory mapping
 DATASET_TO_DIR = {
     tuple(ALL_CEB_DATASETS): DIR_CEB_DATA,
-    tuple(ALL_GEN_DATASETS): DIR_GEN_DATA,
-    tuple(ALL_DISCRIM_DATASETS): DIR_DISCRIM_DATA,
+    tuple(ALL_GEN_DATASETS): DIR_OPEN_DATA,
+    tuple(ALL_DISCRIM_DATASETS): DIR_CLOSED_DATA,
 }
 
 
@@ -648,6 +651,8 @@ MODEL_INFO = {
     "replicate_model":replicate_model,
 }
 
+
+# NOTE: The following aren't used in the paper:
 
 ################################################################################
 #                              Benchmark Agnostic                              #

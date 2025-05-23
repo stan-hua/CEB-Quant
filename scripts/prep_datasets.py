@@ -83,7 +83,7 @@ def prepare_discrimeval():
         explicit_data.append(curr_row)
 
     # Save
-    save_dir = os.path.join(config.DIR_DISCRIM_DATA, "DiscrimEval")
+    save_dir = os.path.join(config.DIR_CLOSED_DATA, "DiscrimEval")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, "explicit.json")
     json_utils.save_json(explicit_data, save_path)
@@ -145,7 +145,7 @@ def prepare_socialstigmaqa():
         save_data.append(curr_row)
 
     # Save
-    save_dir = os.path.join(config.DIR_DISCRIM_DATA, "SocialStigmaQA")
+    save_dir = os.path.join(config.DIR_CLOSED_DATA, "SocialStigmaQA")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, "yes_no.json")
     json_utils.save_json(save_data, save_path)
@@ -189,7 +189,7 @@ def prepare_stereoset():
 
     # Save data
     for social_axis, data in axis_to_inter_data.items():
-        dir_path = os.path.join(config.DIR_DISCRIM_DATA, "StereoSet-Intersentence")
+        dir_path = os.path.join(config.DIR_CLOSED_DATA, "StereoSet-Intersentence")
         os.makedirs(dir_path, exist_ok=True)
         save_path = os.path.join(dir_path, f"{social_axis}.json")
         json_utils.save_json(data, save_path)
@@ -221,7 +221,7 @@ def prepare_stereoset():
 
     # Save data
     for social_axis, data in axis_to_intra_data.items():
-        dir_path = os.path.join(config.DIR_DISCRIM_DATA, "StereoSet-Intrasentence")
+        dir_path = os.path.join(config.DIR_CLOSED_DATA, "StereoSet-Intrasentence")
         os.makedirs(dir_path, exist_ok=True)
         save_path = os.path.join(dir_path, f"{social_axis}.json")
         json_utils.save_json(data, save_path)
@@ -286,7 +286,7 @@ def prepare_bbq_dataset():
             }
             clean_data.append(curr_row)
         # Save
-        save_dir = os.path.join(config.DIR_DISCRIM_DATA, "BBQ")
+        save_dir = os.path.join(config.DIR_CLOSED_DATA, "BBQ")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{subset}.json")
         json_utils.save_json(clean_data, save_path)
@@ -370,7 +370,7 @@ def prepare_iat_dataset():
                 }
                 accum_data.append(clean_row)
         # Save JSON for social axis
-        save_dir = os.path.join(config.DIR_DISCRIM_DATA, "IAT")
+        save_dir = os.path.join(config.DIR_CLOSED_DATA, "IAT")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{social_axis}.json")
         json_utils.save_json(accum_data, save_path)
@@ -409,7 +409,7 @@ def prepare_biaslens_dataset():
             clean_data.append(curr_row)
             idx += 1
         # Save
-        save_dir = os.path.join(config.DIR_DISCRIM_DATA, "BiasLens-YesNo")
+        save_dir = os.path.join(config.DIR_CLOSED_DATA, "BiasLens-YesNo")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{social_axis}.json")
         json_utils.save_json(clean_data, save_path)
@@ -451,7 +451,7 @@ def prepare_biaslens_dataset():
             clean_data.append(curr_row)
             idx += 1
         # Save
-        save_dir = os.path.join(config.DIR_DISCRIM_DATA, "BiasLens-Choices")
+        save_dir = os.path.join(config.DIR_CLOSED_DATA, "BiasLens-Choices")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{social_axis}.json")
         json_utils.save_json(clean_data, save_path)
@@ -475,7 +475,7 @@ def prepare_biaslens_dataset():
             clean_data.append(curr_row)
             idx += 1
         # Save
-        save_dir = os.path.join(config.DIR_GEN_DATA, "BiasLens-GenWhy")
+        save_dir = os.path.join(config.DIR_OPEN_DATA, "BiasLens-GenWhy")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{social_axis}.json")
         json_utils.save_json(clean_data, save_path)
@@ -517,7 +517,7 @@ def prepare_bold_dataset():
             curr_accum_data.append(curr_row)
         # Save
         for social_axis, accum_data in social_axis_to_data.items():
-            save_dir = os.path.join(config.DIR_GEN_DATA, "BOLD")
+            save_dir = os.path.join(config.DIR_OPEN_DATA, "BOLD")
             os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, f"{social_axis}.json")
             json_utils.save_json(accum_data, save_path)
@@ -565,7 +565,7 @@ def prepare_do_not_answer_dataset():
             }
             accum_data.append(curr_row)
         # Save
-        save_dir = os.path.join(config.DIR_GEN_DATA, "DoNotAnswer-S")
+        save_dir = os.path.join(config.DIR_OPEN_DATA, "DoNotAnswer-S")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{axis}.json")
         json_utils.save_json(accum_data, save_path)
@@ -587,7 +587,7 @@ def prepare_do_not_answer_dataset():
             }
             accum_data.append(curr_row)
         # Save
-        save_dir = os.path.join(config.DIR_GEN_DATA, "DoNotAnswer-T")
+        save_dir = os.path.join(config.DIR_OPEN_DATA, "DoNotAnswer-T")
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"{axis}.json")
         json_utils.save_json(accum_data, save_path)
@@ -604,7 +604,7 @@ def prepare_fmt10k_dataset():
 
     for bias_type, dataset_name in bias_type_to_dataset_name.items():
         # Create directory
-        save_dir = os.path.join(config.DIR_GEN_DATA, dataset_name)
+        save_dir = os.path.join(config.DIR_OPEN_DATA, dataset_name)
         os.makedirs(save_dir, exist_ok=True)
         # Get social axes
         social_axes = config.DATASETS_TO_SOCIAL_AXIS[dataset_name]
