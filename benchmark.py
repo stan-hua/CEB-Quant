@@ -5,16 +5,16 @@ Description: Contains high-level functions for benchmarking:
 
 Examples:
 1. Perform inference on datasets for a specific model
->>> python -m benchmark generate [model]
+>>> python -m scripts.benchmark generate [model]
 
 2. Evaluate open-ended text generations
->>> python -m benchmark bias_evaluate [model]
+>>> python -m scripts.benchmark bias_evaluate [model]
 
 3. Find unfinished runs
->>> python -m benchmark find_unfinished --help
+>>> python -m scripts.benchmark find_unfinished --help
 
 4. Delete runs
->>> python -m benchmark delete --help
+>>> python -m scripts.benchmark delete --help
 """
 
 # Standard libraries

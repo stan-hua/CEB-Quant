@@ -50,12 +50,12 @@ DISCRIM_DATASET_NAMES=(
 )
 
 for DATASET_NAME in "${DISCRIM_DATASET_NAMES[@]}"; do
-    srun python -m scripts.sup_evaluation analyze_discrim_dataset $DATASET_NAME;
+    srun python -m scripts.analysis analyze_discrim_dataset $DATASET_NAME;
 done
 
 
 # DiscrimEval
-# srun python -m scripts.sup_evaluation analyze_de
+# srun python -m scripts.analysis analyze_de
 
 ################################################################################
 #                            Generative Evaluation                             #
@@ -74,8 +74,7 @@ GEN_DATASET_NAMES=(
 )
 
 for DATASET_NAME in "${GEN_DATASET_NAMES[@]}"; do
-    # srun python -m scripts.sup_evaluation analyze_gen_dataset $DATASET_NAME;
-    srun python -m scripts.sup_evaluation load_open_sample_change_values $DATASET_NAME;
+    srun python -m scripts.analysis analyze_gen_dataset $DATASET_NAME;
 done
 
 
@@ -84,25 +83,25 @@ done
 #                                   Results                                    #
 ################################################################################
 # # Figure 1. + Supp Table 1
-srun python -m scripts.sup_evaluation change_in_agg_metrics
+srun python -m scripts.analysis change_in_agg_metrics
 
 # # Table 1.
-srun python -m scripts.sup_evaluation change_in_response_flipping
+srun python -m scripts.analysis change_in_response_flipping
 
 # # Figure 2
-srun python -m scripts.sup_evaluation change_in_probabilities
+srun python -m scripts.analysis change_in_probabilities
 
 # # Figure 3
-srun python -m scripts.sup_evaluation factors_related_to_response_flipping
+srun python -m scripts.analysis factors_related_to_response_flipping
 
 # Figure 3c
-srun python -m scripts.sup_evaluation change_in_response_by_social_group_bbq
+srun python -m scripts.analysis change_in_response_by_social_group_bbq
 
 # Supp Table 2.
-srun python -m scripts.sup_evaluation changes_in_model_selection
+srun python -m scripts.analysis changes_in_model_selection
 
 # Figure 4.
-srun python -m scripts.sup_evaluation change_in_text_patterns
+srun python -m scripts.analysis change_in_text_patterns
 
 # Figure 5.
-srun python -m scripts.sup_evaluation change_in_text_bias
+srun python -m scripts.analysis change_in_text_bias

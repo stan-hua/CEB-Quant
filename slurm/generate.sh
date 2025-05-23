@@ -338,16 +338,16 @@ echo $port
 # 1. Regular models
 for MODEL_NAME in "${MODEL_NAMES[@]}"; do
     for CHAT_FLAG in "${CHAT_FLAGS[@]}"; do
-        python -m benchmark generate ${MODEL_NAME} --use_chat_template $CHAT_FLAG --num_gpus $NUM_GPUS --dataset_name $DATASET_NAME;
+        python -m scripts.benchmark generate ${MODEL_NAME} --use_chat_template $CHAT_FLAG --num_gpus $NUM_GPUS --dataset_name $DATASET_NAME;
     done
 done
 
 # # 2. QuIP# models
 # for MODEL_NAME in "${QUIP_MODELS[@]}"; do
-#     python -m benchmark generate ${MODEL_NAME};
+#     python -m scripts.benchmark generate ${MODEL_NAME};
 # done
 
 # # 3. VPTQ models
 # for MODEL_NAME in "${VPTQ_MODELS[@]}"; do
-#     python -m benchmark generate ${MODEL_NAME} --model_provider "vptq";
+#     python -m scripts.benchmark generate ${MODEL_NAME} --model_provider "vptq";
 # done

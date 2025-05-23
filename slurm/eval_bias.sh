@@ -293,5 +293,5 @@ ALL_MODELS=(
 ################################################################################
 # Evaluate model
 for MODEL_NAME in "${ALL_MODELS[@]}"; do
-    python -m benchmark bias_evaluate ${MODEL_NAME};
+    python -m scripts.benchmark bias_evaluate ${MODEL_NAME};
 done
