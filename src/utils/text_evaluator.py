@@ -1,5 +1,5 @@
 """
-judge_evaluator.py
+text_evaluator.py
 
 Description: Uses LLaMA Guard 3 8B to evaluate safety in text
 """
