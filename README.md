@@ -1,109 +1,187 @@
-# CEB: A Compositional Evaluation Benchmark for Bias in Large Language Models
+<!-- OPTIONAL: Project Logo
+<p align="center">
+  <img src="[OPT FILL: Path/link to logo image]" alt="Logo" style="width: 15%; display: block; margin: auto;">
+</p>
+-->
 
-![The framework of CEB.](framework.png)
-
-This repository contains the **refactored version** of the benchmark released in the paper [CEB: A Compositional Evaluation Benchmark for Bias in Large Language Models](https://arxiv.org/pdf/2407.02408).
-
-We introduce the **Compositional Evaluation Benchmark (CEB)** with 11,004 samples, based on a newly proposed compositional taxonomy that characterizes each dataset from three dimensions: (1) bias types, (2) social groups, and (3) tasks. Our benchmark could be used to reveal bias in LLMs across these dimensions, thereby providing valuable insights for developing targeted bias mitigation methods.
-
-## Dataset
-
-The CEB dataset is now publicly available to support further research and development in this critical area.
-
-**[Dataset Files]**: ```./data```
-
-**[HuggingFace Dataset Link]**: [CEB Dataset](https://huggingface.co/datasets/Song-SW/CEB)
-
-**[Dataset Statistics]**:
-
-| **Dataset**            | **Task Type**   | **Bias Type**   | **Age** | **Gender** | **Race** | **Religion** | **Size** |
-|------------------------|-----------------|-----------------|---------|------------|----------|--------------|----------|
-| CEB-Recognition-S      | Recognition     | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Selection-S        | Selection       | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Continuation-S     | Continuation    | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Conversation-S     | Conversation    | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Recognition-T      | Recognition     | Toxicity        | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Selection-T        | Selection       | Toxicity        | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Continuation-T     | Continuation    | Toxicity        | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Conversation-T     | Conversation    | Toxicity        | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-Adult              | Classification  | Stereotyping    | No      | Yes        | Yes      | No           | 500      |
-| CEB-Credit             | Classification  | Stereotyping    | Yes     | Yes        | No       | No           | 500      |
-| CEB-Jigsaw             | Classification  | Toxicity        | No      | Yes        | Yes      | Yes          | 500      |
-| CEB-WB-Recognition     | Recognition     | Stereotyping    | No      | Yes        | No       | No           | 792      |
-| CEB-WB-Selection       | Selection       | Stereotyping    | No      | Yes        | No       | No           | 792      |
-| CEB-SS-Recognition     | Recognition     | Stereotyping    | No      | Yes        | Yes      | Yes          | 960      |
-| CEB-SS-Selection       | Selection       | Stereotyping    | No      | Yes        | Yes      | Yes          | 960      |
-| CEB-RB-Recognition     | Recognition     | Stereotyping    | No      | Yes        | Yes      | Yes          | 1000     |
-| CEB-RB-Selection       | Selection       | Stereotyping    | No      | Yes        | Yes      | Yes          | 1000     |
-| CEB-CP-Recognition     | Recognition     | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
-| CEB-CP-Selection       | Selection       | Stereotyping    | Yes     | Yes        | Yes      | Yes          | 400      |
+<h1 align="center"> Uncertainty Drives Social Bias in Quantized Large Language Models </h1>
 
 
-We encourage researchers and developers to utilize and contribute to this benchmark to enhance the evaluation and mitigation of biases in LLMs.
+<!-- OPTIONAL: Badges with Hyperlinks
+<p align="center">
+  <a href="[OPT FILL: Path/link to paper]"><img src="https://img.shields.io/badge/arXiv-2405.01535-b31b1b.svg" alt="arXiv"></a>
+  <a href="[OPT FILL: Path/link to HuggingFace]"><img src="https://img.shields.io/badge/Hugging%20Face-Organization-ff9d00" alt="Hugging Face Organization"></a>
+  <a href="[OPT FILL: Path/link to LICENSE]"><img src="https://img.shields.io/license-MIT-blue/license-MIT-blue.svg" alt="License"></a>
+  <a href="[OPT FILL: Path/link to PyPI project]"><img src="https://img.shields.io/pypi/v/[OPT FILL: Name of PyPI package].svg" alt="PyPI version"></a>
+</p>
+-->
+
+<p align="center">
+  ⚡ A repository for benchmarking social bias in LLMs post-quantization 🚀 ⚡ <br>
+</p>
 
 ---
 
-## Setup
-```
-# Install all the necessary packages
-pip install envs/requirements.txt
+## 🌲 About the Repo
+
+<!-- OPTIONAL: Create Repository Structure Automatically
+pip install rptree
+rptree -d .
+[OPT FILL: Copy structure to this README]
+-->
+
+```shell
+./
+├── data/                   # Data directory
+│   ├── ceb_datasets/            # CEB datasets
+│   ├── closed_datasets/         # Closed-ended datasets
+│   ├── open_datasets/           # Open-ended datasets
+│   └── save_data/              # Saved artifacts from inference
+│       ├── llm_generations/        # Contains responses generated by each model
+│       ├── analysis/               # Contains analysis related data
+│       └── models/                 # Contains local models
+├── slurm/                  # Contains sbatch scripts for running on SLURM server
+│   └── logs/                   # Stores logs from SLURM jobs
+├── src/
+│   ├── bin/                # Contains a script for renaming models in the command-line
+│   ├── data/               # Contains data code
+│   └── utils/              # Contains utility funcitons
+│       ├── data/
+│       └── misc/
+├── scripts/                # Contains scripts to run
+└── config.py               # Contains global constants
 ```
 
-## Configuration
 
-Please add your OpenAI API key and Perspective API key to your shell config file
+
+## 💴 About the Data
+
+**Data Description**:
+
+In this repository, we repackage the following datasets:
+
+|  Style | Definition |       **Dataset**       | **Questions** |
+|:------:|:----------:|:-----------------------:|:-------------:|
+| Closed |      1     |     CEB-Recognition     |     1,600     |
+| Closed |      1     |        CEB-Jigsaw       |     1,500     |
+| Closed |      2     |        CEB-Adult        |     1,000     |
+| Closed |      2     |        CEB-Credit       |     1,000     |
+| Closed |      3     |     BiasLens-Choices    |     10,917    |
+| Closed |      3     |      SocialStigmaQA     |     10,360    |
+| Closed |      3     |           BBQ           |     29,238    |
+| Closed |      3     |           IAT           |     13,858    |
+| Closed |      3     | StereoSet-Intersentence |     2,123     |
+|  Open  |      3     |     BiasLens-GenWhy     |     10,972    |
+|  Open  |      3     |     CEB-Continuation    |      800      |
+|  Open  |      3     |     CEB-Conversation    |      800      |
+|  Open  |      3     |        FMT10K-IM        |     1,655     |
+|  Open  |      3     |          Total          |     85,823    |
+
+In **closed-ended datasets**, a response is selected among multiple  fixed options. We use geometric average tokene probability in each choice to select a response.
+
+In **open-ended datasets**, a text response is generated with greedy decoding and evaluated later asynchronously using LLaMA Guard 8B. 
+
+
+---
+
+## 🔧 Installation
+
+**(Manual) Installation:**
+```shell
+# Get repository
+git clone https://github.com/[repository]
+cd [repository]
+
+# Create new conda environment
+conda create --name fairbench python=3.10.15
+conda activate fairbench
+
+# Install dependencies
+pip install -r envs/requirements.txt
 ```
+
+## ⚙️ Configuration
+
+**(OpenAI) Registering your OpenAI key**
+```shell
 # Add to ~/.bashrc file (or to your .envrc)
 echo 'export OPENAI_KEY="[ENTER HERE]"' >> ~/.bashrc
-echo 'export PERSPECTIVE_KEY="[ENTER HERE]"' >> ~/.bashrc
 
 # Reload shell
 source ~/.bashrc
 ```
 
-For modifying any models or changing any prompts, please refer to `config.py`
+**Adding a New Model**
 
----
+| To add a new model, please update `MODEL_INFO` in `config.py`. Take, for example, "Meta-Llama-3.1-8B-Instruct-GPTQ-4bit".
 
-## CEB-Benchmark Evaluation
+| First, update `MODEL_INFO['model_group']` if it's a new model.
+* Append `llama3.1-8b-instruct`.
 
-#### 0. If using custom HuggingFace model, create shorthand in `config.py`
-```
-# Modify MODEL_INFO["model_mapping"] with shorthand for directory
-```
+| Next, in `MODEL_INFO['model_path_to_name']`, provide a mapping of the HuggingFace / local path to a model shorthand, following the standard: `[original_model]-[q_method]-[bit_configuration]`.
+* Add "Meta-Llama-3.1-8B-Instruct-GPTQ-4bit" -> "llama3.1-8b-instruct-gptq-w4a16",
 
-#### 1. Perform generations on ALL datasets (e.g., for a LLaMA 3.1 8B model on HuggingFace)
-```
+
+
+## 🏃 How to Run
+
+**(Shell) Generate responses to all datasets for a single model**
+```shell
 # Option 1. In shell
-MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
-python -m ceb_benchmark generate --model_path ${MODEL_NAME};
+# MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
+MODEL_NICKNAME="llama3.1-8b-instruct"    # shorthand defined in config.py / MODEL_INFO
+python -m scripts.benchmark generate ${MODEL_NICKNAME};
 
-# Option 2. In SLURM server
-sbatch slurm/run_ceb.sh
+# Option 2. In a SLURM batch job
+# TODO: First, modify `slurm/generate.sh` to run the model specified
+sbatch slurm/generate.sh
 ```
-NOTE: Ensure that the model path has a shorthand mapping in `src/config/config.py`
 
-#### 2. Evaluate stereotyping/toxicity using OpenAI's ChatGPT (Stereotype) & Google's Perspective API (Toxicity)
-```
+
+**(Shell) Classify safety of open-ended responses**
+```shell
 # Option 1. In shell
-RESULTS_DIR="./generation_results/llama3.1-8b"
-OPENAI_MODEL='gpt-4o-2024-08-06'    # OpenAI model for assessing stereotype bias
-python -m src.task.ceb_benchmark evaluate --results_dir ${RESULTS_DIR} --openai_model ${OPENAI_MODEL}
+# MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
+MODEL_NICKNAME="llama3.1-8b-instruct"    # shorthand defined in config.py / MODEL_INFO
+python -m scripts.benchmark bias_evaluate ${MODEL_NAME};
 
-# Option 2. In SLURM server
-sbatch slurm/eval_ceb.sh
+# Option 2. In a SLURM batch job
+# TODO: First, modify `slurm/generate.sh` to run the model specified
+sbatch slurm/eval_bias.sh
 ```
 
----
+
+**(Shell) Perform analysis to reproduce paper results**
+```shell
+# Option 1. In shell
+# MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
+MODEL_NICKNAME="llama3.1-8b-instruct"    # shorthand defined in config.py / MODEL_INFO
+python -m scripts.benchmark bias_evaluate ${MODEL_NAME};
+
+# Option 2. In a SLURM batch job
+# TODO: First, modify `slurm/generate.sh` to run the model specified
+sbatch slurm/eval_bias.sh
+```
+
+
+## 👏 Acknowledgements
+
+Special thanks to the authors of the [CEB Benchmark]((https://arxiv.org/pdf/2407.02408)), whose code base served
+as the starting point for this repository.
+
+**Collaborators**:
+1. [Anonymous Snail](mailto:)
+
 
 ## Citation
 
-Please cite the original benchmark paper.
-```
-@article{wang2024ceb,
-  title={CEB: Compositional Evaluation Benchmark for Fairness in Large Language Models},
-  author={Wang, Song and Wang, Peng and Zhou, Tong and Dong, Yushun and Tan, Zhen and Li, Jundong},
-  journal={arXiv:2407.02408},
-  year={2024}
+If you find our work useful, please consider citing our paper!
+
+```bibtex
+@article{YourName,
+  title={Your Title},
+  author={Your team},
+  journal={Location},
+  year={Year}
 }
 ```

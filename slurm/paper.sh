@@ -2,7 +2,7 @@
 #SBATCH --job-name=paper                    # Job name
 # --gres=gpu:NVIDIA_L40S:1
 #SBATCH --nodes=1                         # Number of nodes
-#SBATCH --cpus-per-task=32                 # Number of CPU cores per TASK
+#SBATCH --cpus-per-task=64                 # Number of CPU cores per TASK
 #SBATCH --mem=64GB
 #SBATCH -o slurm/logs/slurm-paper-%j.out
 #SBATCH --time=24:00:00
@@ -82,26 +82,33 @@ done
 ################################################################################
 #                                   Results                                    #
 ################################################################################
-# # Figure 1. + Supp Table 1
-srun python -m scripts.analysis change_in_agg_metrics
+# # Figure 1.
+# srun python -m scripts.analysis change_in_agg_metrics
 
-# # Table 1.
-srun python -m scripts.analysis change_in_response_flipping
+# Supp Table 1.
+# srun python -m scripts.analysis change_in_agg_metrics_int8
 
-# # Figure 2
-srun python -m scripts.analysis change_in_probabilities
+# # # Table 1.
+# srun python -m scripts.analysis change_in_response_flipping
 
-# # Figure 3
-srun python -m scripts.analysis factors_related_to_response_flipping
+# # # Figure 2
+# srun python -m scripts.analysis change_in_probabilities
 
-# Figure 3c
-srun python -m scripts.analysis change_in_response_by_social_group_bbq
+# # # Figure 3
+# srun python -m scripts.analysis factors_related_to_response_flipping
 
-# Supp Table 2.
-srun python -m scripts.analysis changes_in_model_selection
+# # Figure 3c
+# srun python -m scripts.analysis change_in_response_by_social_group_bbq
 
-# Figure 4.
-srun python -m scripts.analysis change_in_text_patterns
+# # Supp Table 2.
+# srun python -m scripts.analysis changes_in_model_selection
+
+# # Figure 4.
+# srun python -m scripts.analysis change_in_text_patterns
 
 # Figure 5.
-srun python -m scripts.analysis change_in_text_bias
+# srun python -m scripts.analysis change_in_text_bias
+
+# # Supp. Table.
+# srun python -m scripts.analysis change_in_text_bias_fmt10k
+srun python -m scripts.analysis change_in_text_bias_biaslens

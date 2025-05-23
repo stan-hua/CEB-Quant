@@ -48,7 +48,7 @@ NUM_GPUS_SPLIT=1
 NUM_GPUS_DISTRIBUTE=1
 
 # HuggingFace ID
-HF_ID="stan-hua"
+HF_ID=$HF_DATA_USERNAME
 
 # Models to Evaluate
 MODEL_NAMES=(

@@ -9,6 +9,12 @@ import os
 ################################################################################
 #                             Evaluation Constants                             #
 ################################################################################
+# Number of concurrent workers to send API requests (e.g., to OpenAI)
+MAX_WORKER_AUTOEVAL = 4
+
+# HuggingFace username where models are found
+HF_DATA_USERNAME = os.environ["HF_USERNAME_DATA"]
+
 # API Keys for inference / evaluation
 # NOTE: OpenAI used for generating bias scores on indirect eval.
 # NOTE: Perspective used for generating toxicity scores on indirect eval.
@@ -17,19 +23,14 @@ PERSPECTIVE_KEY = os.environ.get("PERSPECTIVE_KEY")
 # NOTE: Modify below if using OpenAI API but with vLLM or other LLM provider link
 OPENAI_API_URL = None
 
-# Number of concurrent workers to send API requests (e.g., to OpenAI)
-MAX_WORKER_AUTOEVAL = 4
-
 # Default OpenAI model for evaluation
 DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
 
 # Perspective API URL
 PERSPECTIVE_API_URL = "https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1"
-
 # Filename of Perspective API file lock
 # NOTE: We use this to prevent multiple processes from overloading the Perspective API server
 PERSPECTIVE_LOCK_FNAME = "perspective.api.lock"
-
 # Filename to save intermediary results from Perspective API
 PERSPECTIVE_EVAL_FNAME = 'perspective_eval_progress.json'
 
@@ -210,15 +211,15 @@ DIR_PROJECT = os.path.dirname(__file__)
 assert (DIR_PROJECT.endswith("CEB-Quant")), DIR_PROJECT
 
 # Path to datasets directory
-DIR_DATASETS = os.path.join(DIR_PROJECT, "datasets")
+DIR_DATA = os.path.join(DIR_PROJECT, "data")
 # Path to CEB datasets directory
-DIR_CEB_DATA = os.path.join(DIR_DATASETS, "ceb_datasets")
+DIR_CEB_DATA = os.path.join(DIR_DATA, "ceb_datasets")
 # Path to generative (open) datasets directory (excluding CEB)
-DIR_OPEN_DATA = os.path.join(DIR_DATASETS, "open_datasets")
+DIR_OPEN_DATA = os.path.join(DIR_DATA, "open_datasets")
 # Path to discriminative (closed) datasets directory
-DIR_CLOSED_DATA = os.path.join(DIR_DATASETS, "closed_datasets")
+DIR_CLOSED_DATA = os.path.join(DIR_DATA, "closed_datasets")
 # Path to directory to save things
-DIR_SAVE_DATA = os.path.join(DIR_DATASETS, "save_data")
+DIR_SAVE_DATA = os.path.join(DIR_DATA, "save_data")
 # Path to LLM generations (to evaluate)
 DIR_GENERATIONS = os.path.join(DIR_SAVE_DATA, "llm_generations")
 # Path to stored analysis
@@ -231,7 +232,7 @@ DIR_EVALUATIONS = os.path.join(DIR_SAVE_DATA, "llm_evaluations")
 # Path to store LM-eval metrics
 DIR_LM_EVAL = os.path.join(DIR_SAVE_DATA, "lm-eval")
 # Path to supplementary directory
-DIR_SUPPLEMENTARY = os.path.join(DIR_PROJECT, "supplementary")
+DIR_SUPPLEMENTARY = os.path.join(DIR_SAVE_DATA, "supplementary")
 
 # Mapping of dataset names to directory mapping
 DATASET_TO_DIR = {
@@ -292,12 +293,12 @@ MODEL_INFO = {
         # LLaMA 3.1 8B Instruct
         "meta-llama/Llama-3.1-8B": "llama3.1-8b",
         "meta-llama/Llama-3.1-8B-Instruct": "llama3.1-8b-instruct",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit-desc_act": "llama3.1-8b-instruct-gptq-desc_act-8bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit": "llama3.1-8b-instruct-gptq-8bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-4bit": "llama3.1-8b-instruct-gptq-4bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-3bit": "llama3.1-8b-instruct-gptq-3bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-GPTQ-2bit": "llama3.1-8b-instruct-gptq-2bit",
-        "stan-hua/Meta-Llama-3.1-8B-Instruct-AWQ-4bit": "llama3.1-8b-instruct-awq-4bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit-desc_act": "llama3.1-8b-instruct-gptq-desc_act-8bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-GPTQ-8bit": "llama3.1-8b-instruct-gptq-8bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-GPTQ-4bit": "llama3.1-8b-instruct-gptq-4bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-GPTQ-3bit": "llama3.1-8b-instruct-gptq-3bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-GPTQ-2bit": "llama3.1-8b-instruct-gptq-2bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-Instruct-AWQ-4bit": "llama3.1-8b-instruct-awq-4bit",
         "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4": "hf-llama3.1-8b-instruct-gptq-4bit",
         "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4": "hf-llama3.1-8b-instruct-awq-4bit",
         "neuralmagic/Meta-Llama-3.1-8B-Instruct-quantized.w4a16": "nm-llama3.1-8b-instruct-gptq-w4a16",
@@ -317,11 +318,11 @@ MODEL_INFO = {
         "ISTA-DASLab/Meta-Llama-3.1-8B-Instruct-AQLM-PV-1Bit-1x16-hf": "hf-llama3.1-8b-instruct-aqlm-pv-1bit-1x16",
 
         # LLaMA 3.1 8B
-        "stan-hua/Meta-Llama-3.1-8B-GPTQ-8bit": "llama3.1-8b-gptq-8bit",
-        "stan-hua/Meta-Llama-3.1-8B-GPTQ-4bit": "llama3.1-8b-gptq-4bit",
-        "stan-hua/Meta-Llama-3.1-8B-GPTQ-3bit": "llama3.1-8b-gptq-3bit",
-        "stan-hua/Meta-Llama-3.1-8B-GPTQ-2bit": "llama3.1-8b-gptq-2bit",
-        "stan-hua/Meta-Llama-3.1-8B-AWQ-4bit": "llama3.1-8b-awq-4bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-GPTQ-8bit": "llama3.1-8b-gptq-8bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-GPTQ-4bit": "llama3.1-8b-gptq-4bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-GPTQ-3bit": "llama3.1-8b-gptq-3bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-GPTQ-2bit": "llama3.1-8b-gptq-2bit",
+        f"{HF_DATA_USERNAME}/Meta-Llama-3.1-8B-AWQ-4bit": "llama3.1-8b-awq-4bit",
         "Xu-Ouyang/Meta-Llama-3.1-8B-int3-GPTQ-wikitext2": "hf-llama3.1-8b-gptq-3bit",
         "Xu-Ouyang/Llama-3.1-8B-int2-GPTQ-wikitext2": "hf-llama3.1-8b-gptq-2bit",
 

@@ -47,7 +47,7 @@ export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 #                                 Choose Model                                 #
 ################################################################################
 # HuggingFace ID
-HF_ID="stan-hua"
+HF_ID=$HF_DATA_USERNAME
 
 # Models to generate for
 MODEL_NAMES=(

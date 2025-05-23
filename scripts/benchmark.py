@@ -546,8 +546,8 @@ if __name__ == "__main__":
     # Configure multiprocessing; to avoid vLLM issues with multi-threading
     multiprocessing.set_start_method('spawn')
     Fire({
-        "bias_evaluate": bias_eval_dataset_collection,
         "generate": generate,
+        "bias_evaluate": bias_eval_dataset_collection,
         "find_unfinished": find_unfinished,
         "delete": delete,
     })

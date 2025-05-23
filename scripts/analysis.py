@@ -27,10 +27,10 @@ from rouge_score import rouge_scorer
 from tqdm import tqdm
 
 # Custom libraries
-import audit_ceb
 import config
-from benchmark import extract_model_metadata_from_name
-from src.utils import fmt_eval, json_utils, viz_utils
+from scripts import audit_datasets
+from scripts.benchmark import extract_model_metadata_from_name
+from src.utils import json_utils, viz_utils
 from src.utils.llm_gen_wrapper import extract_model_path_or_name
 
 
@@ -99,18 +99,19 @@ NON_SHARED_COLS = [
 OPEN_ENDED_REQUIRED_COLS = ["probs_categorization", "toxicity", "lt-error_count", "max_1gram_rep"]
 
 # Simple function filter out model based on quantization in name
-def filter_quant(name):
+def filter_quant(name, keep_w8a8=False):
     should_remove = any([
         ("-chat" in name),
         ("aqlm" in name),
         ("kv8" in name),
         ("fp8" in name),
         ("gptq-w8a16" in name),
-        ("w8a8" in name),
         ("smooth-gptq" in name), ("smooth-rtn-w8a16" in name),
         ("72b" in name), ("70b" in name), ("32b" in name), ("22b" in name),
         ("instruct" not in name),
     ])
+    if not keep_w8a8:
+        should_remove = should_remove or ("w8a8" in name)
     return should_remove
 
 
@@ -309,7 +310,6 @@ def get_huggingface_paths():
     gen_dir = os.path.join(config.DIR_GENERATIONS, "no_sys_prompt")
     all_models = os.listdir(gen_dir)
     all_models = [m for m in all_models if re.search(MODEL_REGEX, m) and not filter_quant(m)]
-    all_models = [m for m in all_models if "w8a8" not in m]
 
     # Convert to HuggingFace path
     accum_paths = []
@@ -334,7 +334,7 @@ def get_huggingface_paths():
     df_paths["Q Method"] = df_paths["Q Method"].map(lambda x: "SmoothQuant-RTN W4A16" if "+ SQ" in x else x)
     
     # Add HuggingFace name
-    df_paths["HF Path"] = df_paths["HF Path"].map(lambda x: f"stan-hua/{x}" if "/" not in x else x)
+    df_paths["HF Path"] = df_paths["HF Path"].map(lambda x: f"{config.HF_DATA_USERNAME}/{x}" if "/" not in x else x)
 
     df_paths = df_paths.sort_values(by=["Model Family", "Param Size", "Base Model", "Q Method"])
     df_paths = df_paths[["Base Model", "Q Method", "HF Path"]]
@@ -953,7 +953,7 @@ def analyze_de():
 ################################################################################
 #                                   Results                                    #
 ################################################################################
-def load_dataset_agg_metrics(dataset_name):
+def load_dataset_agg_metrics(dataset_name, keep_w8a8=False):
     """
     Load aggregated bias metrics for a dataset
 
@@ -986,7 +986,7 @@ def load_dataset_agg_metrics(dataset_name):
     # Filter for base models
     df_data = df_data[df_data["model_base"].isin(KEEP_BASE_MODELS)]
     # Filter from quantized model
-    df_data = df_data[~df_data["model_modified"].map(filter_quant)]
+    df_data = df_data[~df_data["model_modified"].map(lambda x: filter_quant(x, keep_w8a8=keep_w8a8))]
     # If BBQ dataset, load the ambiguous scores
     if dataset_name == "BBQ":
         LOGGER.info("Filtering BBQ for ambiguous context...")
@@ -1200,12 +1200,6 @@ def change_in_agg_metrics():
     ]
     df_qmethod = pd.concat(accum_metrics["prop_sig-by_qmethod"])
     df_qmethod = df_qmethod.pivot(index="q_method_full", columns="dataset", values="is_significant")
-    # Supplementary
-    df_w8_supp = df_qmethod.dropna(axis=1)[["CEB-Recognition", "CEB-Jigsaw"]]
-    df_w8_supp = (100 * df_w8_supp).round(1).sort_index()
-    df_w8_supp.loc[df_w8_supp.index.str.contains("W4")].mean(axis=0)
-    df_w8_supp.loc[df_w8_supp.index.str.contains("W8")].mean(axis=0)
-    df_w8_supp.to_csv(os.path.join(config.DIR_ANALYSIS, "aggregate_metrics", "supp_table-w8a16_qmethod.csv"))
 
     # Average the proportion of quantized models that flip (per dataset by each quantization method) across the datasets
     df_qmethod = df_qmethod.dropna().mean(axis=1).sort_index(ascending=False)
@@ -1249,7 +1243,6 @@ def change_in_agg_metrics():
 
     # Recognition. Bias change
     df_recognition = load_dataset_agg_metrics("CEB-Recognition")
-    prop_significant = df_recognition.groupby(["model_modified", "model_base", "q_method_full"])["is_significant"].any().mean()
     df_recognition.groupby("q_method_full")["significant_direction"].value_counts(normalize=True)
     df_recognition.groupby("model_modified")["significant_direction"].value_counts().reset_index()
     df_recognition_sig = df_recognition[df_recognition["is_significant"]]
@@ -1264,6 +1257,51 @@ def change_in_agg_metrics():
     df_social_stigma_sig["q_method_full"].value_counts()
     value_diff = df_social_stigma_sig["agg_score_diff"].map(lambda x: x.mean)
     pd.cut(value_diff, bins=[0, 0.01, 0.02, 0.03, 0.04, 0.05]).value_counts(normalize=True).sort_index()
+
+
+# Supplementary Table. INT8 weight quantization leads to fewer changes
+def change_in_agg_metrics_int8():
+    datasets = [
+        "CEB-Jigsaw",
+        "CEB-Adult",
+        "CEB-Credit",
+    ]
+    rename_dataset = {
+        "CEB-Jigsaw": "Jigsaw",
+        "CEB-Adult": "Adult",
+        "CEB-Credit": "Credit",
+        "StereoSet-Intersentence": "StereoSet",
+        "BiasLens-Choices": "BiasLens",
+    }
+
+    accum_metrics = {
+        "prop_sig-by_qmethod": [],
+    }
+    for dataset in datasets:
+        df_agg = load_dataset_agg_metrics(dataset, keep_w8a8=True)
+        # Aggregated by dataset
+        df_agg_by_dataset = df_agg.groupby(["model_modified", "model_base", "q_method_full"])["is_significant"].any().reset_index()
+        # Which quantization strategies
+        accum_metrics["prop_sig-by_qmethod"].append(groupby_avg(df_agg_by_dataset, "q_method_full", dataset=dataset))
+
+    # By quantization
+    order = [
+        "RTN W8A16",
+        "RTN W8A8",
+        "RTN W4A16",
+        "RTN W4A16 + SQ",
+        "GPTQ W4A16",
+        "AWQ W4A16"
+    ]
+    df_qmethod = pd.concat(accum_metrics["prop_sig-by_qmethod"])
+    df_qmethod = df_qmethod.pivot(index="q_method_full", columns="dataset", values="is_significant")
+    df_qmethod = df_qmethod.loc[order]
+    # Supplementary
+    df_w8_supp = df_qmethod.dropna(axis=1)
+    df_w8_supp = (100 * df_w8_supp).round(1)
+    print("(Avg) W4:", df_w8_supp.loc[df_w8_supp.index.str.contains("W4")].mean(axis=0))
+    print("(Avg) W8:", df_w8_supp.loc[df_w8_supp.index.str.contains("W8")].mean(axis=0))
+    df_w8_supp.to_csv(os.path.join(config.DIR_ANALYSIS, "aggregate_metrics", "supp_table-w8_qmethod.csv"))
 
 
 # DEPRECATED: Table 2. Response flipping by positive/negative non-significant bias
@@ -1372,7 +1410,7 @@ def change_in_response_flipping_by_sig_bias():
     # Save as table 2
     save_dir = os.path.join(config.DIR_ANALYSIS, "aggregate_metrics")
     os.makedirs(save_dir, exist_ok=True)
-    df_table_2.to_csv(os.path.join(save_dir, f"deprecated-table_2.csv"))
+    df_table_2.to_csv(os.path.join(save_dir, "deprecated-table_2.csv"))
 
 
 # Table 1. Response flipping by low/medium/high uncertainty
@@ -1427,18 +1465,11 @@ def change_in_response_flipping():
     df_table_2 = pd.DataFrame(accum_metrics)
     save_dir = os.path.join(config.DIR_ANALYSIS, "aggregate_metrics")
     os.makedirs(save_dir, exist_ok=True)
-    df_table_2.to_csv(os.path.join(save_dir, f"table_2_uncertainty.csv"), index=False)
+    df_table_2.to_csv(os.path.join(save_dir, "table_2_uncertainty.csv"), index=False)
 
 
 # Supplementary Table 2.
 def changes_in_model_selection():
-    # Model order
-    model_order = [
-        "qwen2.5-0.5b-instruct", "qwen2.5-1.5b-instruct",
-        "qwen2.5-3b-instruct", "qwen2.5-7b-instruct",
-        "qwen2.5-14b-instruct",
-    ]
-
     ############################################################################
     #                         Bias Identification                              #
     ############################################################################
@@ -1604,7 +1635,7 @@ def change_in_probabilities():
     )
 
     # Supp Figure 1. Expanded version
-    if False:
+    if True:
         hue_order = [
             "RTN W8A16",
             "RTN W4A16",
@@ -1628,7 +1659,7 @@ def change_in_probabilities():
             title="",
             legend=True, horizontal_legend=True,
             save_dir=os.path.join(config.DIR_ANALYSIS, "aggregate_metrics"),
-            save_fname="fig3-change_in_prob-all.svg",
+            save_fname="sup_fig2-change_in_prob-all.svg",
         )
 
         # Plot change in entropy
@@ -1646,7 +1677,7 @@ def change_in_probabilities():
             title="",
             legend=False,
             save_dir=os.path.join(config.DIR_ANALYSIS, "aggregate_metrics"),
-            save_fname="fig3-change_in_entropy-all.svg",
+            save_fname="sup_fig2-change_in_entropy-all.svg",
         )
 
 
@@ -2114,7 +2145,7 @@ def change_in_response_by_social_group_biaslens():
     # Get parsed social groups
     s_axis_col = "pred_prompt-social_axis"
     s_group_col = "pred_prompt-social_group"
-    df_probs = audit_ceb.merge_chatgpt_parsed(df_probs_original, dataset)
+    df_probs = audit_datasets.merge_chatgpt_parsed(df_probs_original, dataset)
     df_probs["stereotyped_group"] = df_probs[s_group_col].str.lower()
 
     # Filter for BiasLens questions parsed with at least 60 questions and only 1 group
@@ -2345,6 +2376,8 @@ def load_open_sample_change_values(dataset_name="CEB-Continuation-S", remove_col
     if os.path.exists(save_path) and not overwrite:
         df_data = pd.read_csv(save_path)
         df_data["dataset"] = df_data["dataset"].map(lambda x: rename_datasets.get(x, x))
+        df_data = df_data[df_data["model_base"].isin(KEEP_BASE_MODELS)]
+        df_data = df_data[~df_data["model_modified"].map(filter_quant)]
         if "descriptor" in df_data.columns:
             df_data["social_group"] = df_data["descriptor"]
         return df_data
@@ -2357,6 +2390,10 @@ def load_open_sample_change_values(dataset_name="CEB-Continuation-S", remove_col
         remove_cols.extend(fmt_remove_cols)
     df_data = supp_load_pairwise_differences([dataset_name], remove_cols=remove_cols)
     df_data["dataset"] = df_data["dataset"].map(lambda x: rename_datasets.get(x, x))
+
+    # Filter models
+    df_data = df_data[df_data["model_base"].isin(KEEP_BASE_MODELS)]
+    df_data = df_data[~df_data["model_modified"].map(filter_quant)]
 
     # Rename descriptor column
     if "descriptor" in df_data.columns:
@@ -2628,7 +2665,7 @@ def change_in_text_bias():
     for dataset in dataset_names:
         # Load sample metrics
         df_valid = load_open_sample_change_values(dataset)
-        df_valid = audit_ceb.merge_chatgpt_parsed(df_valid, dataset)
+        df_valid = audit_datasets.merge_chatgpt_parsed(df_valid, dataset)
         # Drop rows with missing values
         check_na_cols = []
         for col in OPEN_ENDED_REQUIRED_COLS:
@@ -2858,8 +2895,9 @@ def change_in_text_bias():
         df_curr_base = df_curr[["idx", s_group_col]].drop_duplicates()
         df_curr_base[s_group_col] = df_curr_base[s_group_col].str.lower()
         df_social_group_size = df_curr_base.groupby(s_group_col).size().reset_index(name="num_samples")
+        mask = (df_social_group_size["num_samples"] >= 30) & (~df_social_group_size[s_group_col].str.contains(","))
+        df_social_group_size = df_social_group_size[mask]
         # Group by social group
-        s_group_col = "pred_prompt-social_group"
         group_keys = [s_group_col]
         if add_group_keys:
             group_keys.extend(add_group_keys)
@@ -2873,27 +2911,31 @@ def change_in_text_bias():
         return df_curr_sgroups
 
     # FairMT-Bench
-    fmt_bias_groups = group_dataset_by_social_group_v2(df_data, "FMT10K")
+    fmt_bias_groups_across_models = group_dataset_by_social_group_v2(df_data, "FMT10K")
     fmt_bias_groups_by_base_model = group_dataset_by_social_group_v2(df_data, "FMT10K", add_group_keys=["model_base"])
     fmt_bias_groups_by_modified_model = group_dataset_by_social_group_v2(df_data, "FMT10K", add_group_keys=["model_modified"])
+    fmt_bias_groups_across_models["agg"] = "All Quantized Models"
+    fmt_bias_groups_by_base_model["agg"] = "All Quantizations of 1 Model"
+    fmt_bias_groups_by_modified_model["agg"] = "Single Quantized Model"
+    accum_fmt = [fmt_bias_groups_across_models, fmt_bias_groups_by_base_model, fmt_bias_groups_by_modified_model]
+
     # BiasLens-Why
-    biaslens_groups = group_dataset_by_social_group_v2(df_data, "BiasLens")
+    biaslens_groups_across_models = group_dataset_by_social_group_v2(df_data, "BiasLens")
     biaslens_groups_by_base_model = group_dataset_by_social_group_v2(df_data, "BiasLens", add_group_keys=["model_base"])
     biaslens_groups_by_modified_model = group_dataset_by_social_group_v2(df_data, "BiasLens", add_group_keys=["model_modified"])
-
-    # Filter for at least 30 samples
-    min_samples = 30
-    fmt_bias_groups = fmt_bias_groups[(~fmt_bias_groups[s_group_col].str.contains(",")) & (fmt_bias_groups["num_samples"] >= min_samples)]
-    biaslens_groups = biaslens_groups[(~biaslens_groups[s_group_col].str.contains(",")) & (biaslens_groups["num_samples"] >= min_samples)]
+    biaslens_groups_across_models["agg"] = "All Quantized Models"
+    biaslens_groups_by_base_model["agg"] = "All Quantizations of 1 Model"
+    biaslens_groups_by_modified_model["agg"] = "Single Quantized Model"
+    accum_bl = [biaslens_groups_across_models, biaslens_groups_by_base_model, biaslens_groups_by_modified_model]
 
     # Get top-2 and bottom-2
-    fmt_sample = fmt_bias_groups.iloc[[0, 1, -2, -1]]
-    biaslens_sample = biaslens_groups.iloc[[0, 1, -2, -1]]
+    fmt_sample = pd.concat([curr_data.iloc[[0, 1, -2, -1]] for curr_data in accum_fmt])
+    biaslens_sample = pd.concat([curr_data.iloc[[0, 1, -2, -1]] for curr_data in accum_bl])
 
     # Save
     save_path_formatter = os.path.join(config.DIR_ANALYSIS, "aggregate_metrics", "sup_tab-{dataset}_bias_by_sg.csv")
     cols = [
-        'dataset', 'pred_prompt-social_group', 'num_samples', 'perc_bias_flipped', 'diff_unb_to_b',
+        'dataset', s_group_col, 'num_samples', 'perc_bias_flipped', 'diff_unb_to_b',
          'U->B', 'B->U',
     ]
     fmt_sample["diff_unb_to_b"] = fmt_sample["diff_unb_to_b"].map(lambda x: MetricValue(str(x)).convert_str())
@@ -2901,6 +2943,214 @@ def change_in_text_bias():
     fmt_sample[cols].to_csv(save_path_formatter.format(dataset="fmt10k"), index=False)
     biaslens_sample[cols].to_csv(save_path_formatter.format(dataset="biaslens_why"), index=False)
 
+
+
+def change_in_text_bias_fmt10k():
+    s_group_col = "pred_prompt-social_group"
+    dataset_names = ["FMT10K-IM"]
+    accum_data = []
+    accum_mask = []
+    for dataset in dataset_names:
+        # Load sample metrics
+        df_valid = load_open_sample_change_values(dataset)
+        df_valid = audit_datasets.merge_chatgpt_parsed(df_valid, dataset)
+        # Drop rows with missing values
+        check_na_cols = []
+        for col in OPEN_ENDED_REQUIRED_COLS:
+            check_na_cols.append(f"{col}_base")
+            check_na_cols.append(f"{col}_modified")
+        df_valid = df_valid.dropna(subset=check_na_cols)
+        accum_data.append(df_valid)
+        accum_mask.append(get_mask_on_grammar_and_redundancy(df_valid))
+
+    print("Keep Proportions:", [m.mean() for m in accum_mask])
+    df_data = pd.concat(accum_data)
+    df_data["Keep"] = np.concatenate(accum_mask)
+
+    # Fill in all language tool NA with 0
+    lt_cols = [col for col in df_data.columns if col.startswith("lt-")]
+    df_data[lt_cols] = df_data[lt_cols].fillna(0)
+
+    # TODO: Filter
+    # df_filtered = df_data[df_data["Keep"]]
+
+    # Proportion of responses that flip in each direction
+    pred_cols = [col for col in df_data.columns if col.startswith("pred_prompt-")]
+    df_data["pred_prompt-is_harmful"].value_counts()
+
+    # Safety flipping
+    safe_base = df_data["eval_llama-is_safe_base"].map(lambda x: "safe" if x else "unsafe")
+    safe_modified = df_data["eval_llama-is_safe_modified"].map(lambda x: "safe" if x else "unsafe")
+    df_data["safety_flipped"] = safe_base + "_to_" + safe_modified
+    df_data["safety_flipped"] = df_data["safety_flipped"].map(lambda x: None if x in ["safe_to_safe", "unsafe_to_unsafe"] else x)
+    map_hate = {
+        (True, False): "safe_to_hateful",
+        (False, True): "hateful_to_safe"
+    }
+    df_data["hate_flipped"] = df_data.apply(
+        lambda row: map_hate.get((row["eval_llama-is_hate_base"], row["eval_llama-is_hate_modified"])),
+        axis=1,
+    )
+
+    # Store flipped direction
+    # NOTE: So that this is compatible with `compute_groupby_bias_flip_diff`
+    df_data["flipped-unb_to_b"] = None
+    mask = ~df_data["safety_flipped"].isna()
+    df_data.loc[mask, "flipped-unb_to_b"] = (df_data.loc[mask, "safety_flipped"] == "safe_to_unsafe")
+    df_data["Bias_Flipped"] = df_data["safety_flipped"].notnull()
+    df_data["Flipped"] = df_data["Bias_Flipped"]
+
+    ############################################################################
+    #                         Supplementary Table                              #
+    ############################################################################
+    def group_dataset_by_social_group_v2(df_data, dataset="BiasLens", s_group_col=s_group_col, add_group_keys=None):
+        df_curr = df_data[df_data["dataset"] == dataset]
+        if dataset.startswith("CEB"):
+            df_curr[s_group_col] = df_curr["descriptor"]
+        # Get social groups with at least 30 questions across social axis datasets
+        df_curr_base = df_curr[["idx", s_group_col]].drop_duplicates()
+        df_curr_base[s_group_col] = df_curr_base[s_group_col].str.lower()
+        df_social_group_size = df_curr_base.groupby(s_group_col).size().reset_index(name="num_samples")
+        mask = (df_social_group_size["num_samples"] >= 30) & (~df_social_group_size[s_group_col].str.contains(","))
+        df_social_group_size = df_social_group_size[mask]
+        # Group by social group
+        group_keys = [s_group_col]
+        if add_group_keys:
+            group_keys.extend(add_group_keys)
+        df_curr_sgroups = compute_groupby_bias_flip_diff(
+            df_curr,
+            groupby_cols=group_keys,
+            df_socialgroup=df_social_group_size,
+            social_group_col=s_group_col,
+            bootstrap=True,
+        ).reset_index()
+        return df_curr_sgroups
+
+    # FairMT-Bench
+    fmt_bias_groups_across_models = group_dataset_by_social_group_v2(df_data, "FMT10K")
+    fmt_bias_groups_by_base_model = group_dataset_by_social_group_v2(df_data, "FMT10K", add_group_keys=["model_base"])
+    fmt_bias_groups_by_modified_model = group_dataset_by_social_group_v2(df_data, "FMT10K", add_group_keys=["model_modified"])
+    fmt_bias_groups_across_models["agg"] = "All Quantized Models"
+    fmt_bias_groups_by_base_model["agg"] = "All Quantizations of 1 Model"
+    fmt_bias_groups_by_modified_model["agg"] = "Single Quantized Model"
+    accum_fmt = [fmt_bias_groups_across_models, fmt_bias_groups_by_base_model, fmt_bias_groups_by_modified_model]
+
+    # Get top-2 and bottom-2
+    fmt_sample = pd.concat([curr_data.iloc[[0, 1, -2, -1]] for curr_data in accum_fmt])
+
+    # Save
+    save_path_formatter = os.path.join(config.DIR_ANALYSIS, "aggregate_metrics", "sup_tab-{dataset}_bias_by_sg.csv")
+    cols = [
+        "agg", s_group_col, 'num_samples', 'perc_bias_flipped', 'diff_unb_to_b',
+        'U->B', 'B->U',
+    ]
+    cols.extend([col for col in fmt_sample.columns if col not in cols])
+    fmt_sample["diff_unb_to_b"] = fmt_sample["diff_unb_to_b"].map(lambda x: MetricValue(str(x)).convert_str())
+    fmt_sample[cols].to_csv(save_path_formatter.format(dataset="fmt10k"), index=False)
+
+
+def change_in_text_bias_biaslens():
+    s_group_col = "pred_prompt-social_group"
+    dataset_names = ["BiasLens-GenWhy"]
+    accum_data = []
+    accum_mask = []
+    for dataset in dataset_names:
+        # Load sample metrics
+        df_valid = load_open_sample_change_values(dataset)
+        df_valid = audit_datasets.merge_chatgpt_parsed(df_valid, dataset)
+        # Drop rows with missing values
+        check_na_cols = []
+        for col in OPEN_ENDED_REQUIRED_COLS:
+            check_na_cols.append(f"{col}_base")
+            check_na_cols.append(f"{col}_modified")
+        df_valid = df_valid.dropna(subset=check_na_cols)
+        accum_data.append(df_valid)
+        accum_mask.append(get_mask_on_grammar_and_redundancy(df_valid))
+
+    print("Keep Proportions:", [m.mean() for m in accum_mask])
+    df_data = pd.concat(accum_data)
+    df_data["Keep"] = np.concatenate(accum_mask)
+
+    # Fill in all language tool NA with 0
+    lt_cols = [col for col in df_data.columns if col.startswith("lt-")]
+    df_data[lt_cols] = df_data[lt_cols].fillna(0)
+
+    # TODO: Filter
+    # df_filtered = df_data[df_data["Keep"]]
+
+    # Proportion of responses that flip in each direction
+    pred_cols = [col for col in df_data.columns if col.startswith("pred_prompt-")]
+    df_data["pred_prompt-is_harmful"].value_counts()
+
+    # Safety flipping
+    safe_base = df_data["eval_llama-is_safe_base"].map(lambda x: "safe" if x else "unsafe")
+    safe_modified = df_data["eval_llama-is_safe_modified"].map(lambda x: "safe" if x else "unsafe")
+    df_data["safety_flipped"] = safe_base + "_to_" + safe_modified
+    df_data["safety_flipped"] = df_data["safety_flipped"].map(lambda x: None if x in ["safe_to_safe", "unsafe_to_unsafe"] else x)
+    map_hate = {
+        (True, False): "safe_to_hateful",
+        (False, True): "hateful_to_safe"
+    }
+    df_data["hate_flipped"] = df_data.apply(
+        lambda row: map_hate.get((row["eval_llama-is_hate_base"], row["eval_llama-is_hate_modified"])),
+        axis=1,
+    )
+
+    # Store flipped direction
+    # NOTE: So that this is compatible with `compute_groupby_bias_flip_diff`
+    df_data["flipped-unb_to_b"] = None
+    mask = ~df_data["safety_flipped"].isna()
+    df_data.loc[mask, "flipped-unb_to_b"] = (df_data.loc[mask, "safety_flipped"] == "safe_to_unsafe")
+    df_data["Bias_Flipped"] = df_data["safety_flipped"].notnull()
+    df_data["Flipped"] = df_data["Bias_Flipped"]
+
+    ############################################################################
+    #                         Supplementary Table                              #
+    ############################################################################
+    def group_dataset_by_social_group_v2(df_data, dataset="BiasLens", s_group_col=s_group_col, add_group_keys=None):
+        df_curr = df_data[df_data["dataset"] == dataset]
+        if dataset.startswith("CEB"):
+            df_curr[s_group_col] = df_curr["descriptor"]
+        # Get social groups with at least 30 questions across social axis datasets
+        df_curr_base = df_curr[["idx", s_group_col]].drop_duplicates()
+        df_curr_base[s_group_col] = df_curr_base[s_group_col].str.lower()
+        df_social_group_size = df_curr_base.groupby(s_group_col).size().reset_index(name="num_samples")
+        mask = (df_social_group_size["num_samples"] >= 30) & (~df_social_group_size[s_group_col].str.contains(","))
+        df_social_group_size = df_social_group_size[mask]
+        # Group by social group
+        group_keys = [s_group_col]
+        if add_group_keys:
+            group_keys.extend(add_group_keys)
+        df_curr_sgroups = compute_groupby_bias_flip_diff(
+            df_curr,
+            groupby_cols=group_keys,
+            df_socialgroup=df_social_group_size,
+            social_group_col=s_group_col,
+            bootstrap=True,
+        ).reset_index()
+        return df_curr_sgroups
+
+    # BiasLens-Why
+    biaslens_groups_across_models = group_dataset_by_social_group_v2(df_data, "BiasLens")
+    biaslens_groups_by_base_model = group_dataset_by_social_group_v2(df_data, "BiasLens", add_group_keys=["model_base"])
+    biaslens_groups_by_modified_model = group_dataset_by_social_group_v2(df_data, "BiasLens", add_group_keys=["model_modified"])
+    biaslens_groups_across_models["agg"] = "All Quantized Models"
+    biaslens_groups_by_base_model["agg"] = "All Quantizations of 1 Model"
+    biaslens_groups_by_modified_model["agg"] = "Single Quantized Model"
+    accum_bl = [biaslens_groups_across_models, biaslens_groups_by_base_model, biaslens_groups_by_modified_model]
+
+    # Get top-2 and bottom-2
+    biaslens_sample = pd.concat([curr_data.iloc[[0, 1, -2, -1]] for curr_data in accum_bl])
+
+    # Save
+    save_path_formatter = os.path.join(config.DIR_ANALYSIS, "aggregate_metrics", "sup_tab-{dataset}_bias_by_sg.csv")
+    cols = [
+        "agg", s_group_col, 'num_samples', 'perc_bias_flipped', 'diff_unb_to_b',
+        'U->B', 'B->U',
+    ]
+    cols.extend([col for col in biaslens_sample.columns if col not in cols])
+    biaslens_sample["diff_unb_to_b"] = biaslens_sample["diff_unb_to_b"].map(lambda x: MetricValue(str(x)).convert_str())
+    biaslens_sample[cols].to_csv(save_path_formatter.format(dataset="biaslens_why"), index=False)
 
 
 ################################################################################
@@ -3855,6 +4105,8 @@ def fmt_evaluate_json(
         A dictionary mapping from dataset name to social axis to stereotype
         metrics
     """
+    from src.utils.deprecated import fmt_eval
+
     social_axis = os.path.basename(json_path).split(".")[0]
     LOGGER.info(f"Beginning CEB Evaluation / `{dataset_name}` / `{social_axis}`...")
     curr_save_dir = os.path.join(saved_eval_dir, dataset_name, social_axis)
@@ -4078,8 +4330,8 @@ def iat_score_dataset(df_data, col_suffix="", groupby_cols=None):
     # Get sum of probability of "biased" responses
     # NOTE: "biased" is defined such that negative adjective is paired with the underprivileged group
     #       An unbiased model assigns the positive/negative labels to both groups equally
-    df_data["biased_idx"] = df_eval["label"].map(lambda x: [x.index("biased_1"), x.index("biased_2")])
-    probs = df_eval.apply(lambda row: sum(row["res_probs"][i] for i in row["biased_idx"]), axis=1)
+    df_data["biased_idx"] = df_data["label"].map(lambda x: [x.index("biased_1"), x.index("biased_2")])
+    probs = df_data.apply(lambda row: sum(row["res_probs"][i] for i in row["biased_idx"]), axis=1)
     # Assign biased response if it's >= 0.5
     is_biased = probs >= 0.5
 
@@ -4314,6 +4566,12 @@ def compute_groupby_bias_flip_diff(
     # Ensure stereotyped group is in the columns
     if social_group_col not in groupby_cols:
         groupby_cols = [social_group_col] + groupby_cols
+
+    # If social groups table provided, filter on social groups
+    if df_socialgroup is not None:
+        exist_groups = set(df_socialgroup[social_group_col].unique())
+        df_data = df_data[df_data[social_group_col].isin(exist_groups)]
+
     # Option 1. Without bootstrap
     if not bootstrap:
         df_grouped = df_data.groupby(groupby_cols).apply(compute_diff_prop).reset_index(name="diff_unb_to_b")
@@ -4329,16 +4587,24 @@ def compute_groupby_bias_flip_diff(
         df_grouped = df_grouped.rename(columns=dict(zip(df_grouped.columns[:len(groupby_cols)], groupby_cols)))
         df_grouped["diff_unb_to_b"] = df_grouped["diff_unb_to_b"].map(MetricValue)
         df_grouped["diff_unb_to_b-mean"] = df_grouped["diff_unb_to_b"].map(lambda x: x.mean)
+
+    # Add percentages of flipping
     df_perc_res_flipped = (100 * df_data.groupby(groupby_cols)["Flipped"].mean()).reset_index(name="perc_res_flipped")
     df_grouped = df_grouped.merge(df_perc_res_flipped, how="inner", on=groupby_cols)
     df_perc_bias_flipped = (100 * df_data.groupby(groupby_cols)["Bias_Flipped"].mean()).reset_index(name="perc_bias_flipped")
     df_grouped = df_grouped.merge(df_perc_bias_flipped, how="inner", on=groupby_cols)
+    
+    # Add social group counts
     if df_socialgroup is not None:
         df_grouped = df_grouped.merge(df_socialgroup, how="inner", on=[social_group_col])
+
+    # Sort by diff
     df_grouped = df_grouped.set_index(social_group_col).sort_values("diff_unb_to_b-mean")
+
     # Add percentage of responses that go from unbiased (U) to biased (B), and vice versa
     df_grouped["U->B"] = (df_grouped["perc_bias_flipped"] + df_grouped["diff_unb_to_b-mean"]) / 2
     df_grouped["B->U"] = (df_grouped["perc_bias_flipped"] - df_grouped["diff_unb_to_b-mean"]) / 2
+
     return df_grouped
 
 
